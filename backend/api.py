@@ -8,6 +8,7 @@ from django.utils.decorators import method_decorator
 import jwt
 from django.conf import settings
 from datetime import datetime, timedelta
+from api.models import Partner
 
 token_expiration_time: timedelta = timedelta(hours=1)  # Token expiration time
 
@@ -293,3 +294,11 @@ def logout(request):
 #     if not request.user.is_authenticated:
 #         return 403, {"message": "You are not authenticated"}
 #     return 200, request.user
+
+@api.get("/partners", auth=jwt_auth)
+def get_partners(request):
+    partners = Partner.objects.all()
+
+    response = [{"name": partner.name, "address": partner.address, "institution": partner.institution} for partner in partners]
+
+    return response
