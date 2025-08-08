@@ -8,7 +8,7 @@ from django.utils.decorators import method_decorator
 import jwt
 from django.conf import settings
 from datetime import datetime, timedelta
-from api.models import Partner
+from api.models import *
 
 token_expiration_time: timedelta = timedelta(hours=1)  # Token expiration time
 
@@ -299,6 +299,6 @@ def logout(request):
 def get_partners(request):
     partners = Partner.objects.all()
 
-    response = [{"name": partner.name, "address": partner.address, "institution": partner.institution} for partner in partners]
+    response = [{"name": partner.name, "address": partner.address, "imageURL": partner.imageURL, "institution": partner.institution} for partner in partners]
 
     return response
