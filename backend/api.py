@@ -234,71 +234,154 @@ def logout(request):
         "note": "JWT tokens cannot be invalidated server-side without a blacklist. Ensure your client discards the token."
     }
 
-# @api.get("/hello")
-# def hello(request, name: str = "World"):
-#     return f"Hello, {name}!"
+class PartnerSchema(Schema):
+    id: int
+    name: str
+    address: str = ""
+    institution: str = None
+    imageURL: str = None
 
-# @api.get("/math")
-# def math(request, a: int, b: int):
-#     return {
-#         "sum": a + b,
-#         "difference": a - b,
-#         "product": a * b,
-#         "quotient": a / b if b != 0 else "Division by zero error"
-#     }
+class PartnerCreateSchema(Schema):
+    name: str
+    address: str = ""
+    institution: str = None
+    imageURL: str = None
 
-# @api.get("/math/{a}and{b}")
-# def math_path(request, a: int, b: int):
-#     return {
-#         "sum": a + b,
-#         "difference": a - b,
-#         "product": a * b,
-#         "quotient": a / b if b != 0 else "Division by zero error"
-#     }
+class PartnerUpdateSchema(Schema):
+    name: str = None
+    address: str = None
+    institution: str = None
+    imageURL: str = None
 
-# class HelloSchema(Schema):
-#     name: str = "World"
+# Partner Endpoints
 
-# @api.post("/hello")
-# def hello_post(request, data: HelloSchema):
-#     return f"Hello, {data.name}!"
-
-# Define a response Schema
-
-# class UserSchema(Schema):
-#     username: str
-#     is_authenticated: bool
-#     # Unauthenticated users don't have the following fields, so provide defaults
-#     email: str = None
-#     first_name: str = None
-#     last_name: str = None
-
-# @api.get("/me", response=UserSchema)
-# def me(request):
-#     user = request.user
-#     return user
-
-# Multiple response types
-
-# class UserSchema(Schema):
-#     username: str
-#     email: str
-#     first_name: str
-#     last_name: str
-
-# class ErrorSchema(Schema):
-#     message: str
-
-# @api.get("/me", response={200: UserSchema, 403: ErrorSchema})
-# def me(request):
-#     if not request.user.is_authenticated:
-#         return 403, {"message": "You are not authenticated"}
-#     return 200, request.user
-
-@api.get("/partners", auth=jwt_auth)
+@api.get("/partners", response={200: list[PartnerSchema], 401: ErrorSchema})
 def get_partners(request):
-    partners = Partner.objects.all()
+    """
+    GET /api/partners
+    Purpose: Fetch all partners
+    """
+    try:
+        partners = Partner.objects.select_related('institution').all()
+        
+        response = []
+        for partner in partners:
+            response.append({
+                "id": partner.id,
+                "name": partner.name,
+                "address": partner.address or "",
+                "institution": partner.institution.name if partner.institution else None,
+                "imageURL": partner.imgUrl
+            })
+        
+        return 200, response
+    except Exception as e:
+        return 401, {"message": f"Error fetching partners: {str(e)}"}
 
-    response = [{"name": partner.name, "address": partner.address, "imageURL": partner.imgUrl, "institution": partner.institution.name} for partner in partners]
+@api.get("/partners/{partner_id}", response={200: PartnerSchema, 401: ErrorSchema, 404: ErrorSchema})
+def get_partner(request, partner_id: int):
+    """
+    GET /api/partners/{id}
+    Purpose: Fetch a single partner by ID
+    """
+    try:
+        partner = Partner.objects.select_related('institution').get(id=partner_id)
+        
+        return 200, {
+            "id": partner.id,
+            "name": partner.name,
+            "address": partner.address or "",
+            "institution": partner.institution.name if partner.institution else None,
+            "imageURL": partner.imgUrl
+        }
+    except Partner.DoesNotExist:
+        return 404, {"message": "Partner not found"}
+    except Exception as e:
+        return 401, {"message": f"Error fetching partner: {str(e)}"}
 
-    return response
+@api.post("/partners", auth=jwt_auth, response={201: PartnerSchema, 400: ErrorSchema, 401: ErrorSchema})
+def create_partner(request, data: PartnerCreateSchema):
+    """
+    POST /api/partners
+    Purpose: Create a new partner
+    """
+    try:
+        # Handle institution lookup if provided
+        institution_obj = None
+        if data.institution:
+            institution_obj, created = PartnerTipus.objects.get_or_create(name=data.institution)
+        
+        partner = Partner.objects.create(
+            name=data.name,
+            address=data.address or "",
+            institution=institution_obj,
+            imgUrl=data.imageURL
+        )
+        
+        return 201, {
+            "id": partner.id,
+            "name": partner.name,
+            "address": partner.address or "",
+            "institution": partner.institution.name if partner.institution else None,
+            "imageURL": partner.imgUrl
+        }
+    except Exception as e:
+        if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
+            return 400, {"message": "Partner with this name already exists"}
+        return 400, {"message": f"Error creating partner: {str(e)}"}
+
+@api.put("/partners/{partner_id}", auth=jwt_auth, response={200: PartnerSchema, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
+def update_partner(request, partner_id: int, data: PartnerUpdateSchema):
+    """
+    PUT /api/partners/{id}
+    Purpose: Update an existing partner
+    """
+    try:
+        partner = Partner.objects.get(id=partner_id)
+        
+        # Update fields only if they are provided (not None)
+        if data.name is not None:
+            partner.name = data.name
+        if data.address is not None:
+            partner.address = data.address
+        if data.imageURL is not None:
+            partner.imgUrl = data.imageURL
+        if data.institution is not None:
+            if data.institution == "":
+                partner.institution = None
+            else:
+                institution_obj, created = PartnerTipus.objects.get_or_create(name=data.institution)
+                partner.institution = institution_obj
+        
+        partner.save()
+        
+        return 200, {
+            "id": partner.id,
+            "name": partner.name,
+            "address": partner.address or "",
+            "institution": partner.institution.name if partner.institution else None,
+            "imageURL": partner.imgUrl
+        }
+    except Partner.DoesNotExist:
+        return 404, {"message": "Partner not found"}
+    except Exception as e:
+        if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
+            return 400, {"message": "Partner with this name already exists"}
+        return 400, {"message": f"Error updating partner: {str(e)}"}
+
+@api.delete("/partners/{partner_id}", auth=jwt_auth, response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
+def delete_partner(request, partner_id: int):
+    """
+    DELETE /api/partners/{id}
+    Purpose: Delete a specific partner
+    """
+    try:
+        partner = Partner.objects.get(id=partner_id)
+        partner_name = partner.name
+        partner.delete()
+        
+        return 200, {"message": f"Partner '{partner_name}' deleted successfully"}
+    except Partner.DoesNotExist:
+        return 404, {"message": "Partner not found"}
+    except Exception as e:
+        return 400, {"message": f"Error deleting partner: {str(e)}"}
