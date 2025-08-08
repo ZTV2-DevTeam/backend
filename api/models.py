@@ -6,7 +6,7 @@ from datetime import datetime
 
 
 class Profile(models.Model):
-    user = models.OneToOneField('User', on_delete=models.CASCADE)
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
     telefonszam = models.CharField(max_length=20, blank=True, null=True)
     medias = models.BooleanField(default=True)
     stab = models.ForeignKey('Stab', related_name='tagok', on_delete=models.SET_NULL, blank=True, null=True)
@@ -99,7 +99,7 @@ class Forgatas(models.Model):
     date = models.DateField(blank=False, null=False)
     timeFrom = models.TimeField(blank=False, null=False)
     timeTo = models.TimeField(blank=False, null=False)
-    location = models.ForeignKey('Partner',  blank=True, null=True)
+    location = models.ForeignKey('Partner', on_delete=models.SET_NULL, blank=True, null=True)
     contactPerson = models.ForeignKey('ContactPerson', on_delete=models.SET_NULL, blank=True, null=True)
     notes = models.TextField(max_length=500, blank=True, null=True)
 
@@ -156,4 +156,15 @@ class Equipment(models.Model):
             start_time__lt=end_datetime,
             end_time__gt=start_datetime
         ).exists()
+
+class ContactPerson(models.Model):
+    name = models.CharField(max_length=150, blank=False, null=False)
+    email = models.EmailField(max_length=254, blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
     
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Kapcsolattartó"
+        verbose_name_plural = "Kapcsolattartók"

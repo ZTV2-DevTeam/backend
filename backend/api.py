@@ -299,6 +299,6 @@ def logout(request):
 def get_partners(request):
     partners = Partner.objects.all()
 
-    response = [{"name": partner.name, "address": partner.address, "imageURL": partner.imageURL, "institution": partner.institution} for partner in partners]
+    response = [{"name": partner.name, "address": partner.address, "imageURL": partner.imgUrl, "institution": partner.institution.name} for partner in partners]
 
     return response
