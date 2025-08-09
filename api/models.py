@@ -168,3 +168,74 @@ class ContactPerson(models.Model):
     class Meta:
         verbose_name = "Kapcsolattartó"
         verbose_name_plural = "Kapcsolattartók"
+
+class Announcement(models.Model):
+    author = models.ForeignKey('auth.user', related_name='announcements', on_delete=models.SET_NULL, blank=True, null=True)
+    title = models.CharField(max_length=200, blank=False, null=False)
+    body = models.TextField(max_length=5000, blank=False, null=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    cimzettek = models.ManyToManyField('auth.User', related_name='uzenetek', blank=True)
+
+    def __str__(self):
+        return self.title
+    
+    class Meta:
+        verbose_name = "Közlemény"
+        verbose_name_plural = "Közlemények"
+        ordering = ['-created_at']
+
+class Tavollet(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    start_date = models.DateField(blank=False, null=False)
+    end_date = models.DateField(blank=False, null=False)
+    reason = models.TextField(max_length=500, blank=True, null=True)
+    denied = models.BooleanField(default=False)
+
+
+    def __str__(self):
+        return f'{self.user.get_full_name()}: {self.start_date} - {self.end_date}'
+    
+    class Meta:
+        verbose_name = "Távollét"
+        verbose_name_plural = "Távollétek"
+        ordering = ['start_date']
+
+class Beosztas(models.Model):
+    kesz = models.BooleanField(default=False)
+    szerepkor_relaciok = models.ManyToManyField('SzerepkorRelaciok', related_name='beosztasok', blank=True)
+    author = models.ForeignKey('auth.User', related_name='beosztasok', on_delete=models.SET_NULL, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f'Beosztás {self.id} - Kész: {self.kesz}'
+    
+    class Meta:
+        verbose_name = "Beosztás"
+        verbose_name_plural = "Beosztások"
+        ordering = ['-created_at']
+
+class SzerepkorRelaciok(models.Model):
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+    szerepkor = models.ForeignKey('Szerepkor', on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f'{self.user.get_full_name()} - {self.szerepkor.name}'
+    
+    class Meta:
+        verbose_name = "Szerepkör Reláció"
+        verbose_name_plural = "Szerepkör Relációk"
+        ordering = ['user__last_name', 'user__first_name']
+
+class Szerepkor(models.Model):
+    name = models.CharField(max_length=150, unique=True, blank=False, null=False)
+    ev = models.IntegerField(blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+    
+    class Meta:
+        verbose_name = "Szerepkör"
+        verbose_name_plural = "Szerepkörök"
+        ordering = ['name']
+        
