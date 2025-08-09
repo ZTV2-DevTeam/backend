@@ -389,7 +389,58 @@ def delete_partner(request, partner_id: int):
 @api.get('forgatasok', response={200: PartnerSchema, 401: ErrorSchema, 404: ErrorSchema})
 def get_forgatasok(request):
     try:
-        forgatasok = Forgatas.objects.all()
+        forgatasok = Forgatas.objects.all().exclude(forgTipus='kacsa')
+        response = []
+        for forgatas in forgatasok:
+            stab = [tag.user.id for tag in forgatas.beosztas.SzerepkorRelaciok.all()] if forgatas.beosztas else []
+
+            response.append({
+                "id": forgatas.id,
+                "name": forgatas.name,
+                "description": forgatas.description,
+                "date": forgatas.date.isoformat(),
+                "timeFrom": forgatas.timeFrom.isoformat(),
+                "timeTo": forgatas.timeTo.isoformat(),
+                "location": forgatas.location if forgatas.location else None,
+                "contactPerson": forgatas.contactPerson if forgatas.contactPerson else None,
+                "notes": forgatas.notes if forgatas.notes else None,
+                "forgTipus": forgatas.forgTipus,
+                "sajat": request.user.id in stab,
+                "relatedKaCsa": forgatas.relatedKaCsa.id if forgatas.relatedKaCsa else None,
+            })
+        return 200, response
+    except Exception as e:
+        return 401, {"message": f"Error fetching forgatasok: {str(e)}"}
+
+@api.get('forgatasok/{forgatas_id}', response={200: PartnerSchema, 401: ErrorSchema, 404: ErrorSchema})
+def get_forgatas(request, forgatas_id: int):
+    try:
+        forgatas = Forgatas.objects.get(id=forgatas_id)
+        stab = [tag.user.id for tag in forgatas.beosztas.SzerepkorRelaciok.all()] if forgatas.beosztas else []
+
+        return 200, {
+            "id": forgatas.id,
+            "name": forgatas.name,
+            "description": forgatas.description,
+            "date": forgatas.date.isoformat(),
+            "timeFrom": forgatas.timeFrom.isoformat(),
+            "timeTo": forgatas.timeTo.isoformat(),
+            "location": forgatas.location if forgatas.location else None,
+            "contactPerson": forgatas.contactPerson if forgatas.contactPerson else None,
+            "notes": forgatas.notes if forgatas.notes else None,
+            "forgTipus": forgatas.forgTipus,
+            "sajat": request.user.id in stab,
+            "relatedKaCsa": forgatas.relatedKaCsa.id if forgatas.relatedKaCsa else None,
+        }
+    except Forgatas.DoesNotExist:
+        return 404, {"message": "Forgatás not found"}
+    except Exception as e:
+        return 401, {"message": f"Error fetching forgatás: {str(e)}"}
+
+@api.get('forgatasok', response={200: PartnerSchema, 401: ErrorSchema, 404: ErrorSchema})
+def get_forgatasok(request):
+    try:
+        forgatasok = Forgatas.objects.filter(forgTipus='kacsa')
         response = []
         for forgatas in forgatasok:
             stab = [tag.user.id for tag in forgatas.beosztas.SzerepkorRelaciok.all()] if forgatas.beosztas else []
