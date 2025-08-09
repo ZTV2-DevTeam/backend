@@ -6,14 +6,49 @@ from datetime import datetime
 
 
 class Profile(models.Model):
+    ADMIN_TYPES = [
+        ('none', 'Nincs adminisztrátor jogosultság'),
+        ('developer', 'Administrator-Developer'),
+        ('teacher', 'Administrator-Teacher (Médiatanár)'),
+    ]
+    
     user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
     telefonszam = models.CharField(max_length=20, blank=True, null=True)
     medias = models.BooleanField(default=True)
     stab = models.ForeignKey('Stab', related_name='tagok', on_delete=models.PROTECT, blank=True, null=True)
     osztaly = models.ForeignKey('Osztaly', on_delete=models.PROTECT, blank=True, null=True)
+    admin_type = models.CharField(max_length=20, choices=ADMIN_TYPES, default='none', verbose_name='Adminisztrátor típus')
 
     def __str__(self):
         return self.user.get_full_name()
+    
+    @property
+    def is_admin(self):
+        """Check if user has any admin permissions"""
+        return self.admin_type != 'none'
+    
+    @property
+    def is_developer_admin(self):
+        """Check if user is a developer admin"""
+        return self.admin_type == 'developer'
+    
+    @property
+    def is_teacher_admin(self):
+        """Check if user is a teacher admin (Médiatanár)"""
+        return self.admin_type == 'teacher'
+    
+    def has_admin_permission(self, permission_type):
+        """
+        Check if user has specific admin permission
+        permission_type can be: 'developer', 'teacher', 'any'
+        """
+        if permission_type == 'any':
+            return self.is_admin
+        elif permission_type == 'developer':
+            return self.is_developer_admin
+        elif permission_type == 'teacher':
+            return self.is_teacher_admin
+        return False
 
 class Osztaly(models.Model):
     startYear = models.IntegerField(blank=False, null=False)
