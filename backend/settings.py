@@ -141,3 +141,16 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Email settings for password reset
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = getattr(local_settings, 'EMAIL_HOST')
+EMAIL_PORT = getattr(local_settings, 'EMAIL_PORT')
+EMAIL_USE_TLS = getattr(local_settings, 'EMAIL_USE_TLS')
+EMAIL_HOST_USER = getattr(local_settings, 'EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = getattr(local_settings, 'EMAIL_HOST_PASSWORD')
+
+DEFAULT_FROM_EMAIL = getattr(local_settings, 'DEFAULT_FROM_EMAIL')
+
+# Password Reset Settings
+PASSWORD_RESET_TIMEOUT = getattr(local_settings, 'PASSWORD_RESET_TIMEOUT', 3600)  # 1 hour

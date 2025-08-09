@@ -9,6 +9,10 @@ import jwt
 from django.conf import settings
 from datetime import datetime, timedelta
 from api.models import *
+from django.core.mail import send_mail
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 token_expiration_time: timedelta = timedelta(hours=1)  # Token expiration time
 
@@ -67,6 +71,23 @@ class LoginSchema(Schema):
 
 class ErrorSchema(Schema):
     message: str
+
+class ForgotPasswordRequest(Schema):
+    email: str
+
+class ForgotPasswordResponse(Schema):
+    message: str
+
+class ResetPasswordRequest(Schema):
+    token: str
+    password: str
+    confirmPassword: str
+
+class ResetPasswordResponse(Schema):
+    message: str
+
+class VerifyTokenResponse(Schema):
+    valid: bool
 
 # class CreateUserSchema(Schema):
 #     username: str
@@ -385,3 +406,104 @@ def delete_partner(request, partner_id: int):
         return 404, {"message": "Partner not found"}
     except Exception as e:
         return 400, {"message": f"Error deleting partner: {str(e)}"}
+
+# Password Reset Endpoints
+
+@api.post("/forgot-password", response={200: ForgotPasswordResponse, 400: ErrorSchema})
+def forgot_password(request, data: ForgotPasswordRequest):
+    """
+    POST /api/forgot-password
+    Purpose: Request password reset token via email
+    """
+    try:
+        # Import the utility functions
+        from api.password_reset_utils import generate_password_reset_token, send_password_reset_email
+        
+        # Check if user exists with this email
+        try:
+            user = User.objects.get(email=data.email)
+        except User.DoesNotExist:
+            # For security reasons, don't reveal if email exists or not
+            return 200, {"message": "Ha a megadott email cím regisztrált, akkor elküldtük a jelszó visszaállítási linket."}
+        
+        # Check if user is active
+        if not user.is_active:
+            return 200, {"message": "Ha a megadott email cím regisztrált, akkor elküldtük a jelszó visszaállítási linket."}
+        
+        # Generate JWT token for password reset
+        reset_token = generate_password_reset_token(user.id)
+        
+        # Send email with reset link
+        email_sent = send_password_reset_email(user, reset_token)
+        
+        if email_sent:
+            print(f"Password reset email sent successfully to {user.email}")
+        else:
+            print(f"Failed to send password reset email to {user.email}")
+        
+        # Always return the same message for security
+        return 200, {"message": "Ha a megadott email cím regisztrált, akkor elküldtük a jelszó visszaállítási linket."}
+        
+    except Exception as e:
+        print(f"Error in forgot_password: {str(e)}")
+        return 400, {"message": "Hiba történt a kérés feldolgozása során."}
+
+@api.get("/verify-reset-token/{token}", response={200: VerifyTokenResponse, 400: ErrorSchema})
+def verify_reset_token(request, token: str):
+    """
+    GET /api/verify-reset-token/{token}
+    Purpose: Verify if reset token is valid
+    """
+    try:
+        from api.password_reset_utils import verify_password_reset_token
+        
+        # Verify the JWT token
+        verification_result = verify_password_reset_token(token)
+        
+        return 200, {"valid": verification_result['valid']}
+            
+    except Exception as e:
+        print(f"Error in verify_reset_token: {str(e)}")
+        return 400, {"message": "Hiba történt a token ellenőrzése során."}
+
+@api.post("/reset-password", response={200: ResetPasswordResponse, 400: ErrorSchema})
+def reset_password(request, data: ResetPasswordRequest):
+    """
+    POST /api/reset-password
+    Purpose: Reset user password using valid token
+    """
+    try:
+        from api.password_reset_utils import verify_password_reset_token
+        
+        # Validate password confirmation
+        if data.password != data.confirmPassword:
+            return 400, {"message": "A jelszavak nem egyeznek."}
+        
+        # Verify the JWT token
+        verification_result = verify_password_reset_token(data.token)
+        
+        if not verification_result['valid']:
+            error_message = verification_result.get('error', 'Érvénytelen token')
+            if 'expired' in error_message.lower():
+                return 400, {"message": "A token lejárt. Kérjen új jelszó visszaállítási linket."}
+            return 400, {"message": "Érvénytelen token."}
+        
+        user = verification_result['user']
+        
+        # Validate password strength (Django's built-in validators)
+        try:
+            validate_password(data.password, user)
+        except ValidationError as e:
+            return 400, {"message": " ".join(e.messages)}
+        
+        # Update user password
+        user.set_password(data.password)
+        user.save()
+        
+        print(f"Password reset successful for user: {user.username}")
+        
+        return 200, {"message": "A jelszó sikeresen módosításra került. Most már bejelentkezhet az új jelszavával."}
+        
+    except Exception as e:
+        print(f"Error in reset_password: {str(e)}")
+        return 400, {"message": "Hiba történt a jelszó módosítása során."}
