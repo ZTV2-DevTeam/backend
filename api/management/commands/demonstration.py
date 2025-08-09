@@ -9,7 +9,7 @@ from api.models import (
 
 
 class Command(BaseCommand):
-    help = 'Load demo data for ZTV2 application'
+    help = 'Load demo data for FTV application'
 
     def add_arguments(self, parser):
         parser.add_argument(

@@ -79,7 +79,7 @@ def send_password_reset_email(user: User, reset_token: str, frontend_url: str = 
     """
     reset_url = f"{frontend_url}/elfelejtett_jelszo/{reset_token}"
 
-    subject = "ZTV2 - Jelszó visszaállítása"
+    subject = "FTV - Jelszó visszaállítása"
 
     # Create HTML email content
     html_message = f"""
@@ -112,12 +112,12 @@ def send_password_reset_email(user: User, reset_token: str, frontend_url: str = 
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>ZTV2 - Jelszó Visszaállítása</h1>
+                    <h1>FTV - Jelszó Visszaállítása</h1>
                 </div>
                 <div class="content">
                     <p>Kedves {user.first_name or user.username}!</p>
                     
-                    <p>Jelszó visszaállítási kérelmet kaptunk az Ön fiókjához a ZTV2 rendszerben.</p>
+                    <p>Jelszó visszaállítási kérelmet kaptunk az Ön fiókjához a FTV rendszerben.</p>
                     
                     <p>Amennyiben Ön kérte a jelszó visszaállítást, kattintson az alábbi gombra:</p>
                     
@@ -135,7 +135,7 @@ def send_password_reset_email(user: User, reset_token: str, frontend_url: str = 
                 </div>
                 <div class="footer">
                     <p>Ez egy automatikus email, kérjük ne válaszoljon rá.</p>
-                    <p>© 2025 ZTV2. Minden jog fenntartva.</p>
+                    <p>© 2025 FTV. Minden jog fenntartva.</p>
                 </div>
             </div>
         </body>
@@ -146,7 +146,7 @@ def send_password_reset_email(user: User, reset_token: str, frontend_url: str = 
     plain_message = f"""
 Kedves {user.first_name or user.username}!
 
-Jelszó visszaállítási kérést kaptunk az Ön fiókjához a ZTV2 rendszerben.
+Jelszó visszaállítási kérést kaptunk az Ön fiókjához a FTV rendszerben.
 
 Amennyiben Ön kérte a jelszó visszaállítást, kattintson a következő linkre:
 {reset_url}
@@ -158,7 +158,7 @@ Fontos információk:
 
 Ez egy automatikus email, kérjük ne válaszoljon rá.
 
-© 2025 ZTV2. Minden jog fenntartva.
+© 2025 FTV. Minden jog fenntartva.
     """
     
     try:
