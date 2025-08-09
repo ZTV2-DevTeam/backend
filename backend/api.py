@@ -385,3 +385,25 @@ def delete_partner(request, partner_id: int):
         return 404, {"message": "Partner not found"}
     except Exception as e:
         return 400, {"message": f"Error deleting partner: {str(e)}"}
+    
+@api.get('forgatasok', response={200: PartnerSchema, 401: ErrorSchema, 404: ErrorSchema})
+def get_forgatasok(request):
+    try:
+        forgatasok = Forgatas.objects.all()
+        response = []
+        for forgatas in forgatasok:
+            response.append({
+                "id": forgatas.id,
+                "name": forgatas.name,
+                "description": forgatas.description,
+                "date": forgatas.date.isoformat(),
+                "timeFrom": forgatas.timeFrom.isoformat(),
+                "timeTo": forgatas.timeTo.isoformat(),
+                "location": forgatas.location if forgatas.location else None,
+                "contactPerson": forgatas.contactPerson if forgatas.contactPerson else None,
+                "notes": forgatas.notes or "",
+                "forgTipus": forgatas.forgTipus,
+            })
+        return 200, response
+    except Exception as e:
+        return 401, {"message": f"Error fetching forgatasok: {str(e)}"}
