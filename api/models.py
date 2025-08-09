@@ -115,6 +115,8 @@ class Forgatas(models.Model):
     relatedKaCsa = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True, related_name='related_forgatas', limit_choices_to={'forgTipus': 'kacsa'})
     equipments = models.ManyToManyField('Equipment', blank=True, related_name='forgatasok')
 
+    beosztas = models.ForeignKey('Beosztas', on_delete=models.SET_NULL, blank=True, null=True, related_name='forgatas')
+
     def __str__(self):
         return f'{self.name} ({self.date})'
     

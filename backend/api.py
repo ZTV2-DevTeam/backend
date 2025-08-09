@@ -392,6 +392,8 @@ def get_forgatasok(request):
         forgatasok = Forgatas.objects.all()
         response = []
         for forgatas in forgatasok:
+            stab = [tag.user.id for tag in forgatas.beosztas.SzerepkorRelaciok.all()] if forgatas.beosztas else []
+
             response.append({
                 "id": forgatas.id,
                 "name": forgatas.name,
@@ -401,8 +403,10 @@ def get_forgatasok(request):
                 "timeTo": forgatas.timeTo.isoformat(),
                 "location": forgatas.location if forgatas.location else None,
                 "contactPerson": forgatas.contactPerson if forgatas.contactPerson else None,
-                "notes": forgatas.notes or "",
+                "notes": forgatas.notes if forgatas.notes else None,
                 "forgTipus": forgatas.forgTipus,
+                "sajat": request.user.id in stab,
+                "relatedKaCsa": forgatas.relatedKaCsa.id if forgatas.relatedKaCsa else None,
             })
         return 200, response
     except Exception as e:
