@@ -9,8 +9,8 @@ class Profile(models.Model):
     user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
     telefonszam = models.CharField(max_length=20, blank=True, null=True)
     medias = models.BooleanField(default=True)
-    stab = models.ForeignKey('Stab', related_name='tagok', on_delete=models.SET_NULL, blank=True, null=True)
-    osztaly = models.ForeignKey('Osztaly', on_delete=models.SET_NULL, blank=True, null=True)
+    stab = models.ForeignKey('Stab', related_name='tagok', on_delete=models.PROTECT, blank=True, null=True)
+    osztaly = models.ForeignKey('Osztaly', on_delete=models.PROTECT, blank=True, null=True)
 
     def __str__(self):
         return self.user.get_full_name()
@@ -60,7 +60,7 @@ class Partner(models.Model):
     #     ('egyeb', 'Egyéb'),
     # ]
 
-    institution = models.ForeignKey('PartnerTipus', on_delete=models.SET_NULL, related_name='partners', blank=True, null=True)
+    institution = models.ForeignKey('PartnerTipus', on_delete=models.PROTECT, related_name='partners', blank=True, null=True)
     imgUrl = models.URLField(max_length=1000, blank=True, null=True)
 
     def __str__(self):
@@ -99,8 +99,8 @@ class Forgatas(models.Model):
     date = models.DateField(blank=False, null=False)
     timeFrom = models.TimeField(blank=False, null=False)
     timeTo = models.TimeField(blank=False, null=False)
-    location = models.ForeignKey('Partner', on_delete=models.SET_NULL, blank=True, null=True)
-    contactPerson = models.ForeignKey('ContactPerson', on_delete=models.SET_NULL, blank=True, null=True)
+    location = models.ForeignKey('Partner', on_delete=models.PROTECT, blank=True, null=True)
+    contactPerson = models.ForeignKey('ContactPerson', on_delete=models.PROTECT, blank=True, null=True)
     notes = models.TextField(max_length=500, blank=True, null=True)
 
     tipusok = [
@@ -112,7 +112,7 @@ class Forgatas(models.Model):
 
     forgTipus = models.CharField(max_length=150, choices=tipusok, blank=False, null=False)
 
-    relatedKaCsa = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True, related_name='related_forgatas', limit_choices_to={'forgTipus': 'kacsa'})
+    relatedKaCsa = models.ForeignKey('self', on_delete=models.PROTECT, blank=True, null=True, related_name='related_forgatas', limit_choices_to={'forgTipus': 'kacsa'})
     equipments = models.ManyToManyField('Equipment', blank=True, related_name='forgatasok')
 
     def __str__(self):
@@ -139,7 +139,7 @@ class Equipment(models.Model):
     brand = models.CharField(max_length=150, blank=True, null=True)
     model = models.CharField(max_length=150, blank=True, null=True)
     serialNumber = models.CharField(max_length=150, unique=True, blank=True, null=True)
-    equipmentType = models.ForeignKey('EquipmentTipus', on_delete=models.SET_NULL, related_name='equipments', blank=True, null=True)
+    equipmentType = models.ForeignKey('EquipmentTipus', on_delete=models.PROTECT, related_name='equipments', blank=True, null=True)
     functional = models.BooleanField(default=True)
     notes = models.TextField(max_length=500, blank=True, null=True)
 
@@ -170,7 +170,7 @@ class ContactPerson(models.Model):
         verbose_name_plural = "Kapcsolattartók"
 
 class Announcement(models.Model):
-    author = models.ForeignKey('auth.user', related_name='announcements', on_delete=models.SET_NULL, blank=True, null=True)
+    author = models.ForeignKey('auth.user', related_name='announcements', on_delete=models.PROTECT, blank=True, null=True)
     title = models.CharField(max_length=200, blank=False, null=False)
     body = models.TextField(max_length=5000, blank=False, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -204,7 +204,7 @@ class Tavollet(models.Model):
 class Beosztas(models.Model):
     kesz = models.BooleanField(default=False)
     szerepkor_relaciok = models.ManyToManyField('SzerepkorRelaciok', related_name='beosztasok', blank=True)
-    author = models.ForeignKey('auth.User', related_name='beosztasok', on_delete=models.SET_NULL, blank=True, null=True)
+    author = models.ForeignKey('auth.User', related_name='beosztasok', on_delete=models.PROTECT, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
