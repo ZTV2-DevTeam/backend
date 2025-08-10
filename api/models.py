@@ -1,8 +1,71 @@
 from django.db import models
 from django.contrib.auth.models import User
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 # Create your models here.
+
+
+class Tanev(models.Model):
+    """
+    Tanév modell: csak a kezdő és záró dátumot tároljuk.
+    """
+    start_date = models.DateField(verbose_name='Kezdő dátum', help_text='A tanév kezdő dátuma (pl. 2024-09-01)')
+    end_date = models.DateField(verbose_name='Záró dátum', help_text='A tanév záró dátuma (pl. 2025-06-13)')
+    osztalyok = models.ManyToManyField('Osztaly', blank=True, related_name='tanevek', verbose_name='Osztályok',
+                                       help_text='A tanévhez tartozó osztályok')
+
+    class Meta:
+        verbose_name = "Tanév"
+        verbose_name_plural = "Tanévek"
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return f"{self.start_date.year}/{self.end_date.year}"
+
+    @property
+    def start_year(self):
+        return self.start_date.year
+
+    @property
+    def end_year(self):
+        return self.end_date.year
+
+    @classmethod
+    def get_current_by_date(cls, check_date=None):
+        """Visszaadja azt a tanévet, amelyik tartalmazza a megadott dátumot (alapból ma)."""
+        if check_date is None:
+            check_date = date.today()
+        return cls.objects.filter(start_date__lte=check_date, end_date__gte=check_date).first()
+
+    @classmethod
+    def get_active(cls):
+        """Az aktuális tanév (a mai dátum alapján)."""
+        return cls.get_current_by_date()
+
+    @classmethod
+    def create_for_year(cls, start_year):
+        """
+        Létrehoz egy tanévet a megadott kezdő évvel (szeptember 1-től következő év június 15-ig).
+        """
+        start_date = date(start_year, 9, 1)
+        end_date = date(start_year + 1, 6, 15)
+        return cls.objects.create(start_date=start_date, end_date=end_date)
+    
+    def add_osztaly(self, osztaly):
+        """Hozzáad egy osztályt a tanévhez"""
+        self.osztalyok.add(osztaly)
+    
+    def remove_osztaly(self, osztaly):
+        """Eltávolít egy osztályt a tanévből"""
+        self.osztalyok.remove(osztaly)
+    
+    def get_active_osztalyok(self):
+        """Visszaadja a tanévhez tartozó összes osztályt"""
+        return self.osztalyok.all()
+    
+    def get_osztalyok_by_szekcio(self, szekcio):
+        """Visszaadja a tanévhez tartozó osztályokat szekció szerint"""
+        return self.osztalyok.filter(szekcio=szekcio)
 
 
 class Profile(models.Model):
@@ -117,6 +180,8 @@ class Profile(models.Model):
 class Osztaly(models.Model):
     startYear = models.IntegerField(blank=False, null=False)
     szekcio = models.CharField(max_length=1, blank=False, null=False)
+    tanev = models.ForeignKey('Tanev', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Tanév', 
+                              help_text='Az a tanév, amikor ez az osztály aktív volt/lesz')
 
     def __str__(self):
         current_year = datetime.now().year
@@ -130,6 +195,26 @@ class Osztaly(models.Model):
 
             return f'{year_diff}F'
         return f'{self.startYear[:-2]}{self.szekcio.upper()}'
+    
+    def get_current_year_name(self, reference_tanev=None):
+        """Get the class name for a specific school year"""
+        if reference_tanev is None:
+            reference_tanev = Tanev.get_active()
+        
+        if not reference_tanev:
+            return str(self)  # Fallback to original logic
+            
+        if self.szekcio.upper() == 'F':
+            year_diff = reference_tanev.start_year - self.startYear + 8
+            if year_diff < 8:
+                return 'Bejövő NYF'
+            return f'{year_diff}F'
+        return f'{self.startYear[:-2]}{self.szekcio.upper()}'
+    
+    class Meta:
+        verbose_name = "Osztály"
+        verbose_name_plural = "Osztályok"
+        ordering = ['startYear', 'szekcio']
             
 class Stab(models.Model):
     name = models.CharField(max_length=50, unique=True, blank=False, null=False)
@@ -241,6 +326,8 @@ class Forgatas(models.Model):
     location = models.ForeignKey('Partner', on_delete=models.PROTECT, blank=True, null=True)
     contactPerson = models.ForeignKey('ContactPerson', on_delete=models.PROTECT, blank=True, null=True)
     notes = models.TextField(max_length=500, blank=True, null=True)
+    tanev = models.ForeignKey('Tanev', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Tanév',
+                              help_text='A forgatás tanéve (automatikusan meghatározva a dátum alapján)')
 
     tipusok = [
         ('kacsa', 'KaCsa'),
@@ -256,6 +343,12 @@ class Forgatas(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.date})'
+    
+    def save(self, *args, **kwargs):
+        # Auto-assign school year based on date
+        if not self.tanev and self.date:
+            self.tanev = Tanev.get_current_by_date(self.date)
+        super().save(*args, **kwargs)
     
     class Meta:
         verbose_name = "Forgatás"
@@ -350,10 +443,18 @@ class RadioSession(models.Model):
     time_to = models.TimeField(blank=False, null=False, verbose_name='Befejezés ideje')
     description = models.TextField(max_length=500, blank=True, null=True, verbose_name='Leírás')
     participants = models.ManyToManyField('auth.User', related_name='radio_sessions', blank=True, verbose_name='Résztvevők')
+    tanev = models.ForeignKey('Tanev', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Tanév',
+                              help_text='A rádiós összejátszás tanéve (automatikusan meghatározva a dátum alapján)')
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
         return f'{self.radio_stab.name} rádiós összejátszás - {self.date} {self.time_from}-{self.time_to}'
+    
+    def save(self, *args, **kwargs):
+        # Auto-assign school year based on date
+        if not self.tanev and self.date:
+            self.tanev = Tanev.get_current_by_date(self.date)
+        super().save(*args, **kwargs)
     
     def get_participant_profiles(self):
         """Get profiles of participants who should be in 9F class"""
@@ -369,6 +470,8 @@ class RadioSession(models.Model):
     def overlaps_with_datetime(self, start_datetime, end_datetime):
         """Check if this radio session overlaps with given datetime range"""
         from datetime import datetime, time
+        from calendar import FRIDAY
+        from datetime import timedelta
         
         session_start = datetime.combine(self.date, self.time_from)
         session_end = datetime.combine(self.date, self.time_to)
@@ -384,10 +487,19 @@ class Beosztas(models.Model):
     kesz = models.BooleanField(default=False)
     szerepkor_relaciok = models.ManyToManyField('SzerepkorRelaciok', related_name='beosztasok', blank=True)
     author = models.ForeignKey('auth.User', related_name='beosztasok', on_delete=models.PROTECT, blank=True, null=True)
+    tanev = models.ForeignKey('Tanev', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Tanév',
+                              help_text='A beosztás tanéve')
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        return f'Beosztás {self.id} - Kész: {self.kesz}'
+        tanev_str = f" ({self.tanev})" if self.tanev else ""
+        return f'Beosztás {self.id}{tanev_str} - Kész: {self.kesz}'
+    
+    def save(self, *args, **kwargs):
+        # Auto-assign current active school year if none specified
+        if not self.tanev:
+            self.tanev = Tanev.get_active()
+        super().save(*args, **kwargs)
     
     class Meta:
         verbose_name = "Beosztás"
