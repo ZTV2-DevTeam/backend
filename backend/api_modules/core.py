@@ -19,6 +19,14 @@ class UserPermissionsSchema(Schema):
     display_properties: dict
     role_info: dict
 
+class TanevConfigStatusSchema(Schema):
+    """Response schema for school year configuration status."""
+    config_necessary: bool
+    system_admin_setup_required: bool
+    current_tanev: dict = None
+    missing_components: list[str] = []
+    setup_steps: list[dict] = []
+
 # ============================================================================
 # Basic API Endpoints
 # ============================================================================
@@ -101,8 +109,12 @@ def register_core_endpoints(api):
                 "is_admin": False,
                 "is_developer_admin": False,
                 "is_teacher_admin": False,
+                "is_system_admin": False,
                 "is_superuser": user.is_superuser,
                 "is_staff": user.is_staff,
+                
+                # Special roles
+                "is_production_leader": False,
                 
                 # Content management permissions
                 "can_manage_users": False,
@@ -111,6 +123,7 @@ def register_core_endpoints(api):
                 "can_manage_forgatas": False,
                 "can_manage_announcements": False,
                 "can_manage_radio_sessions": False,
+                "can_manage_system_config": False,
                 
                 # Access permissions  
                 "can_access_admin_panel": user.is_staff or user.is_superuser,
@@ -134,6 +147,7 @@ def register_core_endpoints(api):
             # Role and assignment information
             role_info = {
                 "admin_type": "none",
+                "special_role": "none",
                 "primary_role": "student",
                 "stab_assignment": None,
                 "radio_stab_assignment": None,
@@ -164,17 +178,27 @@ def register_core_endpoints(api):
             if profile:
                 # Admin type permissions
                 role_info["admin_type"] = profile.admin_type
+                role_info["special_role"] = profile.special_role
                 permissions["is_admin"] = profile.is_admin
                 permissions["is_developer_admin"] = profile.is_developer_admin
                 permissions["is_teacher_admin"] = profile.is_teacher_admin
+                permissions["is_system_admin"] = profile.is_system_admin
+                permissions["is_production_leader"] = profile.is_production_leader
                 
                 # Set primary role based on admin type and assignments
-                if profile.is_developer_admin:
+                if profile.is_system_admin:
+                    role_info["primary_role"] = "system_admin"
+                    role_info["roles"].append("Rendszeradminisztrátor")
+                elif profile.is_developer_admin:
                     role_info["primary_role"] = "developer_admin"
                     role_info["roles"].append("Developer Admin")
                 elif profile.is_teacher_admin:
                     role_info["primary_role"] = "teacher_admin"
                     role_info["roles"].append("Médiatanár")
+                
+                # Add special role information
+                if profile.is_production_leader:
+                    role_info["roles"].append("Gyártásvezető")
                 
                 # Class assignment (potential osztályfőnök)
                 if profile.osztaly:
@@ -320,6 +344,180 @@ def register_core_endpoints(api):
             
         except Exception as e:
             return 401, {"message": f"Error fetching permissions: {str(e)}"}
+
+    @api.get("/tanev-config-status", response=TanevConfigStatusSchema)
+    def check_tanev_config_necessary(request, auth: JWTAuth = Depends()):
+        """
+        Checks if the system configuration setup wizard should be shown to system administrators.
+        Returns detailed status of configuration steps that need to be completed.
+        """
+        if not auth.profile or not auth.profile.is_system_admin:
+            raise HttpError(403, "Only system administrators can check configuration status")
+        
+        from api.models import (
+            Tanev, Osztaly, Stab, Config, 
+            EquipmentTipus, Equipment, Partner,
+            Szerepkor, User, Profile
+        )
+        
+        status = {
+            "config_necessary": False,
+            "steps_incomplete": [],
+            "details": {},
+            "completion_percentage": 0
+        }
+        
+        steps = []
+        completed = 0
+        
+        # Step 1: Basic system configuration
+        config_count = Config.objects.count()
+        step_completed = config_count > 0
+        steps.append({
+            "step": "basic_config",
+            "name": "Alapvető rendszerbeállítások",
+            "required": True,
+            "completed": step_completed,
+            "description": "Rendszer alapbeállításainak konfigurálása"
+        })
+        if step_completed:
+            completed += 1
+        
+        # Step 2: School year setup
+        tanev_count = Tanev.objects.count()
+        step_completed = tanev_count > 0
+        steps.append({
+            "step": "school_year",
+            "name": "Tanév beállítása",
+            "required": True,
+            "completed": step_completed,
+            "description": "Aktuális tanév létrehozása és beállítása"
+        })
+        if step_completed:
+            completed += 1
+        
+        # Step 3: Classes setup
+        osztaly_count = Osztaly.objects.count()
+        step_completed = osztaly_count > 0
+        steps.append({
+            "step": "classes",
+            "name": "Osztályok létrehozása",
+            "required": True,
+            "completed": step_completed,
+            "description": "Iskolai osztályok hozzáadása a rendszerhez"
+        })
+        if step_completed:
+            completed += 1
+        
+        # Step 4: Equipment types
+        equipment_tipus_count = EquipmentTipus.objects.count()
+        step_completed = equipment_tipus_count > 0
+        steps.append({
+            "step": "equipment_types",
+            "name": "Eszköztípusok definiálása",
+            "required": True,
+            "completed": step_completed,
+            "description": "Különböző eszköztípusok létrehozása"
+        })
+        if step_completed:
+            completed += 1
+        
+        # Step 5: Equipment inventory
+        equipment_count = Equipment.objects.count()
+        step_completed = equipment_count > 0
+        steps.append({
+            "step": "equipment",
+            "name": "Eszközök hozzáadása",
+            "required": True,
+            "completed": step_completed,
+            "description": "Eszközök felvétele a rendszerbe"
+        })
+        if step_completed:
+            completed += 1
+        
+        # Step 6: Partners/institutions
+        partner_count = Partner.objects.count()
+        step_completed = partner_count > 0
+        steps.append({
+            "step": "partners",
+            "name": "Partnerintézmények",
+            "required": False,
+            "completed": step_completed,
+            "description": "Együttműködő intézmények hozzáadása"
+        })
+        if step_completed:
+            completed += 1
+        
+        # Step 7: Roles setup  
+        szerepkor_count = Szerepkor.objects.count()
+        step_completed = szerepkor_count > 0
+        steps.append({
+            "step": "roles",
+            "name": "Szerepkörök definiálása",
+            "required": True,
+            "completed": step_completed,
+            "description": "Különböző szerepkörök létrehozása"
+        })
+        if step_completed:
+            completed += 1
+        
+        # Step 8: Staff/stab setup
+        stab_count = Stab.objects.count()
+        step_completed = stab_count > 0
+        steps.append({
+            "step": "staff",
+            "name": "Stáb létrehozása",
+            "required": True,
+            "completed": step_completed,
+            "description": "Munkacsoport/stáb felállítása"
+        })
+        if step_completed:
+            completed += 1
+        
+        # Step 9: User accounts setup
+        non_admin_users = User.objects.exclude(
+            profile__admin_type__in=['developer', 'teacher', 'system_admin']
+        ).count()
+        step_completed = non_admin_users > 0
+        steps.append({
+            "step": "users",
+            "name": "Felhasználói fiókok",
+            "required": True,
+            "completed": step_completed,
+            "description": "Diákok és tanárok fiókjainak létrehozása"
+        })
+        if step_completed:
+            completed += 1
+        
+        # Calculate completion percentage
+        total_steps = len(steps)
+        completion_percentage = round((completed / total_steps) * 100) if total_steps > 0 else 0
+        
+        # Determine if config is necessary (check only required steps)
+        required_steps = [step for step in steps if step["required"]]
+        required_completed = len([step for step in required_steps if step["completed"]])
+        config_necessary = required_completed < len(required_steps)
+        
+        # Get incomplete steps
+        steps_incomplete = [
+            step["step"] for step in steps 
+            if not step["completed"] and step["required"]
+        ]
+        
+        status.update({
+            "config_necessary": config_necessary,
+            "steps_incomplete": steps_incomplete,
+            "details": {
+                "total_steps": total_steps,
+                "completed_steps": completed,
+                "required_steps": len(required_steps),
+                "required_completed": required_completed,
+                "steps": steps
+            },
+            "completion_percentage": completion_percentage
+        })
+        
+        return status
 
 # ============================================================================
 # Utility Functions

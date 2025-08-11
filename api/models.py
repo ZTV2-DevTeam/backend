@@ -73,6 +73,12 @@ class Profile(models.Model):
         ('none', 'Nincs adminisztrátor jogosultság'),
         ('developer', 'Administrator-Developer'),
         ('teacher', 'Administrator-Teacher (Médiatanár)'),
+        ('system_admin', 'Rendszeradminisztrátor'),
+    ]
+    
+    SPECIAL_ROLES = [
+        ('none', 'Nincs különleges szerep'),
+        ('production_leader', 'Gyártásvezető'),
     ]
     
     user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
@@ -82,6 +88,10 @@ class Profile(models.Model):
     radio_stab = models.ForeignKey('RadioStab', related_name='tagok', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Rádiós stáb')
     osztaly = models.ForeignKey('Osztaly', on_delete=models.PROTECT, blank=True, null=True)
     admin_type = models.CharField(max_length=20, choices=ADMIN_TYPES, default='none', verbose_name='Adminisztrátor típus')
+    special_role = models.CharField(max_length=20, choices=SPECIAL_ROLES, default='none', verbose_name='Különleges szerep')
+    first_login_token = models.CharField(max_length=255, blank=True, null=True, verbose_name='Első bejelentkezés token')
+    first_login_sent_at = models.DateTimeField(blank=True, null=True, verbose_name='Első bejelentkezés token küldve')
+    password_set = models.BooleanField(default=False, verbose_name='Jelszó beállítva')
 
     def __str__(self):
         return self.user.get_full_name()
@@ -101,10 +111,20 @@ class Profile(models.Model):
         """Check if user is a teacher admin (Médiatanár)"""
         return self.admin_type == 'teacher'
     
+    @property
+    def is_system_admin(self):
+        """Check if user is a system admin (Rendszeradminisztrátor)"""
+        return self.admin_type == 'system_admin'
+    
+    @property
+    def is_production_leader(self):
+        """Check if user is a production leader (Gyártásvezető)"""
+        return self.special_role == 'production_leader'
+    
     def has_admin_permission(self, permission_type):
         """
         Check if user has specific admin permission
-        permission_type can be: 'developer', 'teacher', 'any'
+        permission_type can be: 'developer', 'teacher', 'system_admin', 'any'
         """
         if permission_type == 'any':
             return self.is_admin
@@ -112,6 +132,8 @@ class Profile(models.Model):
             return self.is_developer_admin
         elif permission_type == 'teacher':
             return self.is_teacher_admin
+        elif permission_type == 'system_admin':
+            return self.is_system_admin
         return False
     
     @property

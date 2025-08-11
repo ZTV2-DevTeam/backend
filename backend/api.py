@@ -36,6 +36,7 @@ from .api_modules.communications import register_communications_endpoints
 from .api_modules.organization import register_organization_endpoints
 from .api_modules.absence import register_absence_endpoints
 from .api_modules.config import register_config_endpoints
+from .api_modules.user_management import register_user_management_endpoints
 
 # ============================================================================
 # API Configuration
@@ -59,6 +60,7 @@ register_auth_endpoints(api)            # Authentication endpoints
 register_partner_endpoints(api)         # Partner management endpoints
 register_radio_endpoints(api)           # Radio management endpoints
 register_user_endpoints(api)            # User management endpoints
+register_user_management_endpoints(api) # Comprehensive user CRUD management endpoints
 register_academic_endpoints(api)        # School years and classes endpoints
 register_equipment_endpoints(api)       # Equipment management endpoints
 register_production_endpoints(api)      # Filming sessions and contact persons
