@@ -38,16 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',  # Add CORS headers support
-    'compressor',
     'api',  # Your API app
-]
-
-COMPRESS_ROOT = BASE_DIR / "static"
-
-COMPRESS_ENABLED = True
-
-STATICFILES_FINDERS = [
-    "compressor.finders.CompressorFinder",
 ]
 
 MIDDLEWARE = [
@@ -144,7 +135,7 @@ USE_TZ = False # False, mert csak egy időzónát használunk
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '__szlg/static/'
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",
