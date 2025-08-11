@@ -227,6 +227,7 @@ from ninja import Schema
 from api.models import Forgatas, ContactPerson, Partner, Equipment, Tanev
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime, date, time
+from typing import Optional
 
 # ============================================================================
 # Schemas
@@ -236,14 +237,14 @@ class ContactPersonSchema(Schema):
     """Response schema for contact person data."""
     id: int
     name: str
-    email: str = None
-    phone: str = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
 
 class ContactPersonCreateSchema(Schema):
     """Request schema for creating new contact person."""
     name: str
-    email: str = None
-    phone: str = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
 
 class ForgatoTipusSchema(Schema):
     """Schema for filming types."""
@@ -258,15 +259,15 @@ class ForgatSchema(Schema):
     date: str
     time_from: str
     time_to: str
-    location: dict = None
-    contact_person: ContactPersonSchema = None
-    notes: str = None
+    location: Optional[dict] = None
+    contact_person: Optional[ContactPersonSchema] = None
+    notes: Optional[str] = None
     type: str
     type_display: str
-    related_kacsa: dict = None
+    related_kacsa: Optional[dict] = None
     equipment_ids: list[int] = []
     equipment_count: int = 0
-    tanev: dict = None
+    tanev: Optional[dict] = None
 
 class ForgatCreateSchema(Schema):
     """Request schema for creating new filming session."""
@@ -275,26 +276,26 @@ class ForgatCreateSchema(Schema):
     date: str
     time_from: str
     time_to: str
-    location_id: int = None
-    contact_person_id: int = None
-    notes: str = None
+    location_id: Optional[int] = None
+    contact_person_id: Optional[int] = None
+    notes: Optional[str] = None
     type: str
-    related_kacsa_id: int = None
+    related_kacsa_id: Optional[int] = None
     equipment_ids: list[int] = []
 
 class ForgatUpdateSchema(Schema):
     """Request schema for updating existing filming session."""
-    name: str = None
-    description: str = None
-    date: str = None
-    time_from: str = None
-    time_to: str = None
-    location_id: int = None
-    contact_person_id: int = None
-    notes: str = None
-    type: str = None
-    related_kacsa_id: int = None
-    equipment_ids: list[int] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    date: Optional[str] = None
+    time_from: Optional[str] = None
+    time_to: Optional[str] = None
+    location_id: Optional[int] = None
+    contact_person_id: Optional[int] = None
+    notes: Optional[str] = None
+    type: Optional[str] = None
+    related_kacsa_id: Optional[int] = None
+    equipment_ids: Optional[list[int]] = None
 
 # ============================================================================
 # Constants

@@ -235,6 +235,7 @@ from django.contrib.auth.models import User
 from api.models import Announcement
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime
+from typing import Optional
 
 # ============================================================================
 # Schemas
@@ -253,7 +254,7 @@ class AnnouncementSchema(Schema):
     id: int
     title: str
     body: str
-    author: UserBasicSchema = None
+    author: Optional[UserBasicSchema] = None
     created_at: str
     updated_at: str
     recipient_count: int = 0
@@ -267,16 +268,16 @@ class AnnouncementCreateSchema(Schema):
 
 class AnnouncementUpdateSchema(Schema):
     """Request schema for updating existing announcement."""
-    title: str = None
-    body: str = None
-    recipient_ids: list[int] = None
+    title: Optional[str] = None
+    body: Optional[str] = None
+    recipient_ids: Optional[list[int]] = None
 
 class AnnouncementDetailSchema(Schema):
     """Detailed response schema for announcement with recipients."""
     id: int
     title: str
     body: str
-    author: UserBasicSchema = None
+    author: Optional[UserBasicSchema] = None
     created_at: str
     updated_at: str
     recipients: list[UserBasicSchema] = []
@@ -413,6 +414,7 @@ def register_communications_endpoints(api):
             401: Authentication failed
         """
         try:
+            from django.db.models import Q
             user = request.auth
             
             if my_announcements:
@@ -420,10 +422,9 @@ def register_communications_endpoints(api):
                 announcements = Announcement.objects.filter(author=user)
             else:
                 # Public announcements (no specific recipients) or those targeting this user
+                # Using Q objects instead of union() to avoid distinct() issues
                 announcements = Announcement.objects.filter(
-                    cimzettek__isnull=True
-                ).union(
-                    Announcement.objects.filter(cimzettek=user)
+                    Q(cimzettek__isnull=True) | Q(cimzettek=user)
                 ).distinct()
             
             announcements = announcements.select_related('author').prefetch_related('cimzettek').order_by('-created_at')

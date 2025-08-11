@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from api.models import Tavollet
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime, date
+from typing import Optional
 
 # ============================================================================
 # Schemas
@@ -27,24 +28,24 @@ class TavolletSchema(Schema):
     user: UserBasicSchema
     start_date: str
     end_date: str
-    reason: str = None
+    reason: Optional[str] = None
     denied: bool
     duration_days: int
     status: str
 
 class TavolletCreateSchema(Schema):
     """Request schema for creating new absence."""
-    user_id: int = None  # Optional - if not provided, uses current user
+    user_id: Optional[int] = None  # Optional - if not provided, uses current user
     start_date: str
     end_date: str
-    reason: str = None
+    reason: Optional[str] = None
 
 class TavolletUpdateSchema(Schema):
     """Request schema for updating existing absence."""
-    start_date: str = None
-    end_date: str = None
-    reason: str = None
-    denied: bool = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    reason: Optional[str] = None
+    denied: Optional[bool] = None
 
 # ============================================================================
 # Utility Functions

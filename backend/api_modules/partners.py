@@ -79,6 +79,7 @@ Validation Rules:
 from ninja import Schema
 from api.models import Partner, PartnerTipus
 from .auth import JWTAuth, ErrorSchema
+from typing import Optional
 
 # ============================================================================
 # Schemas
@@ -89,22 +90,22 @@ class PartnerSchema(Schema):
     id: int
     name: str
     address: str = ""
-    institution: str = None
-    imageURL: str = None
+    institution: Optional[str] = None
+    imageURL: Optional[str] = None
 
 class PartnerCreateSchema(Schema):
     """Request schema for creating new partner."""
     name: str
     address: str = ""
-    institution: str = None
-    imageURL: str = None
+    institution: Optional[str] = None
+    imageURL: Optional[str] = None
 
 class PartnerUpdateSchema(Schema):
     """Request schema for updating existing partner."""
-    name: str = None
-    address: str = None
-    institution: str = None
-    imageURL: str = None
+    name: Optional[str] = None
+    address: Optional[str] = None
+    institution: Optional[str] = None
+    imageURL: Optional[str] = None
 
 # ============================================================================
 # Utility Functions

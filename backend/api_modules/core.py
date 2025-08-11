@@ -124,6 +124,7 @@ from ninja import Schema
 from ninja.errors import HttpError
 from .auth import JWTAuth, ErrorSchema
 from api.models import Profile
+from typing import Optional
 
 # ============================================================================
 # Permission Schemas
@@ -140,7 +141,7 @@ class TanevConfigStatusSchema(Schema):
     """Response schema for school year configuration status."""
     config_necessary: bool
     system_admin_setup_required: bool
-    current_tanev: dict = None
+    current_tanev: Optional[dict] = None
     missing_components: list[str] = []
     setup_steps: list[dict] = []
 

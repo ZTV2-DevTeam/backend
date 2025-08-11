@@ -6,6 +6,7 @@ Handles system configuration and settings (Config model).
 from ninja import Schema
 from api.models import Config
 from .auth import JWTAuth, ErrorSchema
+from typing import Optional
 
 # ============================================================================
 # Schemas
@@ -20,8 +21,8 @@ class ConfigSchema(Schema):
 
 class ConfigUpdateSchema(Schema):
     """Request schema for updating configuration."""
-    active: bool = None
-    allow_emails: bool = None
+    active: Optional[bool] = None
+    allow_emails: Optional[bool] = None
 
 # ============================================================================
 # Utility Functions
@@ -72,7 +73,15 @@ def check_developer_admin_permissions(user) -> tuple[bool, str]:
             return False, "Developer adminisztrátor jogosultság szükséges"
         return True, ""
     except Profile.DoesNotExist:
-        return False, "Felhasználói profil nem található"
+        # Auto-create a basic profile for users without one
+        Profile.objects.create(
+            user=user,
+            admin_type='none',
+            special_role='none',
+            medias=True,
+            password_set=True
+        )
+        return False, "Developer adminisztrátor jogosultság szükséges"
 
 def check_admin_permissions(user) -> tuple[bool, str]:
     """
@@ -91,7 +100,15 @@ def check_admin_permissions(user) -> tuple[bool, str]:
             return False, "Adminisztrátor jogosultság szükséges"
         return True, ""
     except Profile.DoesNotExist:
-        return False, "Felhasználói profil nem található"
+        # Auto-create a basic profile for users without one
+        Profile.objects.create(
+            user=user,
+            admin_type='none',
+            special_role='none',
+            medias=True,
+            password_set=True
+        )
+        return False, "Adminisztrátor jogosultság szükséges"
 
 # ============================================================================
 # API Endpoints

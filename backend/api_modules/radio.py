@@ -128,6 +128,7 @@ from django.contrib.auth.models import User
 from api.models import RadioStab, RadioSession, Profile
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime
+from typing import Optional
 
 # ============================================================================
 # Schemas
@@ -138,14 +139,14 @@ class RadioStabSchema(Schema):
     id: int
     name: str
     team_code: str
-    description: str = None
+    description: Optional[str] = None
     member_count: int = 0
 
 class RadioStabCreateSchema(Schema):
     """Request schema for creating new radio stab."""
     name: str
     team_code: str
-    description: str = None
+    description: Optional[str] = None
 
 class RadioSessionSchema(Schema):
     """Response schema for radio session data."""
@@ -154,7 +155,7 @@ class RadioSessionSchema(Schema):
     date: str
     time_from: str
     time_to: str
-    description: str = None
+    description: Optional[str] = None
     participant_count: int = 0
 
 class RadioSessionCreateSchema(Schema):
@@ -163,7 +164,7 @@ class RadioSessionCreateSchema(Schema):
     date: str
     time_from: str
     time_to: str
-    description: str = None
+    description: Optional[str] = None
     participant_ids: list[int] = []
 
 # ============================================================================
@@ -233,7 +234,7 @@ def check_admin_permissions(user: User) -> tuple[bool, str]:
 def register_radio_endpoints(api):
     """Register all radio-related endpoints with the API router."""
     
-    @api.get("/radio-stabs", auth=JWTAuth(), response={200: list[RadioStabSchema], 401: ErrorSchema})
+    @api.get("/radio-stabs", auth=JWTAuth(), response={200: list[RadioStabSchema], 500: ErrorSchema})
     def get_radio_stabs(request):
         """
         Get all radio stabs with member counts.
@@ -243,7 +244,7 @@ def register_radio_endpoints(api):
         
         Returns:
             200: List of all radio stabs
-            401: Authentication failed
+            500: Server error
         """
         try:
             radio_stabs = RadioStab.objects.all()
@@ -254,9 +255,9 @@ def register_radio_endpoints(api):
             
             return 200, response
         except Exception as e:
-            return 401, {"message": f"Error fetching radio stabs: {str(e)}"}
+            return 500, {"message": f"Error fetching radio stabs: {str(e)}"}
 
-    @api.post("/radio-stabs", auth=JWTAuth(), response={201: RadioStabSchema, 400: ErrorSchema, 401: ErrorSchema})
+    @api.post("/radio-stabs", auth=JWTAuth(), response={201: RadioStabSchema, 400: ErrorSchema, 403: ErrorSchema, 500: ErrorSchema})
     def create_radio_stab(request, data: RadioStabCreateSchema):
         """
         Create new radio stab.
@@ -269,13 +270,14 @@ def register_radio_endpoints(api):
         Returns:
             201: Radio stab created successfully
             400: Invalid data or duplicate team code
-            401: Authentication or permission failed
+            403: Insufficient permissions
+            500: Server error
         """
         try:
             # Check if user has admin permissions
             has_permission, error_message = check_admin_permissions(request.auth)
             if not has_permission:
-                return 401, {"message": error_message}
+                return 403, {"message": error_message}
             
             radio_stab = RadioStab.objects.create(
                 name=data.name,
@@ -287,9 +289,9 @@ def register_radio_endpoints(api):
         except Exception as e:
             if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
                 return 400, {"message": "Ezzel a csapat kóddal már létezik rádiós stáb"}
-            return 400, {"message": f"Error creating radio stab: {str(e)}"}
+            return 500, {"message": f"Error creating radio stab: {str(e)}"}
 
-    @api.get("/radio-sessions", auth=JWTAuth(), response={200: list[RadioSessionSchema], 401: ErrorSchema})
+    @api.get("/radio-sessions", auth=JWTAuth(), response={200: list[RadioSessionSchema], 500: ErrorSchema})
     def get_radio_sessions(request, start_date: str = None, end_date: str = None):
         """
         Get radio sessions with optional date filtering.
@@ -303,7 +305,7 @@ def register_radio_endpoints(api):
             
         Returns:
             200: List of radio sessions
-            401: Authentication failed
+            500: Server error
         """
         try:
             sessions = RadioSession.objects.select_related('radio_stab').all()
@@ -319,9 +321,9 @@ def register_radio_endpoints(api):
             
             return 200, response
         except Exception as e:
-            return 401, {"message": f"Error fetching radio sessions: {str(e)}"}
+            return 500, {"message": f"Error fetching radio sessions: {str(e)}"}
 
-    @api.post("/radio-sessions", auth=JWTAuth(), response={201: RadioSessionSchema, 400: ErrorSchema, 401: ErrorSchema})
+    @api.post("/radio-sessions", auth=JWTAuth(), response={201: RadioSessionSchema, 400: ErrorSchema, 403: ErrorSchema, 500: ErrorSchema})
     def create_radio_session(request, data: RadioSessionCreateSchema):
         """
         Create new radio session.
@@ -335,13 +337,14 @@ def register_radio_endpoints(api):
         Returns:
             201: Radio session created successfully
             400: Invalid data or radio stab not found
-            401: Authentication or permission failed
+            403: Insufficient permissions
+            500: Server error
         """
         try:
             # Check if user has admin permissions
             has_permission, error_message = check_admin_permissions(request.auth)
             if not has_permission:
-                return 401, {"message": error_message}
+                return 403, {"message": error_message}
             
             # Get the radio stab
             try:

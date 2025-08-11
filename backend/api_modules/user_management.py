@@ -189,6 +189,7 @@ from django.utils import timezone
 from api.models import Profile, Osztaly, Stab, RadioStab
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime, timedelta
+from typing import Optional
 import jwt
 import secrets
 import string
@@ -205,26 +206,26 @@ class UserCreateSchema(Schema):
     email: str
     admin_type: str = 'none'
     special_role: str = 'none'
-    telefonszam: str = None
-    osztaly_id: int = None
-    stab_id: int = None
-    radio_stab_id: int = None
+    telefonszam: Optional[str] = None
+    osztaly_id: Optional[int] = None
+    stab_id: Optional[int] = None
+    radio_stab_id: Optional[int] = None
     medias: bool = True
 
 class UserUpdateSchema(Schema):
     """Request schema for updating existing user."""
-    username: str = None
-    first_name: str = None
-    last_name: str = None
-    email: str = None
-    admin_type: str = None
-    special_role: str = None
-    telefonszam: str = None
-    osztaly_id: int = None
-    stab_id: int = None
-    radio_stab_id: int = None
-    medias: bool = None
-    is_active: bool = None
+    username: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    admin_type: Optional[str] = None
+    special_role: Optional[str] = None
+    telefonszam: Optional[str] = None
+    osztaly_id: Optional[int] = None
+    stab_id: Optional[int] = None
+    radio_stab_id: Optional[int] = None
+    medias: Optional[bool] = None
+    is_active: Optional[bool] = None
 
 class UserDetailSchema(Schema):
     """Detailed response schema for user data."""
@@ -237,15 +238,15 @@ class UserDetailSchema(Schema):
     is_active: bool
     admin_type: str
     special_role: str
-    telefonszam: str = None
-    osztaly: dict = None
-    stab: dict = None
-    radio_stab: dict = None
+    telefonszam: Optional[str] = None
+    osztaly: Optional[dict] = None
+    stab: Optional[dict] = None
+    radio_stab: Optional[dict] = None
     medias: bool
     password_set: bool
     first_login_token_sent: bool
     date_joined: str
-    last_login: str = None
+    last_login: Optional[str] = None
 
 class FirstLoginTokenResponse(Schema):
     """Response schema for first login token generation."""
@@ -397,7 +398,16 @@ def check_system_admin_permissions(user) -> tuple[bool, str]:
             return False, "Rendszeradminisztrátor, fejlesztő vagy médiatanár jogosultság szükséges"
         return True, ""
     except Profile.DoesNotExist:
-        return False, "Felhasználói profil nem található"
+        # Auto-create a basic profile for users without one
+        Profile.objects.create(
+            user=user,
+            admin_type='none',
+            special_role='none',
+            medias=True,
+            password_set=True  # Since they can log in, assume password is set
+        )
+        # Return false for admin permissions since we just created a basic profile
+        return False, "Felhasználói profil automatikusan létrehozva - nincs adminisztrátor jogosultság"
 
 # ============================================================================
 # API Endpoints
@@ -455,7 +465,7 @@ def register_user_management_endpoints(api):
             
             return 200, response
         except Exception as e:
-            return 401, {"message": f"Error fetching users: {str(e)}"}
+            return 500, {"message": f"Error fetching users: {str(e)}"}
 
     @api.post("/manage/users", auth=JWTAuth(), response={201: UserDetailSchema, 400: ErrorSchema, 401: ErrorSchema})
     def create_user(request, data: UserCreateSchema):

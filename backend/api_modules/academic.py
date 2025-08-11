@@ -162,6 +162,7 @@ from ninja import Schema
 from api.models import Tanev, Osztaly
 from .auth import JWTAuth, ErrorSchema
 from datetime import date, datetime
+from typing import Optional
 
 # ============================================================================
 # Schemas
@@ -189,21 +190,21 @@ class OsztalySchema(Schema):
     start_year: int
     szekcio: str
     display_name: str
-    current_display_name: str = None
-    tanev: TanevSchema = None
+    current_display_name: Optional[str] = None
+    tanev: Optional[TanevSchema] = None
     student_count: int = 0
 
 class OsztalyCreateSchema(Schema):
     """Request schema for creating new class."""
     start_year: int
     szekcio: str
-    tanev_id: int = None
+    tanev_id: Optional[int] = None
 
 class OsztalyUpdateSchema(Schema):
     """Request schema for updating existing class."""
-    start_year: int = None
-    szekcio: str = None
-    tanev_id: int = None
+    start_year: Optional[int] = None
+    szekcio: Optional[str] = None
+    tanev_id: Optional[int] = None
 
 # ============================================================================
 # Utility Functions

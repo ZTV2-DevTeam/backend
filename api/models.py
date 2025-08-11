@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 
 # Create your models here.
 
@@ -376,6 +376,54 @@ class Forgatas(models.Model):
         verbose_name = "Forgatás"
         verbose_name_plural = "Forgatások"
         ordering = ['date', 'timeFrom']
+
+class Absence(models.Model):
+    diak = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+    forgatas = models.ForeignKey('Forgatas', on_delete=models.CASCADE)
+    date = models.DateField()
+    timeFrom = models.TimeField()
+    timeTo = models.TimeField()
+    excused = models.BooleanField(default=False)
+    unexcused = models.BooleanField(default=False)
+
+    # Érintett tanórák kiszámítása
+    # Csengetési rend:
+    # 0. óra - 7:30-8:15
+    # 1. óra - 8:25-9:10
+    # 2. óra - 9:20-10:05
+    # 3. óra - 10:20-11:05
+    # 4. óra - 11:15-12:00
+    # 5. óra - 12:20-13:05
+    # 6. óra - 13:25-14:10
+    # 7. óra - 14:20-15:05
+    # 8. óra - 15:15-16:00
+    # Dict, amiben a tanórák sorszáma van, amelyekbe belelóg a forgatás
+
+    affected_classes = {
+        0: (time(7, 30), time(8, 15)),
+        1: (time(8, 25), time(9, 10)),
+        2: (time(9, 20), time(10, 5)),
+        3: (time(10, 20), time(11, 5)),
+        4: (time(11, 15), time(12, 0)),
+        5: (time(12, 20), time(13, 5)),
+        6: (time(13, 25), time(14, 10)),
+        7: (time(14, 20), time(15, 5)),
+        8: (time(15, 15), time(16, 0)),
+    }
+
+    def get_affected_classes(self):
+        affected = []
+        for hour, (start, end) in self.affected_classes.items():
+            if start < self.timeTo and end > self.timeFrom:
+                affected.append(hour)
+        return affected
+
+    class Meta:
+        verbose_name = "Hiányzás"
+        verbose_name_plural = "Hiányzások"
+
+    def __str__(self):
+        return f'{self.diak.get_full_name()} - {self.date} ({self.timeFrom} - {self.timeTo})'
 
 class EquipmentTipus(models.Model):
     name = models.CharField(max_length=150, unique=True, blank=False, null=False)

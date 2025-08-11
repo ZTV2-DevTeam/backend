@@ -62,7 +62,7 @@ from django.contrib.auth.models import User
 from django.http import HttpRequest
 import jwt
 from django.conf import settings
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
@@ -100,6 +100,10 @@ class JWTAuth(HttpBearer):
                     return user
                 else:
                     print(f"User {user.username} is not active")  # Debug
+                    return None
+            else:
+                print("No user_id in JWT payload")  # Debug
+                return None
                     
         except jwt.ExpiredSignatureError:
             print("JWT token has expired")
@@ -172,8 +176,8 @@ def generate_jwt_token(user: User) -> str:
     payload = {
         "user_id": user.id,
         "username": user.username,
-        "exp": datetime.utcnow() + TOKEN_EXPIRATION_TIME,
-        "iat": datetime.utcnow(),
+        "exp": datetime.now(timezone.utc) + TOKEN_EXPIRATION_TIME,
+        "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 

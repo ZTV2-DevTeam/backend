@@ -167,6 +167,7 @@ from ninja import Schema
 from api.models import Equipment, EquipmentTipus
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime
+from typing import Optional
 
 # ============================================================================
 # Schemas
@@ -176,45 +177,45 @@ class EquipmentTipusSchema(Schema):
     """Response schema for equipment type data."""
     id: int
     name: str
-    emoji: str = None
+    emoji: Optional[str] = None
     equipment_count: int = 0
 
 class EquipmentTipusCreateSchema(Schema):
     """Request schema for creating new equipment type."""
     name: str
-    emoji: str = None
+    emoji: Optional[str] = None
 
 class EquipmentSchema(Schema):
     """Response schema for equipment data."""
     id: int
     nickname: str
-    brand: str = None
-    model: str = None
-    serial_number: str = None
-    equipment_type: EquipmentTipusSchema = None
+    brand: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    equipment_type: Optional[EquipmentTipusSchema] = None
     functional: bool
-    notes: str = None
+    notes: Optional[str] = None
     display_name: str
 
 class EquipmentCreateSchema(Schema):
     """Request schema for creating new equipment."""
     nickname: str
-    brand: str = None
-    model: str = None
-    serial_number: str = None
-    equipment_type_id: int = None
+    brand: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    equipment_type_id: Optional[int] = None
     functional: bool = True
-    notes: str = None
+    notes: Optional[str] = None
 
 class EquipmentUpdateSchema(Schema):
     """Request schema for updating existing equipment."""
-    nickname: str = None
-    brand: str = None
-    model: str = None
-    serial_number: str = None
-    equipment_type_id: int = None
-    functional: bool = None
-    notes: str = None
+    nickname: Optional[str] = None
+    brand: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    equipment_type_id: Optional[int] = None
+    functional: Optional[bool] = None
+    notes: Optional[str] = None
 
 class EquipmentAvailabilitySchema(Schema):
     """Response schema for equipment availability."""

@@ -96,6 +96,7 @@ from django.contrib.auth.models import User
 from api.models import Profile
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime
+from typing import Optional
 
 # ============================================================================
 # Schemas
@@ -108,12 +109,12 @@ class UserProfileSchema(Schema):
     first_name: str
     last_name: str
     email: str
-    telefonszam: str = None
+    telefonszam: Optional[str] = None
     medias: bool
     admin_type: str
-    stab_name: str = None
-    radio_stab_name: str = None
-    osztaly_name: str = None
+    stab_name: Optional[str] = None
+    radio_stab_name: Optional[str] = None
+    osztaly_name: Optional[str] = None
     is_second_year_radio: bool = False
 
 # ============================================================================
@@ -195,7 +196,7 @@ def filter_radio_students(profiles):
 def register_user_endpoints(api):
     """Register all user management endpoints with the API router."""
     
-    @api.get("/users", auth=JWTAuth(), response={200: list[UserProfileSchema], 401: ErrorSchema})
+    @api.get("/users", auth=JWTAuth(), response={200: list[UserProfileSchema], 403: ErrorSchema, 500: ErrorSchema})
     def get_all_users(request):
         """
         Get all users with their profiles.
@@ -205,13 +206,14 @@ def register_user_endpoints(api):
         
         Returns:
             200: List of all user profiles
-            401: Authentication or permission failed
+            403: Insufficient permissions
+            500: Server error
         """
         try:
             # Check if user has admin permissions
             has_permission, error_message = check_admin_permissions(request.auth)
             if not has_permission:
-                return 401, {"message": error_message}
+                return 403, {"message": error_message}
             
             profiles = Profile.objects.select_related(
                 'user', 'stab', 'radio_stab', 'osztaly'
@@ -223,9 +225,9 @@ def register_user_endpoints(api):
             
             return 200, response
         except Exception as e:
-            return 401, {"message": f"Error fetching users: {str(e)}"}
+            return 500, {"message": f"Error fetching users: {str(e)}"}
 
-    @api.get("/users/{user_id}", auth=JWTAuth(), response={200: UserProfileSchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/users/{user_id}", auth=JWTAuth(), response={200: UserProfileSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
     def get_user_details(request, user_id: int):
         """
         Get detailed information about a specific user.
@@ -238,14 +240,15 @@ def register_user_endpoints(api):
             
         Returns:
             200: User profile details
+            403: Insufficient permissions
             404: User not found
-            401: Authentication or permission failed
+            500: Server error
         """
         try:
             # Check if user has admin permissions
             has_permission, error_message = check_admin_permissions(request.auth)
             if not has_permission:
-                return 401, {"message": error_message}
+                return 403, {"message": error_message}
             
             user_profile = Profile.objects.select_related(
                 'user', 'stab', 'radio_stab', 'osztaly'
@@ -255,9 +258,9 @@ def register_user_endpoints(api):
         except Profile.DoesNotExist:
             return 404, {"message": "Felhasználó nem található"}
         except Exception as e:
-            return 401, {"message": f"Error fetching user details: {str(e)}"}
+            return 500, {"message": f"Error fetching user details: {str(e)}"}
 
-    @api.get("/users/radio-students", auth=JWTAuth(), response={200: list[UserProfileSchema], 401: ErrorSchema})
+    @api.get("/users/radio-students", auth=JWTAuth(), response={200: list[UserProfileSchema], 403: ErrorSchema, 500: ErrorSchema})
     def get_radio_students(request):
         """
         Get all second year radio students (9F).
@@ -267,13 +270,14 @@ def register_user_endpoints(api):
         
         Returns:
             200: List of 9F student profiles
-            401: Authentication or permission failed
+            403: Insufficient permissions
+            500: Server error
         """
         try:
             # Check if user has admin permissions
             has_permission, error_message = check_admin_permissions(request.auth)
             if not has_permission:
-                return 401, {"message": error_message}
+                return 403, {"message": error_message}
             
             # Get all profiles with F section
             profiles = Profile.objects.select_related(
@@ -287,9 +291,9 @@ def register_user_endpoints(api):
             
             return 200, response
         except Exception as e:
-            return 401, {"message": f"Error fetching radio students: {str(e)}"}
+            return 500, {"message": f"Error fetching radio students: {str(e)}"}
 
-    @api.get("/users/{user_id}/availability", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/users/{user_id}/availability", auth=JWTAuth(), response={200: dict, 400: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
     def check_user_availability(request, user_id: int, start_datetime: str, end_datetime: str):
         """
         Check user availability during specific time period.
@@ -304,9 +308,9 @@ def register_user_endpoints(api):
             
         Returns:
             200: Availability status with conflict details
-            404: User not found
-            401: Authentication failed
             400: Invalid datetime format
+            404: User not found
+            500: Server error
         """
         try:
             user_profile = Profile.objects.select_related('user').get(user__id=user_id)
@@ -367,4 +371,4 @@ def register_user_endpoints(api):
         except Profile.DoesNotExist:
             return 404, {"message": "Felhasználó nem található"}
         except Exception as e:
-            return 401, {"message": f"Error checking availability: {str(e)}"}
+            return 500, {"message": f"Error checking availability: {str(e)}"}

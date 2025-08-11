@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from api.models import Stab, Szerepkor, SzerepkorRelaciok, Beosztas, Tanev
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime
+from typing import Optional
 
 # ============================================================================
 # Schemas
@@ -27,13 +28,13 @@ class SzerepkorSchema(Schema):
     """Response schema for role data."""
     id: int
     name: str
-    ev: int = None
-    year_display: str = None
+    ev: Optional[int] = None
+    year_display: Optional[str] = None
 
 class SzerepkorCreateSchema(Schema):
     """Request schema for creating new role."""
     name: str
-    ev: int = None
+    ev: Optional[int] = None
 
 class UserBasicSchema(Schema):
     """Basic user information schema."""
@@ -58,23 +59,23 @@ class BeosztasSchema(Schema):
     """Response schema for assignment data."""
     id: int
     kesz: bool
-    author: UserBasicSchema = None
-    tanev: dict = None
+    author: Optional[UserBasicSchema] = None
+    tanev: Optional[dict] = None
     created_at: str
     role_relation_count: int = 0
 
 class BeosztasCreateSchema(Schema):
     """Request schema for creating new assignment."""
     kesz: bool = False
-    tanev_id: int = None
+    tanev_id: Optional[int] = None
     szerepkor_relacio_ids: list[int] = []
 
 class BeosztasDetailSchema(Schema):
     """Detailed response schema for assignment with role relations."""
     id: int
     kesz: bool
-    author: UserBasicSchema = None
-    tanev: dict = None
+    author: Optional[UserBasicSchema] = None
+    tanev: Optional[dict] = None
     created_at: str
     szerepkor_relaciok: list[SzerepkorRelacioSchema] = []
 
