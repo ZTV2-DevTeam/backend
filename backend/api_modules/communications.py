@@ -1,7 +1,7 @@
 """
-ZTV2 Communications API Module
+FTV Communications API Module
 
-This module provides comprehensive communication functionality for the ZTV2 system,
+This module provides comprehensive communication functionality for the FTV system,
 including announcement management, targeted messaging, and communication tracking
 for effective school-wide information distribution.
 

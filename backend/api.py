@@ -1,13 +1,13 @@
 """
-ZTV2 Backend API - Comprehensive Public API Documentation
+FTV Backend API - Comprehensive Public API Documentation
 
 This is the main API configuration file that provides a complete, organized, and 
-maintainable REST API for the ZTV2 (Zalaegerszegi Televízió 2) school media system.
+maintainable REST API for the FTV (Zalaegerszegi Televízió 2) school media system.
 
 🎥 OVERVIEW
 ============
 
-ZTV2 is a comprehensive school media management system designed for Zalaegerszegi 
+FTV is a comprehensive school media management system designed for Zalaegerszegi 
 Televízió, providing complete functionality for:
 
 - Student and teacher management
@@ -276,8 +276,8 @@ from .api_modules.user_management import register_user_management_endpoints
 
 # Initialize the main API instance
 api = NinjaAPI(
-    title="ZTV2 Backend API",
-    description="Organized API for ZTV2 backend application with modular structure",
+    title="FTV Backend API",
+    description="Organized API for FTV backend application with modular structure",
     version="2.0.0",
     csrf=False  # Disable CSRF for API endpoints
 )

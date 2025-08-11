@@ -1,8 +1,8 @@
 """
-ZTV2 Users API Module
+FTV Users API Module
 
 This module provides comprehensive user management and profile information functionality
-for the ZTV2 system, including user profiles, radio student management, and availability checking.
+for the FTV system, including user profiles, radio student management, and availability checking.
 
 Public API Overview:
 ==================

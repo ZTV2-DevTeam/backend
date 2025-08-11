@@ -1,8 +1,8 @@
 """
-ZTV2 Equipment Management API Module
+FTV Equipment Management API Module
 
 This module provides comprehensive equipment and equipment type management functionality
-for the ZTV2 system, including inventory tracking, availability checking, and maintenance status.
+for the FTV system, including inventory tracking, availability checking, and maintenance status.
 
 Public API Overview:
 ==================

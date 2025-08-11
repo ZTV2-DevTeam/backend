@@ -1,13 +1,13 @@
 """
-ZTV2 Authentication API Module
+FTV Authentication API Module
 
-This module provides comprehensive authentication functionality for the ZTV2 system,
+This module provides comprehensive authentication functionality for the FTV system,
 including JWT-based authentication, password reset, and user session management.
 
 Public API Overview:
 ==================
 
-The authentication API provides secure access to the ZTV2 system through JWT tokens.
+The authentication API provides secure access to the FTV system through JWT tokens.
 All endpoints return JSON responses and use standard HTTP status codes.
 
 Base URL: /api/

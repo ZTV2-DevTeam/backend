@@ -1,5 +1,5 @@
 """
-ZTV2 User Management API Module
+FTV User Management API Module
 
 This module provides comprehensive user management functionality with full CRUD operations
 for creating, editing, and managing users (students, teachers, administrators) including
@@ -317,7 +317,7 @@ def generate_random_password(length: int = 12) -> str:
 def send_first_login_email(user: User, token: str) -> bool:
     """Send first-time login email to user."""
     try:
-        subject = "ZTV2 - Első bejelentkezés"
+        subject = "FTV - Első bejelentkezés"
         
         # Create the login URL
         base_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
@@ -326,7 +326,7 @@ def send_first_login_email(user: User, token: str) -> bool:
         message = f"""
 Kedves {user.get_full_name()},
 
-Üdvözöljük a ZTV2 rendszerben!
+Üdvözöljük a FTV rendszerben!
 
 Az első bejelentkezéshez kattintson az alábbi linkre és állítsa be jelszavát:
 {login_url}
@@ -334,7 +334,7 @@ Az első bejelentkezéshez kattintson az alábbi linkre és állítsa be jelszav
 A link 30 napig érvényes.
 
 Üdvözlettel,
-ZTV2 Rendszer
+FTV Rendszer
         """
         
         send_mail(

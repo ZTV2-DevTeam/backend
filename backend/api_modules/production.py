@@ -1,8 +1,8 @@
 """
-ZTV2 Production Management API Module
+FTV Production Management API Module
 
 This module provides comprehensive filming session and production management functionality
-for the ZTV2 system, including session scheduling, equipment assignment, contact management,
+for the FTV system, including session scheduling, equipment assignment, contact management,
 and production workflow support.
 
 Public API Overview:

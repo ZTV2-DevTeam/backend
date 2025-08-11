@@ -1,8 +1,8 @@
-# ZTV2 Backend API - Complete Documentation
+# FTV Backend API - Complete Documentation
 
 ## 📚 Overview
 
-The ZTV2 (Zalaegerszegi Televízió 2) Backend API is a comprehensive REST API designed for school media management systems. It provides complete functionality for managing students, teachers, media equipment, filming sessions, radio programs, and administrative tasks.
+The FTV Backend API is a comprehensive REST API designed for school media management systems. It provides complete functionality for managing students, teachers, media equipment, filming sessions, radio programs, and administrative tasks.
 
 **Base URL:** `/api/`
 **Authentication:** JWT Bearer tokens

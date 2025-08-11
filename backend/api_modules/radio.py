@@ -1,8 +1,8 @@
 """
-ZTV2 Radio Management API Module
+FTV Radio Management API Module
 
 This module provides comprehensive radio stab and session management functionality
-for the ZTV2 system, specifically designed for second-year students (9F class) 
+for the FTV system, specifically designed for second-year students (9F class) 
 participating in radio activities.
 
 Public API Overview:

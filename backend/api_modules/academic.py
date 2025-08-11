@@ -1,7 +1,7 @@
 """
-ZTV2 Academic Management API Module
+FTV Academic Management API Module
 
-This module provides comprehensive academic management functionality for the ZTV2 system,
+This module provides comprehensive academic management functionality for the FTV system,
 including school year (Tanev) and class (Osztaly) management with integrated student tracking.
 
 Public API Overview:

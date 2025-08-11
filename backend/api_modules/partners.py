@@ -1,7 +1,7 @@
 """
-ZTV2 Partners API Module
+FTV Partners API Module
 
-This module provides comprehensive partner management functionality for the ZTV2 system,
+This module provides comprehensive partner management functionality for the FTV system,
 including CRUD operations for partners and automatic institution type management.
 
 Public API Overview:

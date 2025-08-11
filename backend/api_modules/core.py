@@ -1,7 +1,7 @@
 """
-ZTV2 Core API Module
+FTV Core API Module
 
-This module provides essential core functionality for the ZTV2 system, including
+This module provides essential core functionality for the FTV system, including
 basic endpoints, user permission management, and system configuration status checking.
 
 Public API Overview:
