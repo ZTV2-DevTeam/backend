@@ -17,6 +17,7 @@ Protected Endpoints (JWT Token Required):
 - GET  /users/{id}                     - Get specific user profile (admin only)
 - GET  /users/radio-students           - Get 9F radio students (admin only)
 - GET  /users/{id}/availability        - Check user availability
+- GET  /users/active                   - Get top 5 active users by last login
 
 User Profile Structure:
 ======================
@@ -95,8 +96,9 @@ from ninja import Schema
 from django.contrib.auth.models import User
 from api.models import Profile
 from .auth import JWTAuth, ErrorSchema
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
+from django.utils import timezone
 
 # ============================================================================
 # Schemas
@@ -116,6 +118,13 @@ class UserProfileSchema(Schema):
     radio_stab_name: Optional[str] = None
     osztaly_name: Optional[str] = None
     is_second_year_radio: bool = False
+
+class ActiveUserSchema(Schema):
+    """Response schema for active user data."""
+    user_id: int
+    full_name: str
+    last_login_time: Optional[str] = None
+    active: bool
 
 # ============================================================================
 # Utility Functions
@@ -372,3 +381,44 @@ def register_user_endpoints(api):
             return 404, {"message": "Felhasználó nem található"}
         except Exception as e:
             return 500, {"message": f"Error checking availability: {str(e)}"}
+
+    @api.get("/users/active", auth=JWTAuth(), response={200: list[ActiveUserSchema], 500: ErrorSchema})
+    def get_active_users(request):
+        """
+        Get top 5 active users by last login time.
+        
+        Returns the top 5 users ordered by their last login time, with their
+        full name, last login timestamp, and active status (true if last login 
+        was within 5 minutes, false otherwise).
+        
+        Returns:
+            200: List of top 5 active users with login information
+            500: Server error
+        """
+        try:
+            # Get top 5 users ordered by last_login (most recent first), excluding those with null last_login
+            users = User.objects.filter(last_login__isnull=False).order_by('-last_login')[:5]
+            
+            response = []
+            now = timezone.now()
+            
+            for user in users:
+                # Check if user was active in the last 5 minutes
+                is_active = False
+                if user.last_login:
+                    time_diff = now - user.last_login
+                    is_active = time_diff.total_seconds() <= 300  # 5 minutes = 300 seconds
+                
+                # Get full name
+                full_name = user.get_full_name() or user.username
+                
+                response.append({
+                    "user_id": user.id,
+                    "full_name": full_name,
+                    "last_login_time": user.last_login.isoformat() if user.last_login else None,
+                    "active": is_active
+                })
+            
+            return 200, response
+        except Exception as e:
+            return 500, {"message": f"Error fetching active users: {str(e)}"}
