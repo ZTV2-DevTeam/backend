@@ -68,7 +68,7 @@ def verify_password_reset_token(token: str) -> dict:
         return {'valid': False, 'error': str(e)}
 
 
-def send_password_reset_email(user: User, reset_token: str, frontend_url: str = "http://localhost:3000"):
+def send_password_reset_email(user: User, reset_token: str, frontend_url: str = "https://ftv.szlg.info"):
     """
     Send password reset email to user
     
@@ -117,7 +117,7 @@ def send_password_reset_email(user: User, reset_token: str, frontend_url: str = 
                 <div class="content">
                     <p>Kedves {user.first_name or user.username}!</p>
                     
-                    <p>Jelszó visszaállítási kérelmet kaptunk az Ön fiókjához a FTV rendszerben.</p>
+                    <p>Jelszó visszaállítási kérelmet kaptunk az Ön fiókjához az FTV rendszerben.</p>
                     
                     <p>Amennyiben Ön kérte a jelszó visszaállítást, kattintson az alábbi gombra:</p>
                     
