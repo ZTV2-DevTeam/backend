@@ -320,6 +320,10 @@ Authorization: Bearer {token}
 # Check user availability
 GET /api/users/123/availability?start_datetime=2024-03-15T14:00:00Z&end_datetime=2024-03-15T16:00:00Z
 Authorization: Bearer {token}
+
+# Get active users (active now and active today)
+GET /api/users/active
+Authorization: Bearer {token}
 ```
 
 ### User CRUD Operations

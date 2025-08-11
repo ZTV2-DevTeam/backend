@@ -17,7 +17,7 @@ Protected Endpoints (JWT Token Required):
 - GET  /users/{id}                     - Get specific user profile (admin only)
 - GET  /users/radio-students           - Get 9F radio students (admin only)
 - GET  /users/{id}/availability        - Check user availability
-- GET  /users/active                   - Get top 5 active users by last login
+- GET  /users/active                   - Get users active now (5 mins) and active today
 
 User Profile Structure:
 ======================
@@ -125,6 +125,11 @@ class ActiveUserSchema(Schema):
     full_name: str
     last_login_time: Optional[str] = None
     active: bool
+
+class ActiveUsersResponseSchema(Schema):
+    """Response schema for active users endpoint."""
+    active_now: list[ActiveUserSchema]
+    active_today: list[ActiveUserSchema]
 
 # ============================================================================
 # Utility Functions
@@ -382,43 +387,64 @@ def register_user_endpoints(api):
         except Exception as e:
             return 500, {"message": f"Error checking availability: {str(e)}"}
 
-    @api.get("/users/active", auth=JWTAuth(), response={200: list[ActiveUserSchema], 500: ErrorSchema})
+    @api.get("/users/active", auth=JWTAuth(), response={200: ActiveUsersResponseSchema, 500: ErrorSchema})
     def get_active_users(request):
         """
-        Get top 5 active users by last login time.
+        Get active users - both currently active (last 5 mins) and active today.
         
-        Returns the top 5 users ordered by their last login time, with their
-        full name, last login timestamp, and active status (true if last login 
-        was within 5 minutes, false otherwise).
+        Returns users in two categories:
+        - active_now: Users who logged in within the last 5 minutes
+        - active_today: Users who logged in today (but not necessarily active now)
         
         Returns:
-            200: List of top 5 active users with login information
+            200: Object with active_now and active_today user lists
             500: Server error
         """
         try:
-            # Get top 5 users ordered by last_login (most recent first), excluding those with null last_login
-            users = User.objects.filter(last_login__isnull=False).order_by('-last_login')[:5]
-            
-            response = []
             now = timezone.now()
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            five_minutes_ago = now - timedelta(minutes=5)
             
-            for user in users:
-                # Check if user was active in the last 5 minutes
-                is_active = False
-                if user.last_login:
-                    time_diff = now - user.last_login
-                    is_active = time_diff.total_seconds() <= 300  # 5 minutes = 300 seconds
-                
-                # Get full name
+            # Get users active now (last 5 minutes)
+            users_active_now = User.objects.filter(
+                last_login__gte=five_minutes_ago,
+                last_login__isnull=False
+            ).order_by('-last_login')
+            
+            # Get users active today
+            users_active_today = User.objects.filter(
+                last_login__gte=today_start,
+                last_login__isnull=False
+            ).exclude(
+                last_login__gte=five_minutes_ago  # Exclude users already in active_now
+            ).order_by('-last_login')
+            
+            # Format active_now users
+            active_now = []
+            for user in users_active_now:
                 full_name = user.get_full_name() or user.username
-                
-                response.append({
+                active_now.append({
                     "user_id": user.id,
                     "full_name": full_name,
                     "last_login_time": user.last_login.isoformat() if user.last_login else None,
-                    "active": is_active
+                    "active": True  # All users in this list are currently active
                 })
             
-            return 200, response
+            # Format active_today users
+            active_today = []
+            for user in users_active_today:
+                full_name = user.get_full_name() or user.username
+                active_today.append({
+                    "user_id": user.id,
+                    "full_name": full_name,
+                    "last_login_time": user.last_login.isoformat() if user.last_login else None,
+                    "active": False  # These users are not currently active
+                })
+            
+            return 200, {
+                "active_now": active_now,
+                "active_today": active_today
+            }
         except Exception as e:
             return 500, {"message": f"Error fetching active users: {str(e)}"}
+    
