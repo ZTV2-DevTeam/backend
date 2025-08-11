@@ -1,6 +1,233 @@
 """
-Communications API endpoints.
-Handles announcements and communication-related functionality.
+ZTV2 Communications API Module
+
+This module provides comprehensive communication functionality for the ZTV2 system,
+including announcement management, targeted messaging, and communication tracking
+for effective school-wide information distribution.
+
+Public API Overview:
+==================
+
+The Communications API manages all aspects of internal communication including
+announcements, targeted messaging, and communication tracking with role-based
+access control and recipient management.
+
+Base URL: /api/communications/
+
+Protected Endpoints (JWT Token Required):
+- GET  /announcements           - List announcements (filtered by user role)
+- GET  /announcements/{id}      - Get specific announcement details
+- POST /announcements           - Create new announcement (admin only)
+- PUT  /announcements/{id}      - Update announcement (admin/author only)
+- DELETE /announcements/{id}    - Delete announcement (admin/author only)
+
+Communication System Overview:
+=============================
+
+The communication system provides:
+
+1. **Broadcast Messaging**: System-wide announcements for all users
+2. **Targeted Messaging**: Specific announcements for selected recipients
+3. **Role-based Visibility**: Automatic filtering based on user permissions
+4. **Author Tracking**: Full attribution and edit history
+5. **Recipient Management**: Detailed recipient lists and tracking
+
+Announcement Types:
+==================
+
+**Global Announcements** (No specific recipients):
+- Visible to all authenticated users
+- System-wide information and updates
+- General school news and events
+
+**Targeted Announcements** (Specific recipients):
+- Visible only to selected users
+- Class-specific information
+- Role-specific communications
+- Personal messages
+
+Data Structure:
+==============
+
+Basic User Information:
+- id: Unique identifier
+- username: Login username
+- first_name, last_name: Personal names
+- full_name: Computed full name
+
+Announcement:
+- id: Unique identifier
+- title: Announcement headline
+- body: Main content (supports rich text)
+- author: User who created the announcement
+- created_at: Creation timestamp
+- updated_at: Last modification timestamp
+- recipient_count: Number of targeted recipients
+- is_targeted: Whether announcement has specific recipients
+
+Detailed Announcement (with recipients):
+- All basic fields plus:
+- recipients: Full list of targeted users
+- Complete recipient information
+
+Visibility and Access Control:
+=============================
+
+**Students**:
+- See global announcements
+- See announcements targeted to them
+- Cannot create or modify announcements
+
+**Teachers**:
+- See all announcements relevant to them
+- Can create announcements for their classes
+- Can edit their own announcements
+
+**Administrators**:
+- See all announcements in system
+- Can create system-wide announcements
+- Can edit/delete any announcement
+- Full recipient management access
+
+Example Usage:
+=============
+
+Get announcements (automatically filtered):
+curl -H "Authorization: Bearer {token}" /api/communications/announcements
+
+Get specific announcement details:
+curl -H "Authorization: Bearer {token}" /api/communications/announcements/123
+
+Create global announcement (admin/teacher):
+curl -X POST /api/communications/announcements \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title":"School Event Notification",
+    "body":"Important information about upcoming school event...",
+    "recipient_ids":[]
+  }'
+
+Create targeted announcement:
+curl -X POST /api/communications/announcements \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title":"9F Class Radio Session",
+    "body":"Radio session scheduled for Friday at 2 PM",
+    "recipient_ids":[12,34,56]
+  }'
+
+Update announcement:
+curl -X PUT /api/communications/announcements/123 \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title":"Updated: School Event Notification",
+    "body":"Updated information about the school event..."
+  }'
+
+Recipient Management:
+====================
+
+Flexible recipient targeting:
+- Individual user selection
+- Class-based targeting (all students in a class)
+- Role-based targeting (all teachers, all admins)
+- Custom recipient lists
+- Dynamic recipient calculation
+
+Recipients can be updated after announcement creation,
+allowing for flexible communication management.
+
+Rich Content Support:
+====================
+
+Announcements support rich content:
+- HTML formatting in body text
+- Long-form content support
+- Line break preservation
+- Unicode character support
+- Markdown-style formatting (frontend dependent)
+
+Author Attribution:
+==================
+
+Complete author tracking:
+- Original author identification
+- Creation timestamp
+- Last modification tracking
+- Edit history (if implemented)
+- Author permission validation
+
+This ensures accountability and proper attribution
+for all communications.
+
+Integration with User System:
+============================
+
+Seamless integration with user management:
+- Automatic user validation
+- Permission-based access control
+- Class and role integration
+- Profile-based targeting
+- Dynamic recipient lists
+
+Permission Requirements:
+=======================
+
+**Creating Announcements**:
+- Admin permissions (teacher or system admin)
+- Author automatically set to current user
+
+**Viewing Announcements**:
+- Authentication required
+- Automatic filtering based on user role and targeting
+
+**Editing Announcements**:
+- Admin permissions OR original author
+- Recipient list changes require admin permissions
+
+**Deleting Announcements**:
+- Admin permissions OR original author
+- Safety confirmations for broadcast announcements
+
+Error Handling:
+==============
+
+- 200/201: Success
+- 400: Validation errors (empty title/body, invalid recipients)
+- 401: Authentication failed or insufficient permissions
+- 403: Access denied (not author/admin for edit/delete)
+- 404: Announcement not found
+- 500: Server error
+
+Validation Rules:
+================
+
+- Title and body are required and cannot be empty
+- Recipient IDs must reference valid, active users
+- Only authors or admins can modify announcements
+- Recipients can be empty for global announcements
+- HTML content is sanitized for security
+
+Communication Best Practices:
+============================
+
+**For Global Announcements**:
+- Use clear, descriptive titles
+- Include all necessary information in body
+- Consider timing for maximum visibility
+
+**For Targeted Announcements**:
+- Verify recipient lists before sending
+- Use specific, actionable titles
+- Include relevant context for recipients
+
+**Content Guidelines**:
+- Keep messages concise but informative
+- Use professional language and tone
+- Include contact information if follow-up needed
 """
 
 from ninja import Schema

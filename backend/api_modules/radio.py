@@ -1,6 +1,126 @@
 """
-Radio management API endpoints.
-Handles radio stabs, radio sessions, and related functionality for second-year students (9F).
+ZTV2 Radio Management API Module
+
+This module provides comprehensive radio stab and session management functionality
+for the ZTV2 system, specifically designed for second-year students (9F class) 
+participating in radio activities.
+
+Public API Overview:
+==================
+
+The Radio API manages radio teams (stabs) and their sessions, supporting
+the school's radio program with scheduling and participant management.
+
+Base URL: /api/
+
+Protected Endpoints (JWT Token Required):
+- GET  /radio-stabs             - List all radio stabs with member counts
+- POST /radio-stabs             - Create new radio stab (admin only)
+- GET  /radio-sessions          - Get radio sessions with optional date filters
+- POST /radio-sessions          - Create new radio session (admin only)
+
+Radio Stab System:
+=================
+
+Radio Stabs are teams of students working together on radio content:
+- Each stab has a unique name and team code
+- Member count tracking for team management
+- Optional description for team purpose/focus
+- Automatic member association through user profiles
+
+Radio Session Management:
+========================
+
+Radio Sessions represent scheduled activities:
+- Date and time scheduling with conflict detection
+- Participant assignment and tracking
+- Integration with user availability system
+- Automatic overlap checking for scheduling
+
+Data Structure:
+==============
+
+Radio Stab:
+- id: Unique identifier
+- name: Team display name
+- team_code: Short unique identifier
+- description: Optional team description
+- member_count: Automatically calculated member count
+
+Radio Session:
+- id: Unique session identifier
+- radio_stab: Associated team information
+- date: Session date (ISO format)
+- time_from: Start time (HH:MM format)
+- time_to: End time (HH:MM format)
+- description: Optional session description
+- participant_count: Number of assigned participants
+
+9F Student Integration:
+======================
+
+Special functionality for second-year radio students:
+- Automatic identification through class assignment
+- Profile-based radio stab association
+- Availability checking for session scheduling
+- Integration with absence management system
+
+Example Usage:
+=============
+
+Get all radio stabs:
+curl -H "Authorization: Bearer {token}" /api/radio-stabs
+
+Create new radio stab (admin):
+curl -X POST /api/radio-stabs \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Morning News Team","team_code":"MNT","description":"Daily morning news broadcast"}'
+
+Get radio sessions with date filter:
+curl -H "Authorization: Bearer {token}" \
+  "/api/radio-sessions?start_date=2024-03-01&end_date=2024-03-31"
+
+Create radio session (admin):
+curl -X POST /api/radio-sessions \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"radio_stab_id":1,"date":"2024-03-15","time_from":"14:00","time_to":"16:00","participant_ids":[1,2,3]}'
+
+Permission Requirements:
+=======================
+
+- Public viewing: Authentication required
+- Stab creation: Admin permissions (teacher or system admin)
+- Session creation: Admin permissions
+- Member management: Automatic through user profiles
+
+Scheduling Features:
+===================
+
+- Date range filtering for session queries
+- Time conflict detection
+- Participant availability checking
+- Integration with user absence system
+- Automatic session overlap validation
+
+Error Handling:
+==============
+
+- 200/201: Success
+- 400: Validation errors (duplicate codes, invalid dates, stab not found)
+- 401: Authentication failed or insufficient permissions
+- 404: Resource not found
+- 500: Server error
+
+Validation Rules:
+================
+
+- Radio stab team codes must be unique
+- Session dates must be valid ISO format dates
+- Time ranges must be logical (start before end)
+- Participant IDs must reference valid users
+- Admin permissions required for creation operations
 """
 
 from ninja import Schema

@@ -1,6 +1,161 @@
 """
-Academic management API endpoints.
-Handles school years (Tanev), classes (Osztaly), and academic-related functionality.
+ZTV2 Academic Management API Module
+
+This module provides comprehensive academic management functionality for the ZTV2 system,
+including school year (Tanev) and class (Osztaly) management with integrated student tracking.
+
+Public API Overview:
+==================
+
+The Academic API manages the school's organizational structure, providing endpoints
+for school year and class management with automatic student association.
+
+Base URL: /api/
+
+Protected Endpoints (JWT Token Required):
+
+School Years:
+- GET  /school-years            - List all school years
+- GET  /school-years/{id}       - Get specific school year
+- GET  /school-years/active     - Get currently active school year
+- POST /school-years            - Create new school year (admin only)
+
+Classes:
+- GET  /classes                 - List all classes
+- GET  /classes/{id}           - Get specific class details
+- GET  /classes/by-section/{section} - Get classes by section (A, B, F, etc.)
+- POST /classes                - Create new class (admin only)
+- PUT  /classes/{id}          - Update class (admin only)
+- DELETE /classes/{id}        - Delete class (admin only)
+
+Academic Year System:
+====================
+
+School Years (Tanev) represent academic periods:
+- Automatic start/end year calculation from dates
+- Active school year determination based on current date
+- Class count tracking per school year
+- Date validation and overlap checking
+
+Class Management:
+================
+
+Classes (Osztaly) represent student groups:
+- Year-based tracking (starting year + current calculation)
+- Section-based organization (A, B, F for different specializations)
+- Student count tracking through profile associations
+- Optional school year linkage
+
+Data Structure:
+==============
+
+School Year (Tanev):
+- id: Unique identifier
+- start_date: Academic year start date
+- end_date: Academic year end date
+- start_year: Calendar year of start
+- end_year: Calendar year of end
+- display_name: Human-readable name
+- is_active: Current active status
+- osztaly_count: Number of associated classes
+
+Class (Osztaly):
+- id: Unique identifier
+- start_year: Year the class started (e.g., 2020 for class that started in 2020)
+- szekcio: Section letter (A, B, F, etc.)
+- display_name: Current class display name (e.g., "12A")
+- current_display_name: Grade level + section (calculated)
+- tanev: Associated school year (optional)
+- student_count: Number of students in class
+
+Section System:
+==============
+
+Section Types and Their Purposes:
+- Section F: Media/Radio specialization (includes 9F radio students)
+- Section A/B: General academic sections
+- Custom sections: Can be added as needed
+
+The section system integrates with:
+- Radio student identification (9F students)
+- User profile assignments
+- Permission and role management
+
+Active School Year Logic:
+========================
+
+The system automatically determines the active school year based on:
+- Current date falls between start_date and end_date
+- Only one school year can be active at a time
+- Used for current student grade calculations
+- Integration with class display name generation
+
+Example Usage:
+=============
+
+Get all school years:
+curl -H "Authorization: Bearer {token}" /api/school-years
+
+Get active school year:
+curl -H "Authorization: Bearer {token}" /api/school-years/active
+
+Create new school year (admin):
+curl -X POST /api/school-years \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"start_date":"2024-09-01","end_date":"2025-06-30"}'
+
+Get all classes:
+curl -H "Authorization: Bearer {token}" /api/classes
+
+Get classes in section F (media students):
+curl -H "Authorization: Bearer {token}" /api/classes/by-section/F
+
+Create new class (admin):
+curl -X POST /api/classes \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"start_year":2020,"szekcio":"F","tanev_id":1}'
+
+Integration Points:
+==================
+
+The academic system integrates with:
+- User profiles (student class assignments)
+- Radio system (9F student identification)
+- Permission system (class-based access control)
+- Absence management (class-level tracking)
+
+Permission Requirements:
+=======================
+
+- Viewing: Authentication required
+- Creating: Admin permissions (teacher or system admin)
+- Updating: Admin permissions
+- Deleting: Admin permissions (with constraint checking)
+
+Error Handling:
+==============
+
+- 200/201: Success
+- 400: Validation errors (invalid dates, sections, references)
+- 401: Authentication failed or insufficient permissions
+- 404: School year or class not found
+- 500: Server error
+
+Validation Rules:
+================
+
+School Years:
+- End date must be after start date
+- Date format must be valid ISO format
+- Automatic year calculation from dates
+
+Classes:
+- Section must be single character
+- Start year must be valid calendar year
+- Optional school year reference must exist
+- Student assignments prevent deletion
 """
 
 from ninja import Schema

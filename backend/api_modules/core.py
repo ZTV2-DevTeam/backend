@@ -1,10 +1,127 @@
 """
-Core API utilities and basic endpoints.
-Contains general-purpose endpoints and utility functions.
+ZTV2 Core API Module
+
+This module provides essential core functionality for the ZTV2 system, including
+basic endpoints, user permission management, and system configuration status checking.
+
+Public API Overview:
+==================
+
+The Core API provides fundamental system functionality and testing endpoints.
+It includes permission checking, system status, and basic utility endpoints.
+
+Base URL: /api/
+
+Public Endpoints (No Authentication Required):
+- GET  /hello                    - Basic test endpoint
+- GET  /test-auth               - API status and authentication check
+
+Protected Endpoints (JWT Token Required):
+- GET  /permissions             - Get comprehensive user permissions and roles
+- GET  /tanev-config-status     - System configuration status (admin only)
+
+Permission System:
+=================
+
+The permission system provides granular access control based on:
+- Admin types (developer, teacher, system admin)
+- Special roles (production leader, osztályfőnök)
+- Class and stab assignments
+- Radio student status
+
+Permission Categories:
+- Admin permissions: System-level access control
+- Content management: CRUD operations on various entities
+- Access permissions: View and interaction rights
+- Special role permissions: Role-specific functionality
+
+User Roles and Types:
+====================
+
+Admin Types:
+- developer_admin: Full system access (all permissions)
+- teacher_admin: Teaching and media management access
+- system_admin: System configuration and user management
+- none: Regular student/user access
+
+Special Roles:
+- Production Leader: Can manage filming sessions
+- Osztályfőnök: Class management for teacher admins
+- Radio Student (9F): Second-year radio participants
+
+Display Properties:
+==================
+
+The system provides frontend display configuration based on user roles:
+- Menu visibility control
+- Dashboard widget customization
+- Navigation item filtering
+- Quick action availability
+
+System Configuration Status:
+===========================
+
+For system administrators, the config status endpoint provides:
+- Setup wizard progress tracking
+- Required vs optional configuration steps
+- Completion percentage calculation
+- Detailed step status and descriptions
+
+Configuration Steps:
+- Basic system settings
+- School year setup
+- Class creation
+- Equipment type definitions
+- Equipment inventory
+- Partner institutions
+- Role definitions
+- Staff/stab setup
+- User account creation
+
+Example Usage:
+=============
+
+Test API connectivity:
+curl /api/hello?name=Developer
+
+Check user permissions:
+curl -H "Authorization: Bearer {token}" /api/permissions
+
+Check system setup status (admin only):
+curl -H "Authorization: Bearer {token}" /api/tanev-config-status
+
+Utility Functions:
+=================
+
+The module includes utility functions for:
+- Error response formatting
+- Date range validation
+- Query pagination
+- Permission checking
+- Role determination
+
+Error Handling:
+==============
+
+- 200: Success
+- 401: Authentication failed or insufficient permissions
+- 403: Access denied for specific operations
+- 400: Invalid input or validation errors
+- 500: Server error
+
+Response Schemas:
+================
+
+All endpoints return structured JSON responses with:
+- Consistent error message format
+- Comprehensive user and permission data
+- Detailed system status information
+- Standardized pagination metadata
 """
 
 from datetime import datetime
 from ninja import Schema
+from ninja.errors import HttpError
 from .auth import JWTAuth, ErrorSchema
 from api.models import Profile
 
@@ -345,13 +462,22 @@ def register_core_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching permissions: {str(e)}"}
 
-    @api.get("/tanev-config-status", response=TanevConfigStatusSchema)
-    def check_tanev_config_necessary(request, auth: JWTAuth = Depends()):
+    @api.get("/tanev-config-status", auth=JWTAuth(), response=TanevConfigStatusSchema)
+    def check_tanev_config_necessary(request):
         """
         Checks if the system configuration setup wizard should be shown to system administrators.
         Returns detailed status of configuration steps that need to be completed.
         """
-        if not auth.profile or not auth.profile.is_system_admin:
+        user = request.auth
+        
+        # Get user profile to check if they are a system admin
+        try:
+            from api.models import Profile
+            profile = Profile.objects.get(user=user)
+        except Profile.DoesNotExist:
+            raise HttpError(403, "User profile not found")
+            
+        if not profile.is_system_admin:
             raise HttpError(403, "Only system administrators can check configuration status")
         
         from api.models import (

@@ -1,24 +1,256 @@
 """
-ZTV2 Backend API - Main API Router
+ZTV2 Backend API - Comprehensive Public API Documentation
 
-This is the main API configuration file that brings together all API modules
-in an organized and maintainable structure.
+This is the main API configuration file that provides a complete, organized, and 
+maintainable REST API for the ZTV2 (Zalaegerszegi Televízió 2) school media system.
 
-API Structure:
-- /api/auth/         - Authentication (login, logout, password reset)
-- /api/partners/     - Partner management (CRUD operations)
-- /api/radio/        - Radio stab and session management
-- /api/users/        - User management and profiles
-- /api/core/         - Basic/utility endpoints
-- /api/academic/     - School years and classes
-- /api/equipment/    - Equipment and equipment types
-- /api/production/   - Filming sessions and contact persons
-- /api/communications/ - Announcements and messaging
-- /api/organization/ - Stabs, roles, and assignments
-- /api/absence/      - Absence management
-- /api/config/       - System configuration
+🎥 OVERVIEW
+============
 
-Each module is self-contained and handles its own endpoints, schemas, and logic.
+ZTV2 is a comprehensive school media management system designed for Zalaegerszegi 
+Televízió, providing complete functionality for:
+
+- Student and teacher management
+- Media equipment tracking and booking
+- Filming session planning and execution
+- Radio program management (specialized for 9F students)  
+- Partner institution collaboration
+- Academic year and class organization
+- Announcement and communication systems
+- Absence and availability tracking
+
+The API is built with Django Ninja for automatic OpenAPI documentation and 
+type-safe request/response handling.
+
+📚 API STRUCTURE
+================
+
+The API is organized into logical modules, each handling a specific domain:
+
+🔐 AUTHENTICATION (/api/auth/)
+   - JWT-based authentication system
+   - Password reset functionality
+   - User session management
+   - Token refresh capabilities
+
+👥 USER MANAGEMENT (/api/users/ & /api/user-management/)
+   - User profiles and information
+   - Administrative user CRUD operations
+   - First-time login system with email automation
+   - Role-based permission management
+   - Bulk user operations
+
+🏫 ACADEMIC SYSTEM (/api/academic/)
+   - School year (Tanév) management
+   - Class (Osztály) organization
+   - Student-class assignments
+   - Academic year calculations
+
+🎬 MEDIA PRODUCTION
+   - Equipment management (/api/equipment/)
+     * Equipment types and inventory
+     * Availability checking and booking
+     * Maintenance status tracking
+   
+   - Filming sessions (/api/production/)
+     * Session planning and scheduling
+     * Equipment assignment
+     * Participant management
+
+📻 RADIO SYSTEM (/api/radio/)
+   - Radio stab (team) management
+   - Radio session scheduling
+   - 9F student specialization support
+   - Participant coordination
+
+🏢 ORGANIZATION (/api/organization/)
+   - Stab (team/department) management
+   - Role and permission assignments
+   - Organizational structure
+
+🤝 PARTNERSHIPS (/api/partners/)
+   - External partner management
+   - Institution collaboration
+   - Partner information tracking
+
+📢 COMMUNICATIONS (/api/communications/)
+   - Announcement system
+   - Message broadcasting
+   - Notification management
+
+📋 OPERATIONS
+   - Absence management (/api/absence/)
+   - System configuration (/api/config/)
+   - Core utilities (/api/core/)
+
+🔑 AUTHENTICATION & SECURITY
+============================
+
+The API uses JWT (JSON Web Token) authentication:
+
+1. **Login Process:**
+   POST /api/login
+   - Send username/password
+   - Receive JWT token + user info
+   - Token expires after 1 hour
+
+2. **Using Tokens:**
+   - Include in Authorization header: `Bearer YOUR_JWT_TOKEN`
+   - Required for all protected endpoints
+   - Automatic user identification
+
+3. **Token Management:**
+   - POST /api/refresh-token - Get new token
+   - POST /api/logout - Invalidate session
+   - GET /api/profile - Check current user
+
+4. **Password Reset:**
+   - POST /api/forgot-password - Initiate reset
+   - GET /api/verify-reset-token/{token} - Verify token
+   - POST /api/reset-password - Complete reset
+
+🎯 PUBLIC API USAGE
+===================
+
+For external developers building custom interfaces:
+
+**Base URL:** `http://your-domain.com/api/`
+
+**Content-Type:** `application/json` (for POST/PUT requests)
+
+**Authentication:** Include JWT token in all requests:
+```
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+```
+
+**Example API Calls:**
+
+```javascript
+// Login to get token
+const loginResponse = await fetch('/api/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: 'username=myuser&password=mypass'
+});
+const { token } = await loginResponse.json();
+
+// Use token for authenticated requests
+const userProfile = await fetch('/api/profile', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+
+// Get all partners
+const partners = await fetch('/api/partners', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+```
+
+📊 RESPONSE FORMAT
+==================
+
+All endpoints return consistent JSON responses:
+
+**Success Response (200/201):**
+```json
+{
+  "id": 123,
+  "name": "Example",
+  "...": "other fields"
+}
+```
+
+**Error Response (400/401/404):**
+```json
+{
+  "message": "Detailed error description"
+}
+```
+
+**List Response:**
+```json
+[
+  {"id": 1, "name": "Item 1"},
+  {"id": 2, "name": "Item 2"}
+]
+```
+
+🎭 USER ROLES & PERMISSIONS
+===========================
+
+The system supports multiple user roles:
+
+**Student (none):**
+- View own profile
+- Check own schedule and availability
+- View announcements
+- Access assigned radio sessions (9F students)
+
+**Teacher Admin (teacher):**
+- Manage filming sessions
+- Access student information
+- Create announcements
+- Manage radio sessions
+
+**System Admin (system_admin):**
+- Full user management
+- System configuration
+- Academic year setup
+
+**Developer Admin (developer):**
+- Complete system access
+- API debugging capabilities
+- Advanced system configuration
+
+📱 FRONTEND INTEGRATION
+=======================
+
+The API provides comprehensive data for frontend applications:
+
+- **Permission System:** GET /api/permissions returns what UI elements to show
+- **User Context:** GET /api/profile provides current user information  
+- **Configuration Status:** GET /api/tanev-config-status for setup wizards
+- **Real-time Data:** All endpoints provide fresh data without caching issues
+
+🔧 DEVELOPMENT FEATURES
+=======================
+
+**Automatic Documentation:**
+- Visit `/api/docs` for interactive API explorer
+- OpenAPI/Swagger specification available
+- Type-safe schemas for all endpoints
+
+**Error Handling:**
+- Detailed error messages in Hungarian
+- Consistent error codes
+- Validation error details
+
+**Testing Endpoints:**
+- GET /api/hello - Basic connectivity test
+- GET /api/test-auth - Authentication status check
+
+🚀 GETTING STARTED
+==================
+
+1. **Authentication:** Start by calling `/api/login` to get a JWT token
+2. **User Context:** Call `/api/profile` to understand current user permissions
+3. **Explore Data:** Use appropriate endpoints based on user role
+4. **Handle Errors:** Implement proper error handling for all API calls
+
+For detailed endpoint documentation, visit the interactive docs at `/api/docs`
+when the server is running.
+
+🎓 EDUCATIONAL CONTEXT
+=====================
+
+This system is specifically designed for educational institutions with media programs:
+
+- **9F Students:** Special support for second-year radio program students
+- **Equipment Management:** School media equipment tracking and booking
+- **Academic Integration:** Seamless integration with school year systems
+- **Multi-role Support:** Students, teachers, and administrators
+
+The API enables building custom applications for specific educational workflows
+while maintaining comprehensive functionality for all user types.
 """
 
 from ninja import NinjaAPI

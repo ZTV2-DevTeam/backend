@@ -1,6 +1,226 @@
 """
-Production management API endpoints.
-Handles filming sessions (Forgatas), contact persons, and production-related functionality.
+ZTV2 Production Management API Module
+
+This module provides comprehensive filming session and production management functionality
+for the ZTV2 system, including session scheduling, equipment assignment, contact management,
+and production workflow support.
+
+Public API Overview:
+==================
+
+The Production API manages all aspects of media production including filming sessions
+(Forgatás), contact person management, equipment assignment, and production scheduling
+with conflict detection and resource management.
+
+Base URL: /api/production/
+
+Protected Endpoints (JWT Token Required):
+
+Contact Persons:
+- GET  /contact-persons         - List all contact persons
+- POST /contact-persons         - Create new contact person (admin only)
+
+Filming Sessions:
+- GET  /filming-sessions        - List filming sessions with filters
+- GET  /filming-sessions/{id}   - Get specific session details
+- POST /filming-sessions        - Create new session (admin only)
+- PUT  /filming-sessions/{id}   - Update session (admin only)
+- DELETE /filming-sessions/{id} - Delete session (admin only)
+- GET  /filming-types          - Get available filming types
+
+Production System Overview:
+==========================
+
+The production system manages the complete filming workflow:
+
+1. **Session Planning**: Date, time, and location coordination
+2. **Resource Assignment**: Equipment and personnel allocation
+3. **Contact Management**: External contact person tracking
+4. **Type Classification**: Different production categories
+5. **Conflict Detection**: Equipment and personnel availability
+6. **Academic Integration**: School year and class coordination
+
+Filming Session Types:
+=====================
+
+Production categories for different content types:
+- **KaCsa**: Special student-produced content format
+- **Rendes**: Regular/standard productions
+- **Rendezvény**: Event coverage and documentation
+- **Egyéb**: Other/miscellaneous productions
+
+Each type has specific workflows and requirements.
+
+Data Structure:
+==============
+
+Contact Person:
+- id: Unique identifier
+- name: Contact person name
+- email: Email address (optional)
+- phone: Phone number (optional)
+
+Filming Session (Forgatás):
+- id: Unique identifier
+- name: Session title/name
+- description: Detailed description
+- date: Filming date
+- time_from: Start time
+- time_to: End time
+- location: Partner location details
+- contact_person: External contact information
+- notes: Additional notes and instructions
+- type: Production type classification
+- type_display: Human-readable type label
+- related_kacsa: Related KaCsa content reference
+- equipment_ids: Assigned equipment list
+- equipment_count: Number of equipment items
+- tanev: Associated school year
+
+Equipment Integration:
+=====================
+
+Comprehensive equipment management:
+- Equipment assignment to sessions
+- Availability conflict detection
+- Equipment count tracking
+- Functional status validation
+- Resource booking prevention
+
+The system prevents double-booking equipment and ensures
+all assigned equipment is functional and available.
+
+Location and Partner Integration:
+================================
+
+Partner location management:
+- External location assignments
+- Partner institution coordination
+- Contact person linking
+- Location-specific requirements
+
+Sessions can be held at partner institutions with
+proper contact person coordination.
+
+Academic Year Integration:
+=========================
+
+School year integration features:
+- Automatic school year association
+- Academic calendar coordination
+- Student availability checking
+- Class schedule integration
+
+Sessions are automatically linked to the current
+academic year for proper organization.
+
+Example Usage:
+=============
+
+Get all contact persons:
+curl -H "Authorization: Bearer {token}" /api/production/contact-persons
+
+Create new contact person (admin):
+curl -X POST /api/production/contact-persons \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"John Smith","email":"john@partner.com","phone":"+36301234567"}'
+
+Get filming sessions with filters:
+curl -H "Authorization: Bearer {token}" \
+  "/api/production/filming-sessions?date_from=2024-03-01&date_to=2024-03-31&type=kacsa"
+
+Create new filming session (admin):
+curl -X POST /api/production/filming-sessions \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name":"Morning Show Recording",
+    "description":"Weekly morning show episode",
+    "date":"2024-03-15",
+    "time_from":"09:00",
+    "time_to":"11:00",
+    "type":"rendes",
+    "equipment_ids":[1,2,3],
+    "contact_person_id":1
+  }'
+
+Get available filming types:
+curl -H "Authorization: Bearer {token}" /api/production/filming-types
+
+KaCsa Integration:
+=================
+
+Special support for KaCsa content format:
+- Related content linking
+- Specialized workflow support
+- Content tracking and organization
+- Student-producer coordination
+
+KaCsa represents a special student-produced content
+format with specific production requirements.
+
+Scheduling and Conflicts:
+========================
+
+Advanced scheduling features:
+- Date and time validation
+- Equipment availability checking
+- Personnel conflict detection
+- Academic calendar integration
+- Automatic overlap prevention
+
+The system ensures efficient resource utilization
+and prevents scheduling conflicts.
+
+Production Workflow:
+===================
+
+Typical production workflow:
+1. Plan session (date, time, type)
+2. Assign location and contact person
+3. Select and assign equipment
+4. Validate availability (equipment + personnel)
+5. Execute session
+6. Track completion and equipment return
+
+Permission Requirements:
+=======================
+
+- Viewing: Authentication required
+- Contact Management: Admin permissions
+- Session Creation: Admin permissions (teacher or system admin)
+- Session Updates: Admin permissions
+- Session Deletion: Admin permissions with safety checks
+
+Error Handling:
+==============
+
+- 200/201: Success
+- 400: Validation errors (time conflicts, equipment unavailable)
+- 401: Authentication failed or insufficient permissions
+- 404: Session, contact person, or resource not found
+- 409: Scheduling conflict
+- 500: Server error
+
+Validation Rules:
+================
+
+- End time must be after start time
+- Dates must be valid and not in the past (configurable)
+- Equipment must be functional and available
+- Contact person references must exist
+- Location references must be valid partners
+- Session names should be unique per day (recommended)
+
+Integration Points:
+==================
+
+- Equipment system (assignment and availability)
+- Partner system (location management)
+- Academic system (school year coordination)
+- User system (permission-based access)
+- Communication system (announcement integration)
 """
 
 from ninja import Schema

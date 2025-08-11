@@ -1,6 +1,166 @@
 """
-Equipment management API endpoints.
-Handles equipment, equipment types, and availability checking.
+ZTV2 Equipment Management API Module
+
+This module provides comprehensive equipment and equipment type management functionality
+for the ZTV2 system, including inventory tracking, availability checking, and maintenance status.
+
+Public API Overview:
+==================
+
+The Equipment API manages the school's media equipment inventory, providing endpoints
+for equipment types, individual equipment items, and availability tracking for filming sessions.
+
+Base URL: /api/
+
+Protected Endpoints (JWT Token Required):
+
+Equipment Types:
+- GET  /equipment-types         - List all equipment types with counts
+- POST /equipment-types         - Create new equipment type (admin only)
+
+Equipment Items:
+- GET  /equipment              - List all equipment (with optional filters)
+- GET  /equipment/{id}         - Get specific equipment details
+- POST /equipment              - Create new equipment item (admin only)
+- PUT  /equipment/{id}         - Update equipment item (admin only)
+- DELETE /equipment/{id}       - Delete equipment item (admin only)
+- GET  /equipment/{id}/availability - Check equipment availability
+
+Equipment Type System:
+=====================
+
+Equipment types categorize different kinds of media equipment:
+- Cameras, Audio equipment, Lighting, etc.
+- Optional emoji icons for visual identification
+- Automatic equipment count tracking per type
+- Used for filtering and organization
+
+Equipment Management:
+====================
+
+Individual equipment items track:
+- Unique nicknames for easy identification
+- Brand and model information
+- Serial numbers for asset tracking
+- Functional status for maintenance management
+- Optional notes for additional information
+- Equipment type classification
+
+Data Structure:
+==============
+
+Equipment Type (EquipmentTipus):
+- id: Unique identifier
+- name: Type name (e.g., "Kamera", "Mikrofon")
+- emoji: Optional visual icon
+- equipment_count: Number of items of this type
+
+Equipment Item:
+- id: Unique identifier
+- nickname: User-friendly name (required)
+- brand: Manufacturer name (optional)
+- model: Equipment model (optional)
+- serial_number: Asset tracking number (optional)
+- equipment_type: Associated type classification
+- functional: Working status flag
+- notes: Additional information (optional)
+- display_name: Auto-generated display name
+
+Availability System:
+===================
+
+Equipment availability checking considers:
+- Functional status (broken equipment unavailable)
+- Current filming session assignments
+- Date/time range conflicts
+- Maintenance periods (if implemented)
+
+The system integrates with filming sessions to prevent double-booking
+and ensure equipment is available when needed.
+
+Example Usage:
+=============
+
+Get all equipment types:
+curl -H "Authorization: Bearer {token}" /api/equipment-types
+
+Create new equipment type (admin):
+curl -X POST /api/equipment-types \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Kamera","emoji":"📹"}'
+
+Get all functional equipment:
+curl -H "Authorization: Bearer {token}" "/api/equipment?functional_only=true"
+
+Create new equipment (admin):
+curl -X POST /api/equipment \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"nickname":"Main Camera","brand":"Canon","model":"XA40","equipment_type_id":1,"functional":true}'
+
+Check equipment availability:
+curl -H "Authorization: Bearer {token}" \
+  "/api/equipment/1/availability?start_datetime=2024-03-15T14:00:00Z&end_datetime=2024-03-15T16:00:00Z"
+
+Maintenance and Status Tracking:
+===============================
+
+Equipment functional status:
+- functional: true = Equipment is working and available
+- functional: false = Equipment is broken or under maintenance
+- Broken equipment is automatically excluded from availability
+- Status updates require admin permissions
+
+Serial Number Management:
+========================
+
+Serial numbers support asset tracking:
+- Optional field for institutional inventory
+- Helps with warranty and maintenance tracking
+- Useful for insurance and audit purposes
+- Can be used for equipment identification
+
+Integration Points:
+==================
+
+The equipment system integrates with:
+- Filming session management (equipment assignment)
+- User permissions (admin access control)
+- Availability checking for scheduling
+- Inventory tracking and reporting
+
+Permission Requirements:
+=======================
+
+- Viewing: Authentication required
+- Creating: Admin permissions (teacher or system admin)
+- Updating: Admin permissions
+- Deleting: Admin permissions (with usage checking)
+- Availability: Authentication required
+
+Error Handling:
+==============
+
+- 200/201: Success
+- 400: Validation errors (duplicate names, invalid references, equipment in use)
+- 401: Authentication failed or insufficient permissions
+- 404: Equipment or equipment type not found
+- 500: Server error
+
+Validation Rules:
+================
+
+Equipment Types:
+- Names must be unique across the system
+- Emoji field accepts single emoji characters
+- Deletion prevented if equipment items exist
+
+Equipment Items:
+- Nicknames must be unique for easy identification
+- Serial numbers should be unique if provided
+- Equipment type references must exist
+- Functional status affects availability calculations
 """
 
 from ninja import Schema

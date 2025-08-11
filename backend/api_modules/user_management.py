@@ -1,6 +1,184 @@
 """
-User management API endpoints with CRUD operations.
-Handles creating, editing, and deleting users (students, teachers), with first-time password setup.
+ZTV2 User Management API Module
+
+This module provides comprehensive user management functionality with full CRUD operations
+for creating, editing, and managing users (students, teachers, administrators) including
+automated first-time password setup and bulk operations.
+
+Public API Overview:
+==================
+
+The User Management API provides complete user lifecycle management with role-based
+access control, automated email notifications, and bulk operations for efficient
+student/teacher onboarding.
+
+Base URL: /api/user-management/
+
+Protected Endpoints (Admin Only):
+- GET    /users                 - List all users with filters
+- GET    /users/{id}           - Get specific user details
+- POST   /users                - Create new user with profile
+- PUT    /users/{id}          - Update user and profile
+- DELETE /users/{id}          - Delete user (with safety checks)
+- POST   /users/{id}/send-first-login - Send first-time login email
+- POST   /users/bulk-create-students  - Bulk create students for a class
+- POST   /users/bulk-send-emails     - Send first-login emails to multiple users
+
+First-Time Login System:
+=======================
+
+Automated user onboarding process:
+1. Admin creates user account (no password set)
+2. System generates secure JWT token (30-day validity)
+3. Email sent to user with secure login link
+4. User clicks link to set their password
+5. Automatic profile activation and login
+
+Token Security Features:
+- 30-day expiration for security
+- Single-use token validation
+- Secure JWT with type checking
+- Automatic cleanup of expired tokens
+
+User Profile Management:
+=======================
+
+Complete profile management including:
+- Basic user information (name, email, username)
+- Administrative roles and permissions
+- Class and stab assignments
+- Contact information
+- Media permissions
+- Account activation status
+
+Admin Types and Roles:
+=====================
+
+Admin Types:
+- none: Regular student user
+- teacher: Media teacher with class management
+- system_admin: System configuration access
+- developer: Full system access
+
+Special Roles:
+- none: No special role
+- production_leader: Can manage filming sessions
+- osztaly_fonok: Class leader (for teachers)
+
+User Data Structure:
+===================
+
+Complete user information including:
+- id: Unique identifier
+- username: Login username
+- first_name, last_name: Personal names
+- email: Contact email
+- full_name: Computed full name
+- is_active: Account activation status
+- admin_type: Administrative role level
+- special_role: Additional role permissions
+- telefonszam: Phone number
+- osztaly: Class assignment details
+- stab: Team assignment details
+- radio_stab: Radio team assignment
+- medias: Media permissions flag
+- password_set: Whether password has been set
+- first_login_token_sent: Email notification status
+- date_joined: Account creation date
+- last_login: Last login timestamp
+
+Bulk Operations:
+===============
+
+Efficient bulk user management:
+- Bulk student creation for entire classes
+- Automated profile generation
+- Bulk email sending with progress tracking
+- Error handling and reporting
+- Transaction safety
+
+Example Usage:
+=============
+
+Get all users with filtering:
+curl -H "Authorization: Bearer {token}" "/api/user-management/users?admin_type=none&is_active=true"
+
+Create new student:
+curl -X POST /api/user-management/users \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"student1","first_name":"John","last_name":"Doe","email":"john@example.com","osztaly_id":1}'
+
+Send first-login email:
+curl -X POST /api/user-management/users/123/send-first-login \
+  -H "Authorization: Bearer {token}"
+
+Bulk create students:
+curl -X POST /api/user-management/users/bulk-create-students \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"osztaly_id":1,"students":[{"username":"student1","first_name":"John","last_name":"Doe","email":"john@example.com"}]}'
+
+Update user profile:
+curl -X PUT /api/user-management/users/123 \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"admin_type":"teacher","special_role":"production_leader","is_active":true}'
+
+Email System Integration:
+========================
+
+Automated email notifications:
+- Welcome emails with first-login links
+- Secure token-based password setup
+- Professional email templates
+- Bulk email sending with progress tracking
+- Error handling for failed deliveries
+
+Security Features:
+=================
+
+- JWT token-based first-time login
+- Admin-only access to user management
+- Safe user deletion with dependency checks
+- Password security validation
+- Account activation controls
+
+Permission Requirements:
+=======================
+
+All endpoints require admin permissions:
+- system_admin: Full user management access
+- developer: Complete administrative access
+- teacher: Limited access (view only in most cases)
+
+Validation and Safety:
+=====================
+
+- Username uniqueness validation
+- Email format validation
+- Safe deletion with relationship checks
+- Transaction rollback on errors
+- Comprehensive error reporting
+
+Error Handling:
+==============
+
+- 200/201: Success
+- 400: Validation errors, duplicate users, invalid data
+- 401: Authentication failed or insufficient permissions
+- 404: User not found
+- 409: Conflict (duplicate username/email)
+- 500: Server error
+
+Integration Points:
+==================
+
+- Academic system (class assignments)
+- Organization system (stab assignments)
+- Radio system (radio stab assignments)
+- Equipment system (permission-based access)
+- Authentication system (profile-based permissions)
 """
 
 from ninja import Schema

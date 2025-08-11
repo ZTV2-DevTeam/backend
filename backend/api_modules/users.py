@@ -1,6 +1,94 @@
 """
-User management API endpoints.
-Handles user profiles, radio students, and availability checking.
+ZTV2 Users API Module
+
+This module provides comprehensive user management and profile information functionality
+for the ZTV2 system, including user profiles, radio student management, and availability checking.
+
+Public API Overview:
+==================
+
+The Users API enables access to user profiles, specialized radio student information,
+and availability checking for scheduling purposes.
+
+Base URL: /api/users/
+
+Protected Endpoints (JWT Token Required):
+- GET  /users                           - List all user profiles (admin only)
+- GET  /users/{id}                     - Get specific user profile (admin only)
+- GET  /users/radio-students           - Get 9F radio students (admin only)
+- GET  /users/{id}/availability        - Check user availability
+
+User Profile Structure:
+======================
+
+Each user profile contains:
+- id: Unique user identifier
+- username: Login username
+- first_name, last_name: Personal names
+- email: Contact email address
+- telefonszam: Phone number (optional)
+- medias: Media permissions flag
+- admin_type: Administrative role level
+- stab_name: Assigned team/stab name
+- radio_stab_name: Radio team assignment with code
+- osztaly_name: Class/grade information
+- is_second_year_radio: Second year radio student flag
+
+Radio Students (9F Class):
+=========================
+
+Special functionality for managing second-year radio students:
+- Automatic identification based on class section 'F'
+- Year calculation based on current date and start year
+- Integration with radio session scheduling
+- Specialized availability checking
+
+Availability System:
+===================
+
+The availability checking system considers:
+- User absence records (approved absences)
+- Radio session conflicts for radio students
+- Overlapping datetime ranges
+- Automatic conflict detection and reporting
+
+Example Usage:
+=============
+
+Get all users (admin required):
+curl -H "Authorization: Bearer {token}" /api/users
+
+Get radio students:
+curl -H "Authorization: Bearer {token}" /api/users/radio-students
+
+Check availability:
+curl -H "Authorization: Bearer {token}" \
+  "/api/users/123/availability?start_datetime=2024-03-15T14:00:00Z&end_datetime=2024-03-15T16:00:00Z"
+
+Admin Permissions:
+=================
+
+Most endpoints require administrative permissions:
+- System administrators can access all user data
+- Regular users can only access availability checking
+- Admin type validation through user profile
+
+Error Handling:
+==============
+
+- 200: Success
+- 400: Invalid input (datetime format errors)
+- 401: Authentication failed or insufficient permissions
+- 404: User/profile not found
+- 500: Server error
+
+Datetime Formats:
+================
+
+All datetime parameters should use ISO 8601 format:
+- "2024-03-15T14:00:00Z" (UTC)
+- "2024-03-15T14:00:00+02:00" (with timezone)
+- System automatically handles timezone conversion
 """
 
 from ninja import Schema

@@ -1,6 +1,59 @@
 """
-Authentication related API endpoints and utilities.
-Handles login, logout, JWT tokens, and password reset functionality.
+ZTV2 Authentication API Module
+
+This module provides comprehensive authentication functionality for the ZTV2 system,
+including JWT-based authentication, password reset, and user session management.
+
+Public API Overview:
+==================
+
+The authentication API provides secure access to the ZTV2 system through JWT tokens.
+All endpoints return JSON responses and use standard HTTP status codes.
+
+Base URL: /api/
+
+Public Endpoints (No Authentication Required):
+- POST /login                    - User login with username/password
+- POST /forgot-password          - Initiate password reset process
+- GET  /verify-reset-token/{token} - Verify password reset token
+- POST /reset-password           - Complete password reset
+
+Protected Endpoints (JWT Token Required):
+- GET  /profile                  - Get current user profile
+- GET  /dashboard               - Access user dashboard
+- POST /refresh-token           - Refresh JWT token
+- POST /logout                  - User logout
+
+Authentication Flow:
+==================
+
+1. Login with username/password to receive JWT token
+2. Include token in Authorization header: "Bearer {token}"
+3. Tokens expire after 1 hour - use refresh-token endpoint
+4. For password reset: forgot-password → verify-reset-token → reset-password
+
+Error Handling:
+==============
+
+All endpoints return consistent error responses:
+- 200: Success
+- 400: Bad request (validation errors)
+- 401: Unauthorized (invalid credentials/token)
+- 500: Server error
+
+Example Usage:
+=============
+
+Login:
+curl -X POST /api/login -d "username=testuser&password=password123"
+
+Authenticated request:
+curl -H "Authorization: Bearer {your-jwt-token}" /api/profile
+
+Password reset:
+curl -X POST /api/forgot-password -H "Content-Type: application/json" -d '{"email":"user@example.com"}'
+
+For detailed examples and schemas, see the interactive documentation.
 """
 
 from ninja import Schema, Form

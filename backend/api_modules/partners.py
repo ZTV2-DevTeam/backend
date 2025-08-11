@@ -1,6 +1,79 @@
 """
-Partner management API endpoints.
-Handles CRUD operations for partners and partner types.
+ZTV2 Partners API Module
+
+This module provides comprehensive partner management functionality for the ZTV2 system,
+including CRUD operations for partners and automatic institution type management.
+
+Public API Overview:
+==================
+
+The Partners API enables management of external partners and their institutional affiliations.
+All endpoints return JSON responses with consistent schemas.
+
+Base URL: /api/partners/
+
+Public Endpoints (No Authentication Required):
+- GET  /partners                 - List all partners
+- GET  /partners/{id}           - Get specific partner details
+
+Protected Endpoints (JWT Token Required):
+- POST /partners                - Create new partner
+- PUT  /partners/{id}          - Update partner information  
+- DELETE /partners/{id}        - Delete partner
+
+Partner Data Structure:
+======================
+
+Each partner contains:
+- id: Unique identifier
+- name: Partner organization name
+- address: Physical address (optional)
+- institution: Institution type name (auto-created if new)
+- imageURL: Partner logo/image URL (optional)
+
+Institution Management:
+======================
+
+The system automatically manages institution types:
+- When creating/updating partners with institution names
+- New institution types are automatically created
+- Institution names are normalized and deduplicated
+- Empty strings are treated as null institutions
+
+Example Usage:
+=============
+
+Get all partners:
+curl /api/partners
+
+Create new partner:
+curl -X POST /api/partners \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"ABC Corp","address":"123 Main St","institution":"Technology"}'
+
+Update partner:
+curl -X PUT /api/partners/1 \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"ABC Corporation","imageURL":"https://example.com/logo.png"}'
+
+Error Handling:
+==============
+
+- 200/201: Success
+- 400: Validation errors (duplicate names, invalid data)
+- 401: Authentication required
+- 404: Partner not found
+- 500: Server error
+
+Validation Rules:
+================
+
+- Partner names must be unique across the system
+- Institution names are automatically normalized
+- All string fields accept empty strings (converted to appropriate nulls)
+- Image URLs should be valid HTTP/HTTPS URLs
 """
 
 from ninja import Schema
