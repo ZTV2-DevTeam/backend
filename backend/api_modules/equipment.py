@@ -223,6 +223,22 @@ class EquipmentAvailabilitySchema(Schema):
     available: bool
     conflicts: list[dict] = []
 
+class EquipmentScheduleSchema(Schema):
+    """Response schema for equipment schedule."""
+    equipment_id: int
+    equipment_name: str
+    schedule: list[dict] = []
+
+class EquipmentUsageSchema(Schema):
+    """Response schema for equipment usage statistics."""
+    equipment_id: int
+    equipment_name: str
+    total_bookings: int
+    upcoming_bookings: int
+    usage_hours: float
+    most_recent_use: Optional[str] = None
+    next_booking: Optional[dict] = None
+
 # ============================================================================
 # Utility Functions
 # ============================================================================
@@ -585,79 +601,97 @@ def register_equipment_endpoints(api):
             return 400, {"message": f"Error deleting equipment: {str(e)}"}
 
     @api.get("/equipment/{equipment_id}/availability", auth=JWTAuth(), response={200: EquipmentAvailabilitySchema, 401: ErrorSchema, 404: ErrorSchema})
-    def check_equipment_availability(request, equipment_id: int, start_datetime: str, end_datetime: str):
+    def check_equipment_availability(request, equipment_id: int, start_date: str, start_time: str, end_date: str = None, end_time: str = None):
         """
         Check equipment availability during specific time period.
         
         Requires authentication. Checks if equipment is available during the
-        specified datetime range, considering filming sessions.
+        specified time range, considering filming sessions.
         
         Args:
             equipment_id: Unique equipment identifier
-            start_datetime: Start of time period (ISO format)
-            end_datetime: End of time period (ISO format)
+            start_date: Start date (YYYY-MM-DD format)
+            start_time: Start time (HH:MM format)
+            end_date: End date (YYYY-MM-DD format, defaults to start_date)
+            end_time: End time (HH:MM format, defaults to start_time + 1 hour)
             
         Returns:
             200: Availability status with conflict details
             404: Equipment not found
             401: Authentication failed
-            400: Invalid datetime format
+            400: Invalid date/time format
         """
         try:
             equipment = Equipment.objects.get(id=equipment_id)
             
-            # Parse datetime strings
+            # Parse dates and times
             try:
-                start_dt = datetime.fromisoformat(start_datetime.replace('Z', '+00:00'))
-                end_dt = datetime.fromisoformat(end_datetime.replace('Z', '+00:00'))
+                from datetime import datetime, date, time
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+                start_time_obj = datetime.strptime(start_time, '%H:%M').time()
+                
+                if end_date:
+                    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+                else:
+                    end_date_obj = start_date_obj
+                    
+                if end_time:
+                    end_time_obj = datetime.strptime(end_time, '%H:%M').time()
+                else:
+                    # Default to 1 hour later
+                    from datetime import timedelta
+                    start_datetime = datetime.combine(start_date_obj, start_time_obj)
+                    end_datetime = start_datetime + timedelta(hours=1)
+                    end_time_obj = end_datetime.time()
+                    
             except ValueError as e:
-                return 400, {"message": f"Hibás dátum formátum: {str(e)}"}
+                return 400, {"message": f"Hibás dátum/idő formátum: {str(e)}"}
             
-            # Check if equipment is functional
-            if not equipment.functional:
-                return 200, {
-                    "equipment_id": equipment_id,
-                    "available": False,
-                    "conflicts": [{
+            # Check availability
+            is_available = equipment.is_available_for(start_date_obj, start_time_obj, end_date_obj, end_time_obj)
+            
+            # Get conflicts if not available
+            conflicts = []
+            if not is_available or not equipment.functional:
+                if not equipment.functional:
+                    conflicts.append({
                         "type": "non_functional",
                         "reason": "Az eszköz nem működőképes",
                         "notes": equipment.notes
-                    }]
-                }
-            
-            # Check for conflicting filming sessions
-            conflicts = []
-            from api.models import Forgatas
-            from datetime import datetime, time
-            
-            # Find filming sessions that use this equipment and overlap with the requested time
-            conflicting_forgatas = Forgatas.objects.filter(
-                equipments=equipment,
-                date__gte=start_dt.date(),
-                date__lte=end_dt.date()
-            ).select_related('location')
-            
-            is_available = True
-            for forgatas in conflicting_forgatas:
-                # Create datetime objects for the filming session
-                forgatas_start = datetime.combine(forgatas.date, forgatas.timeFrom)
-                forgatas_end = datetime.combine(forgatas.date, forgatas.timeTo)
-                
-                # Check for overlap
-                if forgatas_start < end_dt and forgatas_end > start_dt:
-                    is_available = False
-                    conflicts.append({
-                        "type": "filming_session",
-                        "name": forgatas.name,
-                        "date": forgatas.date.isoformat(),
-                        "time_from": forgatas.timeFrom.isoformat(),
-                        "time_to": forgatas.timeTo.isoformat(),
-                        "location": forgatas.location.name if forgatas.location else None
                     })
+                    
+                # Get overlapping bookings
+                overlapping_bookings = equipment.get_bookings_for_period(start_date_obj, end_date_obj)
+                for booking in overlapping_bookings:
+                    # Check for actual time overlap
+                    booking_conflicts = False
+                    if booking.date == start_date_obj == end_date_obj:
+                        if booking.timeFrom < end_time_obj and booking.timeTo > start_time_obj:
+                            booking_conflicts = True
+                    elif booking.date == start_date_obj:
+                        if booking.timeTo > start_time_obj:
+                            booking_conflicts = True
+                    elif booking.date == end_date_obj:
+                        if booking.timeFrom < end_time_obj:
+                            booking_conflicts = True
+                    elif start_date_obj < booking.date < end_date_obj:
+                        booking_conflicts = True
+                        
+                    if booking_conflicts:
+                        conflicts.append({
+                            "type": "filming_session",
+                            "forgatas_id": booking.id,
+                            "forgatas_name": booking.name,
+                            "date": booking.date.isoformat(),
+                            "time_from": booking.timeFrom.isoformat(),
+                            "time_to": booking.timeTo.isoformat(),
+                            "location": booking.location.name if booking.location else None,
+                            "type_display": dict(booking.tipusok).get(booking.forgTipus, booking.forgTipus)
+                        })
             
             return 200, {
                 "equipment_id": equipment_id,
-                "available": is_available,
+                "available": is_available and equipment.functional,
                 "conflicts": conflicts
             }
             
@@ -665,3 +699,192 @@ def register_equipment_endpoints(api):
             return 404, {"message": "Eszköz nem található"}
         except Exception as e:
             return 401, {"message": f"Error checking equipment availability: {str(e)}"}
+
+    @api.get("/equipment/{equipment_id}/schedule", auth=JWTAuth(), response={200: EquipmentScheduleSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def get_equipment_schedule(request, equipment_id: int, start_date: str, end_date: str = None):
+        """
+        Get equipment booking schedule for a date range.
+        
+        Requires authentication. Returns detailed schedule showing when equipment
+        is booked and for which filming sessions.
+        
+        Args:
+            equipment_id: Unique equipment identifier
+            start_date: Start date (YYYY-MM-DD format)
+            end_date: End date (YYYY-MM-DD format, defaults to start_date)
+            
+        Returns:
+            200: Equipment schedule with booking details
+            404: Equipment not found
+            401: Authentication failed
+            400: Invalid date format
+        """
+        try:
+            equipment = Equipment.objects.get(id=equipment_id)
+            
+            # Parse dates
+            try:
+                from datetime import datetime
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+                if end_date:
+                    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+                else:
+                    end_date_obj = start_date_obj
+            except ValueError as e:
+                return 400, {"message": f"Hibás dátum formátum: {str(e)}"}
+            
+            # Get schedule
+            schedule = equipment.get_availability_schedule(start_date_obj, end_date_obj)
+            
+            return 200, {
+                "equipment_id": equipment_id,
+                "equipment_name": equipment.nickname,
+                "schedule": schedule
+            }
+            
+        except Equipment.DoesNotExist:
+            return 404, {"message": "Eszköz nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error getting equipment schedule: {str(e)}"}
+
+    @api.get("/equipment/{equipment_id}/usage", auth=JWTAuth(), response={200: EquipmentUsageSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def get_equipment_usage(request, equipment_id: int, days_back: int = 30):
+        """
+        Get equipment usage statistics.
+        
+        Requires authentication. Returns usage statistics including total bookings,
+        usage hours, and recent activity.
+        
+        Args:
+            equipment_id: Unique equipment identifier
+            days_back: Number of days to look back for statistics (default 30)
+            
+        Returns:
+            200: Equipment usage statistics
+            404: Equipment not found
+            401: Authentication failed
+        """
+        try:
+            equipment = Equipment.objects.get(id=equipment_id)
+            
+            from datetime import date, timedelta
+            from django.utils import timezone
+            
+            # Calculate date range
+            today = date.today()
+            start_date = today - timedelta(days=days_back)
+            
+            # Get bookings in the period
+            bookings = equipment.get_bookings_for_period(start_date, today)
+            
+            # Calculate statistics
+            total_bookings = bookings.count()
+            upcoming_bookings = equipment.forgatasok.filter(date__gt=today).count()
+            
+            # Calculate usage hours
+            usage_hours = 0.0
+            most_recent_use = None
+            
+            for booking in bookings:
+                # Calculate duration in hours
+                from datetime import datetime, timedelta
+                start_datetime = datetime.combine(booking.date, booking.timeFrom)
+                end_datetime = datetime.combine(booking.date, booking.timeTo)
+                duration = end_datetime - start_datetime
+                usage_hours += duration.total_seconds() / 3600
+                
+                # Track most recent use
+                if most_recent_use is None or booking.date > most_recent_use:
+                    most_recent_use = booking.date
+            
+            # Get next booking
+            next_booking_obj = equipment.forgatasok.filter(date__gt=today).order_by('date', 'timeFrom').first()
+            next_booking = None
+            if next_booking_obj:
+                next_booking = {
+                    "forgatas_id": next_booking_obj.id,
+                    "forgatas_name": next_booking_obj.name,
+                    "date": next_booking_obj.date.isoformat(),
+                    "time_from": next_booking_obj.timeFrom.isoformat(),
+                    "time_to": next_booking_obj.timeTo.isoformat(),
+                    "location": next_booking_obj.location.name if next_booking_obj.location else None
+                }
+            
+            return 200, {
+                "equipment_id": equipment_id,
+                "equipment_name": equipment.nickname,
+                "total_bookings": total_bookings,
+                "upcoming_bookings": upcoming_bookings,
+                "usage_hours": round(usage_hours, 2),
+                "most_recent_use": most_recent_use.isoformat() if most_recent_use else None,
+                "next_booking": next_booking
+            }
+            
+        except Equipment.DoesNotExist:
+            return 404, {"message": "Eszköz nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error getting equipment usage: {str(e)}"}
+
+    @api.get("/equipment/availability-overview", auth=JWTAuth(), response={200: list[dict], 401: ErrorSchema})
+    def get_equipment_availability_overview(request, date: str, type_id: int = None):
+        """
+        Get availability overview for all equipment on a specific date.
+        
+        Requires authentication. Returns availability status for all equipment,
+        optionally filtered by equipment type.
+        
+        Args:
+            date: Date to check (YYYY-MM-DD format)
+            type_id: Optional equipment type filter
+            
+        Returns:
+            200: List of equipment with availability status
+            401: Authentication failed
+            400: Invalid date format
+        """
+        try:
+            # Parse date
+            try:
+                from datetime import datetime
+                check_date = datetime.strptime(date, '%Y-%m-%d').date()
+            except ValueError as e:
+                return 400, {"message": f"Hibás dátum formátum: {str(e)}"}
+            
+            # Get equipment
+            equipment_qs = Equipment.objects.select_related('equipmentType')
+            if type_id:
+                equipment_qs = equipment_qs.filter(equipmentType_id=type_id)
+            
+            equipment_list = equipment_qs.all()
+            
+            # Check availability for each equipment
+            overview = []
+            for equip in equipment_list:
+                # Get bookings for this date
+                bookings_today = equip.forgatasok.filter(date=check_date).order_by('timeFrom')
+                
+                booking_details = []
+                for booking in bookings_today:
+                    booking_details.append({
+                        "forgatas_id": booking.id,
+                        "forgatas_name": booking.name,
+                        "time_from": booking.timeFrom.isoformat(),
+                        "time_to": booking.timeTo.isoformat(),
+                        "type": booking.forgTipus,
+                        "location": booking.location.name if booking.location else None
+                    })
+                
+                overview.append({
+                    "equipment_id": equip.id,
+                    "equipment_name": equip.nickname,
+                    "equipment_type": equip.equipmentType.name if equip.equipmentType else None,
+                    "functional": equip.functional,
+                    "available_periods": bookings_today.count() == 0,  # Simplified - fully free day
+                    "bookings": booking_details,
+                    "booking_count": bookings_today.count()
+                })
+            
+            return 200, overview
+            
+        except Exception as e:
+            return 401, {"message": f"Error getting equipment availability overview: {str(e)}"}

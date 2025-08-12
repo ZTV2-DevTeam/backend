@@ -206,6 +206,7 @@ class UserCreateSchema(Schema):
     email: str
     admin_type: str = 'none'
     special_role: str = 'none'
+    osztalyfonok: bool = False
     telefonszam: Optional[str] = None
     osztaly_id: Optional[int] = None
     stab_id: Optional[int] = None
@@ -220,6 +221,7 @@ class UserUpdateSchema(Schema):
     email: Optional[str] = None
     admin_type: Optional[str] = None
     special_role: Optional[str] = None
+    osztalyfonok: Optional[bool] = None
     telefonszam: Optional[str] = None
     osztaly_id: Optional[int] = None
     stab_id: Optional[int] = None
@@ -238,6 +240,7 @@ class UserDetailSchema(Schema):
     is_active: bool
     admin_type: str
     special_role: str
+    osztalyfonok: bool
     telefonszam: Optional[str] = None
     osztaly: Optional[dict] = None
     stab: Optional[dict] = None
@@ -247,6 +250,7 @@ class UserDetailSchema(Schema):
     first_login_token_sent: bool
     date_joined: str
     last_login: Optional[str] = None
+    owned_osztaly_count: int = 0
 
 class FirstLoginTokenResponse(Schema):
     """Response schema for first login token generation."""
@@ -357,6 +361,11 @@ def create_user_detail_response(user: User, profile: Profile = None) -> dict:
         except Profile.DoesNotExist:
             profile = None
     
+    # Count owned classes if user is marked as class teacher
+    owned_osztaly_count = 0
+    if profile and profile.osztalyfonok:
+        owned_osztaly_count = Osztaly.objects.filter(osztaly_fonokei=user).count()
+    
     return {
         "id": user.id,
         "username": user.username,
@@ -367,6 +376,7 @@ def create_user_detail_response(user: User, profile: Profile = None) -> dict:
         "is_active": user.is_active,
         "admin_type": profile.admin_type if profile else 'none',
         "special_role": profile.special_role if profile else 'none',
+        "osztalyfonok": profile.osztalyfonok if profile else False,
         "telefonszam": profile.telefonszam if profile else None,
         "osztaly": {
             "id": profile.osztaly.id,
@@ -387,7 +397,8 @@ def create_user_detail_response(user: User, profile: Profile = None) -> dict:
         "password_set": profile.password_set if profile else False,
         "first_login_token_sent": bool(profile.first_login_sent_at) if profile else False,
         "date_joined": user.date_joined.isoformat(),
-        "last_login": user.last_login.isoformat() if user.last_login else None
+        "last_login": user.last_login.isoformat() if user.last_login else None,
+        "owned_osztaly_count": owned_osztaly_count
     }
 
 def check_system_admin_permissions(user) -> tuple[bool, str]:
@@ -543,6 +554,7 @@ def register_user_management_endpoints(api):
                 user=user,
                 admin_type=data.admin_type,
                 special_role=data.special_role,
+                osztalyfonok=data.osztalyfonok,
                 telefonszam=data.telefonszam,
                 osztaly=osztaly,
                 stab=stab,
@@ -618,6 +630,8 @@ def register_user_management_endpoints(api):
                 profile.telefonszam = data.telefonszam
             if data.medias is not None:
                 profile.medias = data.medias
+            if data.osztalyfonok is not None:
+                profile.osztalyfonok = data.osztalyfonok
             
             # Update related objects
             if data.osztaly_id is not None:
@@ -813,6 +827,7 @@ def register_user_management_endpoints(api):
                         user=user,
                         admin_type='none',
                         special_role='none',
+                        osztalyfonok=False,
                         telefonszam=student_data.get('telefonszam'),
                         osztaly=osztaly,
                         medias=student_data.get('medias', True),

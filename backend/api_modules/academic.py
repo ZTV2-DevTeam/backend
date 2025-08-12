@@ -159,7 +159,7 @@ Classes:
 """
 
 from ninja import Schema
-from api.models import Tanev, Osztaly
+from api.models import Tanev, Osztaly, Profile
 from .auth import JWTAuth, ErrorSchema
 from datetime import date, datetime
 from typing import Optional
@@ -206,6 +206,29 @@ class OsztalyUpdateSchema(Schema):
     szekcio: Optional[str] = None
     tanev_id: Optional[int] = None
 
+class OsztalyTeacherSchema(Schema):
+    """Response schema for class teacher data."""
+    user_id: int
+    username: str
+    full_name: str
+    email: str
+    is_main_teacher: bool = False
+
+class OsztalyWithTeachersSchema(Schema):
+    """Response schema for class data including teachers."""
+    id: int
+    start_year: int
+    szekcio: str
+    display_name: str
+    current_display_name: Optional[str] = None
+    tanev: Optional[TanevSchema] = None
+    student_count: int = 0
+    teachers: list[OsztalyTeacherSchema] = []
+
+class ClassTeacherAssignSchema(Schema):
+    """Request schema for assigning/removing class teachers."""
+    user_ids: list[int]
+
 # ============================================================================
 # Utility Functions
 # ============================================================================
@@ -221,7 +244,7 @@ def create_tanev_response(tanev: Tanev) -> dict:
         Dictionary with school year information
     """
     active_tanev = Tanev.get_active()
-    is_active = active_tanev and active_tanev.id == tanev.id
+    is_active = active_tanev is not None and active_tanev.id == tanev.id
     
     return {
         "id": tanev.id,
@@ -253,6 +276,31 @@ def create_osztaly_response(osztaly: Osztaly) -> dict:
         "tanev": create_tanev_response(osztaly.tanev) if osztaly.tanev else None,
         "student_count": osztaly.profile_set.count() if hasattr(osztaly, 'profile_set') else 0
     }
+
+def create_osztaly_with_teachers_response(osztaly: Osztaly) -> dict:
+    """
+    Create standardized class response dictionary including teacher information.
+    
+    Args:
+        osztaly: Osztaly model instance
+        
+    Returns:
+        Dictionary with class information including teachers
+    """
+    # Get class teachers
+    teachers = []
+    for i, teacher_user in enumerate(osztaly.get_osztaly_fonokei()):
+        teachers.append({
+            "user_id": teacher_user.id,
+            "username": teacher_user.username,
+            "full_name": teacher_user.get_full_name(),
+            "email": teacher_user.email,
+            "is_main_teacher": i == 0  # First teacher is considered main teacher
+        })
+    
+    base_response = create_osztaly_response(osztaly)
+    base_response["teachers"] = teachers
+    return base_response
 
 def check_admin_permissions(user) -> tuple[bool, str]:
     """
@@ -589,3 +637,196 @@ def register_academic_endpoints(api):
             return 404, {"message": "Osztály nem található"}
         except Exception as e:
             return 400, {"message": f"Error deleting class: {str(e)}"}
+
+    # ========================================================================
+    # Class Teacher Management Endpoints
+    # ========================================================================
+    
+    @api.get("/classes/{osztaly_id}/teachers", auth=JWTAuth(), response={200: list[OsztalyTeacherSchema], 401: ErrorSchema, 404: ErrorSchema})
+    def get_class_teachers(request, osztaly_id: int):
+        """
+        Get all teachers assigned to a specific class.
+        
+        Requires authentication. Returns list of teachers for the class.
+        
+        Args:
+            osztaly_id: Unique class identifier
+            
+        Returns:
+            200: List of class teachers
+            404: Class not found
+            401: Authentication failed
+        """
+        try:
+            osztaly = Osztaly.objects.get(id=osztaly_id)
+            teachers = []
+            
+            for i, teacher_user in enumerate(osztaly.get_osztaly_fonokei()):
+                teachers.append({
+                    "user_id": teacher_user.id,
+                    "username": teacher_user.username,
+                    "full_name": teacher_user.get_full_name(),
+                    "email": teacher_user.email,
+                    "is_main_teacher": i == 0
+                })
+            
+            return 200, teachers
+        except Osztaly.DoesNotExist:
+            return 404, {"message": "Osztály nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error fetching class teachers: {str(e)}"}
+
+    @api.get("/classes/{osztaly_id}/with-teachers", auth=JWTAuth(), response={200: OsztalyWithTeachersSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def get_class_with_teachers(request, osztaly_id: int):
+        """
+        Get class information including assigned teachers.
+        
+        Requires authentication. Returns detailed class information with teacher list.
+        
+        Args:
+            osztaly_id: Unique class identifier
+            
+        Returns:
+            200: Class details with teachers
+            404: Class not found
+            401: Authentication failed
+        """
+        try:
+            osztaly = Osztaly.objects.select_related('tanev').get(id=osztaly_id)
+            return 200, create_osztaly_with_teachers_response(osztaly)
+        except Osztaly.DoesNotExist:
+            return 404, {"message": "Osztály nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error fetching class with teachers: {str(e)}"}
+
+    @api.post("/classes/{osztaly_id}/teachers", auth=JWTAuth(), response={200: dict, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def assign_class_teachers(request, osztaly_id: int, data: ClassTeacherAssignSchema):
+        """
+        Assign teachers to a class.
+        
+        Requires admin permissions. Assigns multiple users as class teachers.
+        
+        Args:
+            osztaly_id: Unique class identifier
+            data: List of user IDs to assign as teachers
+            
+        Returns:
+            200: Teachers assigned successfully
+            404: Class or user not found
+            400: Invalid data
+            401: Authentication or permission failed
+        """
+        try:
+            # Check if user has admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 401, {"message": error_message}
+            
+            osztaly = Osztaly.objects.get(id=osztaly_id)
+            
+            from django.contrib.auth.models import User
+            
+            assigned_count = 0
+            errors = []
+            
+            for user_id in data.user_ids:
+                try:
+                    user = User.objects.get(id=user_id)
+                    
+                    # Check if user is already assigned
+                    if not osztaly.is_user_osztaly_fonok(user):
+                        osztaly.add_osztaly_fonok(user)
+                        assigned_count += 1
+                    
+                except User.DoesNotExist:
+                    errors.append(f"Felhasználó nem található: ID {user_id}")
+                except Exception as e:
+                    errors.append(f"Hiba a felhasználó hozzáadásakor (ID {user_id}): {str(e)}")
+            
+            return 200, {
+                "message": f"{assigned_count} tanár sikeresen hozzárendelve az osztályhoz",
+                "assigned_count": assigned_count,
+                "errors": errors
+            }
+        except Osztaly.DoesNotExist:
+            return 404, {"message": "Osztály nem található"}
+        except Exception as e:
+            return 400, {"message": f"Error assigning teachers: {str(e)}"}
+
+    @api.delete("/classes/{osztaly_id}/teachers/{user_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
+    def remove_class_teacher(request, osztaly_id: int, user_id: int):
+        """
+        Remove a teacher from a class.
+        
+        Requires admin permissions. Removes a user from class teacher role.
+        
+        Args:
+            osztaly_id: Unique class identifier
+            user_id: User ID to remove from teachers
+            
+        Returns:
+            200: Teacher removed successfully
+            404: Class or user not found
+            401: Authentication or permission failed
+        """
+        try:
+            # Check if user has admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 401, {"message": error_message}
+            
+            osztaly = Osztaly.objects.get(id=osztaly_id)
+            
+            from django.contrib.auth.models import User
+            user = User.objects.get(id=user_id)
+            
+            if osztaly.is_user_osztaly_fonok(user):
+                osztaly.remove_osztaly_fonok(user)
+                return 200, {"message": f"{user.get_full_name()} eltávolítva az osztályfőnöki pozícióból"}
+            else:
+                return 404, {"message": "A felhasználó nem osztályfőnöke ennek az osztálynak"}
+                
+        except Osztaly.DoesNotExist:
+            return 404, {"message": "Osztály nem található"}
+        except User.DoesNotExist:
+            return 404, {"message": "Felhasználó nem található"}
+        except Exception as e:
+            return 400, {"message": f"Error removing teacher: {str(e)}"}
+
+    @api.get("/users/{user_id}/classes", auth=JWTAuth(), response={200: list[OsztalySchema], 401: ErrorSchema, 404: ErrorSchema})
+    def get_user_classes(request, user_id: int):
+        """
+        Get all classes where a user is assigned as teacher.
+        
+        Requires authentication. Returns classes taught by the specified user.
+        
+        Args:
+            user_id: User ID to check for class assignments
+            
+        Returns:
+            200: List of classes taught by user
+            404: User not found
+            401: Authentication failed
+        """
+        try:
+            from django.contrib.auth.models import User
+            user = User.objects.get(id=user_id)
+            
+            # Check if current user can view this information
+            # Users can view their own classes, admins can view any
+            if request.auth.id != user_id:
+                has_permission, error_message = check_admin_permissions(request.auth)
+                if not has_permission:
+                    return 401, {"message": "Csak saját osztályait vagy adminisztrátorként tekintheti meg"}
+            
+            classes = Osztaly.objects.filter(osztaly_fonokei=user).select_related('tanev')
+            
+            response = []
+            for osztaly in classes:
+                response.append(create_osztaly_response(osztaly))
+            
+            return 200, response
+        except User.DoesNotExist:
+            return 404, {"message": "Felhasználó nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error fetching user classes: {str(e)}"}

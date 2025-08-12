@@ -267,6 +267,8 @@ from .api_modules.production import register_production_endpoints
 from .api_modules.communications import register_communications_endpoints
 from .api_modules.organization import register_organization_endpoints
 from .api_modules.absence import register_absence_endpoints
+from .api_modules.absences import register_absence_management_endpoints  # New absence management
+from .api_modules.assignments import register_assignment_endpoints  # New assignment management
 from .api_modules.config import register_config_endpoints
 from .api_modules.user_management import register_user_management_endpoints
 
@@ -298,5 +300,7 @@ register_equipment_endpoints(api)       # Equipment management endpoints
 register_production_endpoints(api)      # Filming sessions and contact persons
 register_communications_endpoints(api)  # Announcements and messaging
 register_organization_endpoints(api)    # Stabs, roles, and assignments
-register_absence_endpoints(api)         # Absence management endpoints
+register_absence_endpoints(api)         # Absence management endpoints (távollét)
+register_absence_management_endpoints(api)  # School absence management (hiányzás)
+register_assignment_endpoints(api)      # Filming assignment management (beosztás)
 register_config_endpoints(api)          # System configuration endpoints

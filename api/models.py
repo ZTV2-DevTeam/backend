@@ -81,7 +81,7 @@ class Profile(models.Model):
         ('production_leader', 'Gyártásvezető'),
     ]
     
-    user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+    user = models.OneToOneField('auth.User', on_delete=models.CASCADE)
     telefonszam = models.CharField(max_length=20, blank=True, null=True)
     medias = models.BooleanField(default=True)
     stab = models.ForeignKey('Stab', related_name='tagok', on_delete=models.PROTECT, blank=True, null=True)
@@ -89,6 +89,7 @@ class Profile(models.Model):
     osztaly = models.ForeignKey('Osztaly', on_delete=models.PROTECT, blank=True, null=True)
     admin_type = models.CharField(max_length=20, choices=ADMIN_TYPES, default='none', verbose_name='Adminisztrátor típus')
     special_role = models.CharField(max_length=20, choices=SPECIAL_ROLES, default='none', verbose_name='Különleges szerep')
+    osztalyfonok = models.BooleanField(default=False, verbose_name='Osztályfőnök')
     first_login_token = models.CharField(max_length=255, blank=True, null=True, verbose_name='Első bejelentkezés token')
     first_login_sent_at = models.DateTimeField(blank=True, null=True, verbose_name='Első bejelentkezés token küldve')
     password_set = models.BooleanField(default=False, verbose_name='Jelszó beállítva')
@@ -120,6 +121,25 @@ class Profile(models.Model):
     def is_production_leader(self):
         """Check if user is a production leader (Gyártásvezető)"""
         return self.special_role == 'production_leader'
+    
+    @property
+    def is_osztaly_fonok(self):
+        """Check if user is marked as class teacher or is actually assigned to any class as teacher"""
+        # Check the boolean field first
+        if self.osztalyfonok:
+            return True
+
+        # Check if the user is assigned to any class as a teacher
+        try:
+            return self.osztaly and self.osztaly.osztaly_fonokei.filter(id=self.user.id).exists()
+        except Exception as e:
+            # Log the error for debugging purposes
+            print(f"Error in is_osztaly_fonok: {e}")
+            return False
+    
+    def get_owned_osztalyok(self):
+        """Get all classes where this user is assigned as class teacher"""
+        return Osztaly.objects.filter(osztaly_fonokei=self.user)
     
     def has_admin_permission(self, permission_type):
         """
@@ -204,6 +224,9 @@ class Osztaly(models.Model):
     szekcio = models.CharField(max_length=1, blank=False, null=False)
     tanev = models.ForeignKey('Tanev', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Tanév', 
                               help_text='Az a tanév, amikor ez az osztály aktív volt/lesz')
+    osztaly_fonokei = models.ManyToManyField('auth.User', blank=True, related_name='osztaly_fonokei', 
+                                           verbose_name='Osztályfőnökei', 
+                                           help_text='Az osztály fő- és helyettes osztályfőnökei')
 
     def __str__(self):
         current_year = datetime.now().year
@@ -232,6 +255,42 @@ class Osztaly(models.Model):
                 return 'Bejövő NYF'
             return f'{year_diff}F'
         return f'{self.startYear[:-2]}{self.szekcio.upper()}'
+    
+    def get_osztaly_fonokei(self):
+        """Get all users assigned as class teachers for this class"""
+        return self.osztaly_fonokei.all()
+    
+    def get_fo_osztaly_fonok(self):
+        """Get the main class teacher (first one added, could be customized later)"""
+        return self.osztaly_fonokei.first()
+    
+    def add_osztaly_fonok(self, user):
+        """Add a user as class teacher to this class"""
+        self.osztaly_fonokei.add(user)
+        # Also mark the user's profile as osztályfonok if it isn't already
+        try:
+            profile = user.profile
+            if not profile.osztalyfonok:
+                profile.osztalyfonok = True
+                profile.save()
+        except Profile.DoesNotExist:
+            pass
+    
+    def remove_osztaly_fonok(self, user):
+        """Remove a user as class teacher from this class"""
+        self.osztaly_fonokei.remove(user)
+        # Check if user is still class teacher of any other class
+        if not Osztaly.objects.filter(osztaly_fonokei=user).exclude(id=self.id).exists():
+            try:
+                profile = user.profile
+                profile.osztalyfonok = False
+                profile.save()
+            except Profile.DoesNotExist:
+                pass
+    
+    def is_user_osztaly_fonok(self, user):
+        """Check if a user is class teacher of this class"""
+        return self.osztaly_fonokei.filter(id=user.id).exists()
     
     class Meta:
         verbose_name = "Osztály"
@@ -453,11 +512,68 @@ class Equipment(models.Model):
         verbose_name_plural = "Felaszerelések"
         ordering = ['nickname']
 
-    def is_available_for(self, start_datetime, end_datetime):
-        return not self.forgatas.filter(
-            start_time__lt=end_datetime,
-            end_time__gt=start_datetime
-        ).exists()
+    def is_available_for(self, start_date, start_time, end_date, end_time):
+        """Check if equipment is available during the specified time period"""
+        from datetime import datetime
+        
+        # If equipment is not functional, it's not available
+        if not self.functional:
+            return False
+            
+        # Find overlapping filming sessions
+        overlapping_sessions = self.forgatasok.filter(
+            date__gte=start_date,
+            date__lte=end_date
+        )
+        
+        for session in overlapping_sessions:
+            # Check for time overlap on the same date
+            if session.date == start_date == end_date:
+                # Same day - check time overlap
+                if (session.timeFrom < end_time and session.timeTo > start_time):
+                    return False
+            elif session.date == start_date:
+                # Start date - check if session ends after our start time
+                if session.timeTo > start_time:
+                    return False
+            elif session.date == end_date:
+                # End date - check if session starts before our end time
+                if session.timeFrom < end_time:
+                    return False
+            elif start_date < session.date < end_date:
+                # Session is completely within our date range
+                return False
+                
+        return True
+    
+    def get_bookings_for_period(self, start_date, end_date=None):
+        """Get all filming sessions where this equipment is booked for a given period"""
+        if end_date is None:
+            end_date = start_date
+            
+        return self.forgatasok.filter(
+            date__gte=start_date,
+            date__lte=end_date
+        ).order_by('date', 'timeFrom')
+    
+    def get_availability_schedule(self, start_date, end_date):
+        """Get detailed availability schedule for a date range"""
+        schedule = []
+        bookings = self.get_bookings_for_period(start_date, end_date)
+        
+        for booking in bookings:
+            schedule.append({
+                'date': booking.date,
+                'time_from': booking.timeFrom,
+                'time_to': booking.timeTo,
+                'forgatas_name': booking.name,
+                'forgatas_id': booking.id,
+                'forgatas_type': booking.forgTipus,
+                'location': booking.location.name if booking.location else None,
+                'available': False
+            })
+            
+        return schedule
 
 class ContactPerson(models.Model):
     name = models.CharField(max_length=150, blank=False, null=False)
@@ -559,11 +675,14 @@ class Beosztas(models.Model):
     author = models.ForeignKey('auth.User', related_name='beosztasok', on_delete=models.PROTECT, blank=True, null=True)
     tanev = models.ForeignKey('Tanev', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Tanév',
                               help_text='A beosztás tanéve')
+    forgatas = models.ForeignKey('Forgatas', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Forgatás',
+                                help_text='A beosztáshoz tartozó forgatás', related_name='beosztasok')
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
         tanev_str = f" ({self.tanev})" if self.tanev else ""
-        return f'Beosztás {self.id}{tanev_str} - Kész: {self.kesz}'
+        forgatas_str = f" - {self.forgatas.name}" if self.forgatas else ""
+        return f'Beosztás {self.id}{tanev_str}{forgatas_str} - Kész: {self.kesz}'
     
     def save(self, *args, **kwargs):
         # Auto-assign current active school year if none specified
@@ -599,4 +718,3 @@ class Szerepkor(models.Model):
         verbose_name = "Szerepkör"
         verbose_name_plural = "Szerepkörök"
         ordering = ['name']
-        

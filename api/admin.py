@@ -40,7 +40,7 @@ class ProfileAdmin(admin.ModelAdmin):
             'fields': ('osztaly', 'stab', 'radio_stab')
         }),
         ('Jogosultságok', {
-            'fields': ('admin_type', 'special_role')
+            'fields': ('admin_type', 'special_role', 'osztalyfonok')
         }),
         ('Első bejelentkezés', {
             'fields': ('first_login_token', 'first_login_sent_at'),

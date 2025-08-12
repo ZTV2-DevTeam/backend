@@ -192,6 +192,10 @@ def create_user_response(user: User, token: str = None) -> dict:
     Returns:
         Dictionary with user information
     """
+    from backend.api_modules.users import create_user_profile_response
+
+    profile_response = create_user_profile_response(user.profile)
+
     return {
         "token": token or "current_session",
         "user_id": user.id,
@@ -199,6 +203,7 @@ def create_user_response(user: User, token: str = None) -> dict:
         "first_name": user.first_name,
         "last_name": user.last_name,
         "email": user.email,
+        **profile_response,  # Merge profile response fields
     }
 
 # ============================================================================

@@ -114,6 +114,7 @@ class UserProfileSchema(Schema):
     telefonszam: Optional[str] = None
     medias: bool
     admin_type: str
+    is_class_teacher: bool = False
     stab_name: Optional[str] = None
     radio_stab_name: Optional[str] = None
     osztaly_name: Optional[str] = None
@@ -145,6 +146,9 @@ def create_user_profile_response(profile: Profile) -> dict:
     Returns:
         Dictionary with user profile information
     """
+    # Refresh the profile instance to ensure the latest data is fetched
+    profile.refresh_from_db()
+
     return {
         "id": profile.user.id,
         "username": profile.user.username,
@@ -154,6 +158,7 @@ def create_user_profile_response(profile: Profile) -> dict:
         "telefonszam": profile.telefonszam,
         "medias": profile.medias,
         "admin_type": profile.admin_type,
+        "is_class_teacher": profile.is_osztaly_fonok,
         "stab_name": profile.stab.name if profile.stab else None,
         "radio_stab_name": f"{profile.radio_stab.name} ({profile.radio_stab.team_code})" if profile.radio_stab else None,
         "osztaly_name": str(profile.osztaly) if profile.osztaly else None,
@@ -447,4 +452,3 @@ def register_user_endpoints(api):
             }
         except Exception as e:
             return 500, {"message": f"Error fetching active users: {str(e)}"}
-    
