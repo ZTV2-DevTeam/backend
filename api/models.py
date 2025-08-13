@@ -233,10 +233,10 @@ class Osztaly(models.Model):
         elso_felev = datetime.now().month >= 9
         if self.szekcio.upper() == 'F':
             if self.startYear == current_year and datetime.now().month < 9:
-                return 'Bejövő NYF'
+                return 'NYF'
             
             year_diff = current_year - self.startYear 
-            year_diff += 8 if elso_felev else 7
+            year_diff += 9 if elso_felev else 8
 
             return f'{year_diff}F'
         return f'{self.startYear[:-2]}{self.szekcio.upper()}'
