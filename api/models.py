@@ -508,8 +508,8 @@ class Equipment(models.Model):
         return f'{self.nickname} ({self.brand} {self.model})'
     
     class Meta:
-        verbose_name = "Felaszerelés"
-        verbose_name_plural = "Felaszerelések"
+        verbose_name = "Felszerelés"
+        verbose_name_plural = "Felszerelések"
         ordering = ['nickname']
 
     def is_available_for(self, start_date, start_time, end_date, end_time):
