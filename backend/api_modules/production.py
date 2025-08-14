@@ -224,7 +224,7 @@ Integration Points:
 """
 
 from ninja import Schema
-from api.models import Forgatas, ContactPerson, Partner, Equipment, Tanev
+from api.models import Forgatas, ContactPerson, Partner, Equipment, Tanev, Beosztas
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime, date, time
 from typing import Optional
@@ -425,7 +425,7 @@ def register_production_endpoints(api):
     # Contact Person Endpoints
     # ========================================================================
     
-    @api.get("/contact-persons", auth=JWTAuth(), response={200: list[ContactPersonSchema], 401: ErrorSchema})
+    @api.get("/production/contact-persons", auth=JWTAuth(), response={200: list[ContactPersonSchema], 401: ErrorSchema})
     def get_contact_persons(request):
         """
         Get all contact persons.
@@ -447,7 +447,7 @@ def register_production_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching contact persons: {str(e)}"}
 
-    @api.post("/contact-persons", auth=JWTAuth(), response={201: ContactPersonSchema, 400: ErrorSchema, 401: ErrorSchema})
+    @api.post("/production/contact-persons", auth=JWTAuth(), response={201: ContactPersonSchema, 400: ErrorSchema, 401: ErrorSchema})
     def create_contact_person(request, data: ContactPersonCreateSchema):
         """
         Create new contact person.
@@ -482,7 +482,7 @@ def register_production_endpoints(api):
     # Filming Session (Forgatas) Endpoints  
     # ========================================================================
     
-    @api.get("/filming-sessions", auth=JWTAuth(), response={200: list[ForgatSchema], 401: ErrorSchema})
+    @api.get("/production/filming-sessions", auth=JWTAuth(), response={200: list[ForgatSchema], 401: ErrorSchema})
     def get_filming_sessions(request, start_date: str = None, end_date: str = None, type: str = None):
         """
         Get filming sessions with optional filtering.
@@ -519,7 +519,7 @@ def register_production_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching filming sessions: {str(e)}"}
 
-    @api.get("/filming-sessions/{forgatas_id}", auth=JWTAuth(), response={200: ForgatSchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/production/filming-sessions/{forgatas_id}", auth=JWTAuth(), response={200: ForgatSchema, 401: ErrorSchema, 404: ErrorSchema})
     def get_filming_session(request, forgatas_id: int):
         """
         Get single filming session by ID.
@@ -545,7 +545,7 @@ def register_production_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching filming session: {str(e)}"}
 
-    @api.get("/filming-sessions/types", response={200: list[ForgatoTipusSchema]})
+    @api.get("/production/filming-sessions/types", response={200: list[ForgatoTipusSchema]})
     def get_filming_types(request):
         """
         Get available filming session types.
@@ -557,7 +557,7 @@ def register_production_endpoints(api):
         """
         return 200, FORGATAS_TYPES
 
-    @api.post("/filming-sessions", auth=JWTAuth(), response={201: ForgatSchema, 400: ErrorSchema, 401: ErrorSchema})
+    @api.post("/production/filming-sessions", auth=JWTAuth(), response={201: ForgatSchema, 400: ErrorSchema, 401: ErrorSchema})
     def create_filming_session(request, data: ForgatCreateSchema):
         """
         Create new filming session.
@@ -635,11 +635,22 @@ def register_production_endpoints(api):
                 equipment = Equipment.objects.filter(id__in=data.equipment_ids)
                 forgatas.equipments.set(equipment)
             
+            # Create corresponding Beosztas for the new forgatas
+            try:
+                beosztas = Beosztas.objects.create(
+                    forgatas=forgatas,
+                    author=request.auth
+                )
+                print(f"Created Beosztas {beosztas.id} for Forgatas {forgatas.id}")
+            except Exception as beosztas_error:
+                print(f"Warning: Could not create Beosztas for Forgatas {forgatas.id}: {beosztas_error}")
+                # Don't fail the whole operation if beosztas creation fails
+            
             return 201, create_forgatas_response(forgatas)
         except Exception as e:
             return 400, {"message": f"Error creating filming session: {str(e)}"}
 
-    @api.put("/filming-sessions/{forgatas_id}", auth=JWTAuth(), response={200: ForgatSchema, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.put("/production/filming-sessions/{forgatas_id}", auth=JWTAuth(), response={200: ForgatSchema, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
     def update_filming_session(request, forgatas_id: int, data: ForgatUpdateSchema):
         """
         Update existing filming session.
@@ -747,7 +758,7 @@ def register_production_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error updating filming session: {str(e)}"}
 
-    @api.delete("/filming-sessions/{forgatas_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
+    @api.delete("/production/filming-sessions/{forgatas_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
     def delete_filming_session(request, forgatas_id: int):
         """
         Delete filming session.

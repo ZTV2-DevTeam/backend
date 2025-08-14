@@ -280,7 +280,7 @@ def auto_create_absences_for_beosztas(beosztas: Beosztas):
 def register_assignment_endpoints(api):
     """Register all assignment-related endpoints with the API router."""
     
-    @api.get("/filming-assignments", auth=JWTAuth(), response={200: List[BeosztasSchema], 401: ErrorSchema})
+    @api.get("/assignments/filming-assignments", auth=JWTAuth(), response={200: List[BeosztasSchema], 401: ErrorSchema})
     def get_filming_assignments(request, forgatas_id: int = None, kesz: bool = None, 
                                start_date: str = None, end_date: str = None):
         """
@@ -332,7 +332,7 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching assignments: {str(e)}"}
 
-    @api.get("/filming-assignments/{assignment_id}", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/assignments/filming-assignments/{assignment_id}", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema})
     def get_filming_assignment_details(request, assignment_id: int):
         """
         Get detailed information about a specific assignment.
@@ -361,7 +361,7 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching assignment details: {str(e)}"}
 
-    @api.post("/filming-assignments", auth=JWTAuth(), response={201: BeosztasSchema, 400: ErrorSchema, 401: ErrorSchema})
+    @api.post("/assignments/filming-assignments", auth=JWTAuth(), response={201: BeosztasSchema, 400: ErrorSchema, 401: ErrorSchema})
     def create_filming_assignment(request, data: BeosztasCreateSchema):
         """
         Create new filming assignment.
@@ -441,7 +441,7 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error creating assignment: {str(e)}"}
 
-    @api.put("/filming-assignments/{assignment_id}", auth=JWTAuth(), response={200: BeosztasSchema, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.put("/assignments/filming-assignments/{assignment_id}", auth=JWTAuth(), response={200: BeosztasSchema, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
     def update_filming_assignment(request, assignment_id: int, data: BeosztasUpdateSchema):
         """
         Update existing filming assignment.
@@ -508,7 +508,7 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error updating assignment: {str(e)}"}
 
-    @api.post("/filming-assignments/{assignment_id}/finalize", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.post("/assignments/filming-assignments/{assignment_id}/finalize", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema})
     def finalize_filming_assignment(request, assignment_id: int):
         """
         Finalize filming assignment and create absences.
@@ -545,7 +545,7 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error finalizing assignment: {str(e)}"}
 
-    @api.delete("/filming-assignments/{assignment_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
+    @api.delete("/assignments/filming-assignments/{assignment_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
     def delete_filming_assignment(request, assignment_id: int):
         """
         Delete filming assignment.
@@ -602,7 +602,7 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error deleting assignment: {str(e)}"}
 
-    @api.get("/roles", auth=JWTAuth(), response={200: List[SzerepkorSchema], 401: ErrorSchema})
+    @api.get("/assignments/roles", auth=JWTAuth(), response={200: List[SzerepkorSchema], 401: ErrorSchema})
     def get_available_roles(request):
         """
         Get all available roles for assignments.
@@ -624,7 +624,7 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching roles: {str(e)}"}
 
-    @api.get("/filming-assignments/{assignment_id}/absences", auth=JWTAuth(), response={200: List[dict], 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/assignments/filming-assignments/{assignment_id}/absences", auth=JWTAuth(), response={200: List[dict], 401: ErrorSchema, 404: ErrorSchema})
     def get_assignment_absences(request, assignment_id: int):
         """
         Get all absences generated from a specific assignment.

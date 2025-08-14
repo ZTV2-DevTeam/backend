@@ -185,16 +185,16 @@ class ProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Forgatas)
 class ForgatásAdmin(admin.ModelAdmin):
-    list_display = ['name_with_icon', 'date', 'time_display', 'forgTipus_display', 'location_display', 'equipment_count', 'tanev']
-    list_filter = ['forgTipus', 'date', 'tanev', 'location']
-    search_fields = ['name', 'description', 'notes']
-    autocomplete_fields = ['location', 'contactPerson', 'relatedKaCsa', 'tanev']
+    list_display = ['name_with_icon', 'date', 'time_display', 'forgTipus_display', 'location_display', 'equipment_count', 'riporter_display', 'tanev']
+    list_filter = ['forgTipus', 'date', 'tanev', 'location', 'riporter']
+    search_fields = ['name', 'description', 'notes', 'riporter__first_name', 'riporter__last_name']
+    autocomplete_fields = ['location', 'contactPerson', 'relatedKaCsa', 'tanev', 'riporter']
     filter_horizontal = ['equipments']
     date_hierarchy = 'date'
     
     fieldsets = (
         ('🎬 Forgatás alapadatok', {
-            'fields': ('name', 'description', 'forgTipus', 'tanev'),
+            'fields': ('name', 'description', 'forgTipus', 'tanev', 'riporter'),
             'description': 'A forgatás alapvető információi'
         }),
         ('⏰ Időpont', {
@@ -208,7 +208,7 @@ class ForgatásAdmin(admin.ModelAdmin):
         ('🔗 Kapcsolódó forgatás', {
             'fields': ('relatedKaCsa',),
             'classes': ('collapse',),
-            'description': 'KaCsa forgatásokhoz kapcsolódó rendes forgatás'
+            'description': 'Rendes forgatások esetében, a kapcsolódó KaCsa Összejátszás'
         }),
         ('🎯 Eszközök', {
             'fields': ('equipments',),
@@ -246,6 +246,12 @@ class ForgatásAdmin(admin.ModelAdmin):
         color = colors.get(obj.forgTipus, '#6c757d')
         return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, obj.get_forgTipus_display())
     forgTipus_display.short_description = 'Típus'
+
+    def riporter_display(self, obj):
+        if obj.riporter:
+            return format_html('<span style="color: #7209b7;">🎤 {}</span>', obj.riporter.get_full_name() or obj.riporter.username)
+        return '-'
+    riporter_display.short_description = 'Riporter'
     
     def location_display(self, obj):
         if obj.location:

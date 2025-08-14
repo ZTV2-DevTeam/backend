@@ -398,7 +398,7 @@ def can_user_view_announcement(user: User, announcement: Announcement) -> bool:
 def register_communications_endpoints(api):
     """Register all communications-related endpoints with the API router."""
     
-    @api.get("/announcements", auth=JWTAuth(), response={200: list[AnnouncementSchema], 401: ErrorSchema})
+    @api.get("/communications/announcements", auth=JWTAuth(), response={200: list[AnnouncementSchema], 401: ErrorSchema})
     def get_announcements(request, my_announcements: bool = False):
         """
         Get announcements visible to the current user.
@@ -439,7 +439,7 @@ def register_communications_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching announcements: {str(e)}"}
 
-    @api.get("/announcements/public", auth=JWTAuth(), response={200: list[AnnouncementSchema], 401: ErrorSchema})
+    @api.get("/communications/announcements/public", auth=JWTAuth(), response={200: list[AnnouncementSchema], 401: ErrorSchema})
     def get_public_announcements(request):
         """
         Get public announcements (not targeted to specific users).
@@ -464,7 +464,7 @@ def register_communications_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching public announcements: {str(e)}"}
 
-    @api.get("/announcements/{announcement_id}", auth=JWTAuth(), response={200: AnnouncementDetailSchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/communications/announcements/{announcement_id}", auth=JWTAuth(), response={200: AnnouncementDetailSchema, 401: ErrorSchema, 404: ErrorSchema})
     def get_announcement_details(request, announcement_id: int):
         """
         Get detailed information about a specific announcement.
@@ -493,7 +493,7 @@ def register_communications_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching announcement details: {str(e)}"}
 
-    @api.post("/announcements", auth=JWTAuth(), response={201: AnnouncementDetailSchema, 400: ErrorSchema, 401: ErrorSchema})
+    @api.post("/communications/announcements", auth=JWTAuth(), response={201: AnnouncementDetailSchema, 400: ErrorSchema, 401: ErrorSchema})
     def create_announcement(request, data: AnnouncementCreateSchema):
         """
         Create new announcement.
@@ -533,7 +533,7 @@ def register_communications_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error creating announcement: {str(e)}"}
 
-    @api.put("/announcements/{announcement_id}", auth=JWTAuth(), response={200: AnnouncementDetailSchema, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.put("/communications/announcements/{announcement_id}", auth=JWTAuth(), response={200: AnnouncementDetailSchema, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
     def update_announcement(request, announcement_id: int, data: AnnouncementUpdateSchema):
         """
         Update existing announcement.
@@ -584,7 +584,7 @@ def register_communications_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error updating announcement: {str(e)}"}
 
-    @api.delete("/announcements/{announcement_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
+    @api.delete("/communications/announcements/{announcement_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
     def delete_announcement(request, announcement_id: int):
         """
         Delete announcement.
@@ -627,7 +627,7 @@ def register_communications_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error deleting announcement: {str(e)}"}
 
-    @api.get("/announcements/{announcement_id}/recipients", auth=JWTAuth(), response={200: list[UserBasicSchema], 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/communications/announcements/{announcement_id}/recipients", auth=JWTAuth(), response={200: list[UserBasicSchema], 401: ErrorSchema, 404: ErrorSchema})
     def get_announcement_recipients(request, announcement_id: int):
         """
         Get recipients of a specific announcement.

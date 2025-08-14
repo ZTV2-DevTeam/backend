@@ -1,83 +1,54 @@
 {% extends "admin/index.html" %}
 {% load i18n admin_urls static admin_list %}
 
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="stylesheet" type="text/css" href="{% static 'admin/css/dark-mode-admin.css' %}">
+    <meta name="color-scheme" content="light dark">
+    <script src="{% static 'admin/js/dark-mode-admin.js' %}" defer></script>
+{% endblock %}
+
 {% block content %}
 <div id="content-main">
-    <style>
-        .category-section {
-            margin-bottom: 25px;
-            background: #fff;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        
-        .category-header {
-            background: linear-gradient(135deg, #417690 0%, #2c5282 100%);
-            color: white;
-            padding: 12px 20px;
-            font-size: 16px;
-            font-weight: 600;
-            margin: 0;
-            border: none;
-        }
-        
-        .category-models {
-            padding: 0;
-        }
-        
-        .category-models table {
-            width: 100%;
-            margin: 0;
-            border: none;
-        }
-        
-        .category-models .model {
-            border-bottom: 1px solid #f0f0f0;
-        }
-        
-        .category-models .model:last-child {
-            border-bottom: none;
-        }
-        
-        .category-models .model th {
-            background: #f8f9fa;
-            padding: 12px 20px;
-            font-weight: 500;
-            border: none;
-        }
-        
-        .category-models .model td {
-            padding: 8px 20px;
-            border: none;
-        }
-        
-        .category-models .model td a {
-            color: #417690;
-            text-decoration: none;
-            font-size: 13px;
-        }
-        
-        .category-models .model td a:hover {
-            text-decoration: underline;
-        }
-    </style>
 
-    <div class="category-section">
-        <h2 class="category-header">📚 Oktatási Rendszer</h2>
-        <div class="category-models">
+    <section class="category-section" aria-labelledby="production-header">
+        <h2 class="category-header" id="production-header">🎬 Fontos elemek</h2>
+        <div class="category-models" role="group" aria-labelledby="production-header">
+            {% for app in app_list %}
+                {% if app.app_label == "api" %}
+                    {% for model in app.models %}
+                        {% if model.object_name|lower in "forgatas,beosztas,announcement,absence,tavollet" %}
+                        <table role="table">
+                            <tr class="model" role="row">
+                                <th scope="row" role="columnheader"><a href="{{ model.admin_url }}" aria-describedby="production-header">{{ model.name }}</a></th>
+                                <td role="cell">
+                                    {% if model.add_url %}<a href="{{ model.add_url }}" title="{% trans 'Add' %} {{ model.name }}">{% trans 'Add' %}</a>{% endif %}
+                                    {% if   l.admin_url and model.add_url %}<span aria-hidden="true"> / </span>{% endif %}
+                                    {% if model.admin_url %}<a href="{{ model.admin_url }}" title="{% trans 'Change' %} {{ model.name }}">{% trans 'Change' %}</a>{% endif %}
+                                </td>
+                            </tr>
+                        </table>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="category-section" aria-labelledby="educational-system-header">
+        <h2 class="category-header" id="educational-system-header">📚 Oktatási Rendszer</h2>
+        <div class="category-models" role="group" aria-labelledby="educational-system-header">
             {% for app in app_list %}
                 {% if app.app_label == "api" %}
                     {% for model in app.models %}
                         {% if model.object_name|lower in "tanev,osztaly,profile" %}
-                        <table>
-                            <tr class="model">
-                                <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
-                                <td>
-                                    {% if model.add_url %}<a href="{{ model.add_url }}">{% trans 'Add' %}</a>{% endif %}
-                                    {% if model.admin_url and model.add_url %} / {% endif %}
-                                    {% if model.admin_url %}<a href="{{ model.admin_url }}">{% trans 'Change' %}</a>{% endif %}
+                        <table role="table">
+                            <tr class="model" role="row">
+                                <th scope="row" role="columnheader"><a href="{{ model.admin_url }}" aria-describedby="educational-system-header">{{ model.name }}</a></th>
+                                <td role="cell">
+                                    {% if model.add_url %}<a href="{{ model.add_url }}" title="{% trans 'Add' %} {{ model.name }}">{% trans 'Add' %}</a>{% endif %}
+                                    {% if model.admin_url and model.add_url %}<span aria-hidden="true"> / </span>{% endif %}
+                                    {% if model.admin_url %}<a href="{{ model.admin_url }}" title="{% trans 'Change' %} {{ model.name }}">{% trans 'Change' %}</a>{% endif %}
                                 </td>
                             </tr>
                         </table>
@@ -86,22 +57,22 @@
                 {% endif %}
             {% endfor %}
         </div>
-    </div>
+    </section>
 
-    <div class="category-section">
-        <h2 class="category-header">🎬 Gyártás és Forgatás</h2>
-        <div class="category-models">
+    <section class="category-section" aria-labelledby="equipment-header">
+        <h2 class="category-header" id="equipment-header">🎯 Eszközök</h2>
+        <div class="category-models" role="group" aria-labelledby="equipment-header">
             {% for app in app_list %}
                 {% if app.app_label == "api" %}
                     {% for model in app.models %}
-                        {% if model.object_name|lower in "forgatas,beosztas" %}
-                        <table>
-                            <tr class="model">
-                                <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
-                                <td>
-                                    {% if model.add_url %}<a href="{{ model.add_url }}">{% trans 'Add' %}</a>{% endif %}
-                                    {% if model.admin_url and model.add_url %} / {% endif %}
-                                    {% if model.admin_url %}<a href="{{ model.admin_url }}">{% trans 'Change' %}</a>{% endif %}
+                        {% if model.object_name|lower in "equipment" %}
+                        <table role="table">
+                            <tr class="model" role="row">
+                                <th scope="row" role="columnheader"><a href="{{ model.admin_url }}" aria-describedby="equipment-header">{{ model.name }}</a></th>
+                                <td role="cell">
+                                    {% if model.add_url %}<a href="{{ model.add_url }}" title="{% trans 'Add' %} {{ model.name }}">{% trans 'Add' %}</a>{% endif %}
+                                    {% if model.admin_url and model.add_url %}<span aria-hidden="true"> / </span>{% endif %}
+                                    {% if model.admin_url %}<a href="{{ model.admin_url }}" title="{% trans 'Change' %} {{ model.name }}">{% trans 'Change' %}</a>{% endif %}
                                 </td>
                             </tr>
                         </table>
@@ -110,22 +81,22 @@
                 {% endif %}
             {% endfor %}
         </div>
-    </div>
+    </section>
 
-    <div class="category-section">
-        <h2 class="category-header">📻 Rádiós Rendszer</h2>
-        <div class="category-models">
+    <section class="category-section" aria-labelledby="radio-header">
+        <h2 class="category-header" id="radio-header">📻 Rádiós Rendszer</h2>
+        <div class="category-models" role="group" aria-labelledby="radio-header">
             {% for app in app_list %}
                 {% if app.app_label == "api" %}
                     {% for model in app.models %}
                         {% if model.object_name|lower in "radiostab,radiosession" %}
-                        <table>
-                            <tr class="model">
-                                <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
-                                <td>
-                                    {% if model.add_url %}<a href="{{ model.add_url }}">{% trans 'Add' %}</a>{% endif %}
-                                    {% if model.admin_url and model.add_url %} / {% endif %}
-                                    {% if model.admin_url %}<a href="{{ model.admin_url }}">{% trans 'Change' %}</a>{% endif %}
+                        <table role="table">
+                            <tr class="model" role="row">
+                                <th scope="row" role="columnheader"><a href="{{ model.admin_url }}" aria-describedby="radio-header">{{ model.name }}</a></th>
+                                <td role="cell">
+                                    {% if model.add_url %}<a href="{{ model.add_url }}" title="{% trans 'Add' %} {{ model.name }}">{% trans 'Add' %}</a>{% endif %}
+                                    {% if model.admin_url and model.add_url %}<span aria-hidden="true"> / </span>{% endif %}
+                                    {% if model.admin_url %}<a href="{{ model.admin_url }}" title="{% trans 'Change' %} {{ model.name }}">{% trans 'Change' %}</a>{% endif %}
                                 </td>
                             </tr>
                         </table>
@@ -134,22 +105,22 @@
                 {% endif %}
             {% endfor %}
         </div>
-    </div>
+    </section>
 
-    <div class="category-section">
-        <h2 class="category-header">🎯 Eszközök és Felszerelés</h2>
-        <div class="category-models">
+    <section class="category-section" aria-labelledby="partners-header">
+        <h2 class="category-header" id="partners-header">🤝 Partnerek</h2>
+        <div class="category-models" role="group" aria-labelledby="partners-header">
             {% for app in app_list %}
                 {% if app.app_label == "api" %}
                     {% for model in app.models %}
-                        {% if model.object_name|lower in "equipment,equipmenttipus" %}
-                        <table>
-                            <tr class="model">
-                                <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
-                                <td>
-                                    {% if model.add_url %}<a href="{{ model.add_url }}">{% trans 'Add' %}</a>{% endif %}
-                                    {% if model.admin_url and model.add_url %} / {% endif %}
-                                    {% if model.admin_url %}<a href="{{ model.admin_url }}">{% trans 'Change' %}</a>{% endif %}
+                        {% if model.object_name|lower in "partner,contactperson" %}
+                        <table role="table">
+                            <tr class="model" role="row">
+                                <th scope="row" role="columnheader"><a href="{{ model.admin_url }}" aria-describedby="partners-header">{{ model.name }}</a></th>
+                                <td role="cell">
+                                    {% if model.add_url %}<a href="{{ model.add_url }}" title="{% trans 'Add' %} {{ model.name }}">{% trans 'Add' %}</a>{% endif %}
+                                    {% if model.admin_url and model.add_url %}<span aria-hidden="true"> / </span>{% endif %}
+                                    {% if model.admin_url %}<a href="{{ model.admin_url }}" title="{% trans 'Change' %} {{ model.name }}">{% trans 'Change' %}</a>{% endif %}
                                 </td>
                             </tr>
                         </table>
@@ -158,22 +129,22 @@
                 {% endif %}
             {% endfor %}
         </div>
-    </div>
+    </section>
 
-    <div class="category-section">
-        <h2 class="category-header">🤝 Partnerek és Kapcsolatok</h2>
-        <div class="category-models">
+    <section class="category-section" aria-labelledby="configuration-header">
+        <h2 class="category-header" id="configuration-header">⚙️ Konfiguráció és Stábok</h2>
+        <div class="category-models" role="group" aria-labelledby="configuration-header">
             {% for app in app_list %}
                 {% if app.app_label == "api" %}
                     {% for model in app.models %}
-                        {% if model.object_name|lower in "partner,partnertipus,contactperson" %}
-                        <table>
-                            <tr class="model">
-                                <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
-                                <td>
-                                    {% if model.add_url %}<a href="{{ model.add_url }}">{% trans 'Add' %}</a>{% endif %}
-                                    {% if model.admin_url and model.add_url %} / {% endif %}
-                                    {% if model.admin_url %}<a href="{{ model.admin_url }}">{% trans 'Change' %}</a>{% endif %}
+                        {% if model.object_name|lower in "config,stab,szerepkor,equipmenttipus,partnertipus" %}
+                        <table role="table">
+                            <tr class="model" role="row">
+                                <th scope="row" role="columnheader"><a href="{{ model.admin_url }}" aria-describedby="configuration-header">{{ model.name }}</a></th>
+                                <td role="cell">
+                                    {% if model.add_url %}<a href="{{ model.add_url }}" title="{% trans 'Add' %} {{ model.name }}">{% trans 'Add' %}</a>{% endif %}
+                                    {% if model.admin_url and model.add_url %}<span aria-hidden="true"> / </span>{% endif %}
+                                    {% if model.admin_url %}<a href="{{ model.admin_url }}" title="{% trans 'Change' %} {{ model.name }}">{% trans 'Change' %}</a>{% endif %}
                                 </td>
                             </tr>
                         </table>
@@ -182,76 +153,28 @@
                 {% endif %}
             {% endfor %}
         </div>
-    </div>
-
-    <div class="category-section">
-        <h2 class="category-header">📢 Kommunikáció és Hiányzások</h2>
-        <div class="category-models">
-            {% for app in app_list %}
-                {% if app.app_label == "api" %}
-                    {% for model in app.models %}
-                        {% if model.object_name|lower in "announcement,absence,tavollet" %}
-                        <table>
-                            <tr class="model">
-                                <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
-                                <td>
-                                    {% if model.add_url %}<a href="{{ model.add_url }}">{% trans 'Add' %}</a>{% endif %}
-                                    {% if model.admin_url and model.add_url %} / {% endif %}
-                                    {% if model.admin_url %}<a href="{{ model.admin_url }}">{% trans 'Change' %}</a>{% endif %}
-                                </td>
-                            </tr>
-                        </table>
-                        {% endif %}
-                    {% endfor %}
-                {% endif %}
-            {% endfor %}
-        </div>
-    </div>
-
-    <div class="category-section">
-        <h2 class="category-header">⚙️ Rendszer és Egyéb</h2>
-        <div class="category-models">
-            {% for app in app_list %}
-                {% if app.app_label == "api" %}
-                    {% for model in app.models %}
-                        {% if model.object_name|lower in "config,stab,szerepkor" %}
-                        <table>
-                            <tr class="model">
-                                <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
-                                <td>
-                                    {% if model.add_url %}<a href="{{ model.add_url }}">{% trans 'Add' %}</a>{% endif %}
-                                    {% if model.admin_url and model.add_url %} / {% endif %}
-                                    {% if model.admin_url %}<a href="{{ model.admin_url }}">{% trans 'Change' %}</a>{% endif %}
-                                </td>
-                            </tr>
-                        </table>
-                        {% endif %}
-                    {% endfor %}
-                {% endif %}
-            {% endfor %}
-        </div>
-    </div>
+    </section>
 
     {% comment %}Show Django's built-in models{% endcomment %}
     {% for app in app_list %}
         {% if app.app_label == "auth" or app.app_label == "contenttypes" or app.app_label == "sessions" %}
-        <div class="category-section">
-            <h2 class="category-header">🔐 {{ app.name }}</h2>
-            <div class="category-models">
+        <section class="category-section" aria-labelledby="django-{{ app.app_label }}-header">
+            <h2 class="category-header" id="django-{{ app.app_label }}-header">🔐 {{ app.name }}</h2>
+            <div class="category-models" role="group" aria-labelledby="django-{{ app.app_label }}-header">
                 {% for model in app.models %}
-                <table>
-                    <tr class="model">
-                        <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
-                        <td>
-                            {% if model.add_url %}<a href="{{ model.add_url }}">{% trans 'Add' %}</a>{% endif %}
-                            {% if model.admin_url and model.add_url %} / {% endif %}
-                            {% if model.admin_url %}<a href="{{ model.admin_url }}">{% trans 'Change' %}</a>{% endif %}
+                <table role="table">
+                    <tr class="model" role="row">
+                        <th scope="row" role="columnheader"><a href="{{ model.admin_url }}" aria-describedby="django-{{ app.app_label }}-header">{{ model.name }}</a></th>
+                        <td role="cell">
+                            {% if model.add_url %}<a href="{{ model.add_url }}" title="{% trans 'Add' %} {{ model.name }}">{% trans 'Add' %}</a>{% endif %}
+                            {% if model.admin_url and model.add_url %}<span aria-hidden="true"> / </span>{% endif %}
+                            {% if model.admin_url %}<a href="{{ model.admin_url }}" title="{% trans 'Change' %} {{ model.name }}">{% trans 'Change' %}</a>{% endif %}
                         </td>
                     </tr>
                 </table>
                 {% endfor %}
             </div>
-        </div>
+        </section>
         {% endif %}
     {% endfor %}
 </div>

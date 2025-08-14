@@ -1,0 +1,166 @@
+/* Clean Admin Categories with Dark Mode Support */
+
+/* CSS Variables for consistent theming */
+:root {
+    /* Light mode colors - default */
+    --admin-primary-color: #417690;
+    --admin-bg-color: #fff;
+    --admin-bg-secondary: #f8f9fa;
+    --admin-border-color: #ddd;
+    --admin-border-light: #eee;
+    --admin-text-color: #333;
+    --admin-text-secondary: #666;
+    --admin-link-color: #417690;
+    --admin-header-bg: #f4f4f4;
+    --admin-hover-bg: #f9f9f9;
+}
+
+/* Dark mode colors - only when explicitly requested */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --admin-primary-color: #5094c4;
+        --admin-bg-color: #1e1e1e;
+        --admin-bg-secondary: #2a2a2a;
+        --admin-border-color: #444;
+        --admin-border-light: #3a3a3a;
+        --admin-text-color: #e1e1e1;
+        --admin-text-secondary: #b8b8b8;
+        --admin-link-color: #5094c4;
+        --admin-header-bg: #333;
+        --admin-hover-bg: #2a2a2a;
+    }
+}
+
+/* Force dark mode when data-theme is dark */
+[data-theme="dark"] {
+    --admin-primary-color: #5094c4;
+    --admin-bg-color: #1e1e1e;
+    --admin-bg-secondary: #2a2a2a;
+    --admin-border-color: #444;
+    --admin-border-light: #3a3a3a;
+    --admin-text-color: #e1e1e1;
+    --admin-text-secondary: #b8b8b8;
+    --admin-link-color: #5094c4;
+    --admin-header-bg: #333;
+    --admin-hover-bg: #2a2a2a;
+}
+
+/* Force light mode when data-theme is light */
+[data-theme="light"] {
+    --admin-primary-color: #417690;
+    --admin-bg-color: #fff;
+    --admin-bg-secondary: #f8f9fa;
+    --admin-border-color: #ddd;
+    --admin-border-light: #eee;
+    --admin-text-color: #333;
+    --admin-text-secondary: #666;
+    --admin-link-color: #417690;
+    --admin-header-bg: #f4f4f4;
+    --admin-hover-bg: #f9f9f9;
+}
+
+/* Simple, clean category sections */
+.category-section {
+    margin-bottom: 20px;
+    background: var(--admin-bg-color);
+    border: 1px solid var(--admin-border-color);
+    border-radius: 4px;
+}
+
+/* Clean, simple headers */
+.category-header {
+    background: var(--admin-header-bg);
+    color: var(--admin-text-color);
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+    border: none;
+    border-bottom: 1px solid var(--admin-border-color);
+}
+
+/* Model tables styling */
+.category-models {
+    padding: 0;
+}
+
+.category-models table {
+    width: 100%;
+    margin: 0;
+    border: none;
+    border-collapse: collapse;
+}
+
+.category-models .model {
+    border-bottom: 1px solid var(--admin-border-light);
+}
+
+.category-models .model:last-child {
+    border-bottom: none;
+}
+
+.category-models .model:hover {
+    background: var(--admin-hover-bg);
+}
+
+.category-models .model th {
+    background: transparent;
+    padding: 12px 16px;
+    font-weight: 500;
+    border: none;
+    text-align: left;
+    color: var(--admin-text-color);
+    font-size: 13px;
+}
+
+.category-models .model td {
+    padding: 12px 16px;
+    border: none;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+}
+
+/* Simple link styling */
+.category-models .model th a {
+    color: var(--admin-text-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.category-models .model th a:hover {
+    color: var(--admin-link-color);
+}
+
+.category-models .model td a {
+    color: var(--admin-link-color);
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.category-models .model td a:hover {
+    text-decoration: underline;
+}
+
+/* Focus states for accessibility */
+.category-models .model th a:focus,
+.category-models .model td a:focus {
+    outline: 2px solid var(--admin-link-color);
+    outline-offset: 1px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .category-section {
+        margin-bottom: 15px;
+    }
+    
+    .category-header {
+        padding: 10px 12px;
+        font-size: 13px;
+    }
+    
+    .category-models .model th,
+    .category-models .model td {
+        padding: 10px 12px;
+    }
+}

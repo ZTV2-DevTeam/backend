@@ -192,9 +192,9 @@ def create_user_response(user: User, token: str = None) -> dict:
     Returns:
         Dictionary with user information
     """
-    from backend.api_modules.users import create_user_profile_response
+    from backend.api_modules.users import get_or_create_user_profile_response
 
-    profile_response = create_user_profile_response(user.profile)
+    profile_response = get_or_create_user_profile_response(user)
 
     return {
         "token": token or "current_session",

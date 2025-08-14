@@ -81,18 +81,30 @@ class Profile(models.Model):
         ('production_leader', 'Gyártásvezető'),
     ]
     
-    user = models.OneToOneField('auth.User', on_delete=models.CASCADE)
-    telefonszam = models.CharField(max_length=20, blank=True, null=True)
-    medias = models.BooleanField(default=True)
-    stab = models.ForeignKey('Stab', related_name='tagok', on_delete=models.PROTECT, blank=True, null=True)
-    radio_stab = models.ForeignKey('RadioStab', related_name='tagok', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Rádiós stáb')
-    osztaly = models.ForeignKey('Osztaly', on_delete=models.PROTECT, blank=True, null=True)
-    admin_type = models.CharField(max_length=20, choices=ADMIN_TYPES, default='none', verbose_name='Adminisztrátor típus')
-    special_role = models.CharField(max_length=20, choices=SPECIAL_ROLES, default='none', verbose_name='Különleges szerep')
-    osztalyfonok = models.BooleanField(default=False, verbose_name='Osztályfőnök')
-    first_login_token = models.CharField(max_length=255, blank=True, null=True, verbose_name='Első bejelentkezés token')
-    first_login_sent_at = models.DateTimeField(blank=True, null=True, verbose_name='Első bejelentkezés token küldve')
-    password_set = models.BooleanField(default=False, verbose_name='Jelszó beállítva')
+    user = models.OneToOneField('auth.User', on_delete=models.CASCADE, verbose_name='Felhasználó', 
+                                  help_text='A profilhoz tartozó felhasználói fiók')
+    telefonszam = models.CharField(max_length=20, blank=True, null=True, verbose_name='Telefonszám', 
+                                   help_text='A felhasználó telefonszáma')
+    medias = models.BooleanField(default=True, verbose_name='Médiás-e?', 
+                                help_text='Jelöli, hogy a felhasználó médiás-e')
+    stab = models.ForeignKey('Stab', related_name='tagok', on_delete=models.PROTECT, blank=True, null=True, 
+                            verbose_name='Stáb', help_text='A felhasználó stábja')
+    radio_stab = models.ForeignKey('RadioStab', related_name='tagok', on_delete=models.PROTECT, blank=True, null=True, 
+                                  verbose_name='Rádiós stáb', help_text='A felhasználó rádiós stábja (9F diákok számára)')
+    osztaly = models.ForeignKey('Osztaly', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Osztály', 
+                               help_text='A felhasználó osztálya')
+    admin_type = models.CharField(max_length=20, choices=ADMIN_TYPES, default='none', verbose_name='Adminisztrátor típus',
+                                 help_text='A felhasználó adminisztrátori jogosultságainak típusa')
+    special_role = models.CharField(max_length=20, choices=SPECIAL_ROLES, default='none', verbose_name='Különleges szerep',
+                                   help_text='A felhasználó különleges szerepe a rendszerben')
+    osztalyfonok = models.BooleanField(default=False, verbose_name='Osztályfőnök',
+                                      help_text='Jelöli, hogy a felhasználó osztályfőnök-e')
+    first_login_token = models.CharField(max_length=255, blank=True, null=True, verbose_name='Első bejelentkezés token',
+                                        help_text='Token az első bejelentkezéshez és jelszó beállításához')
+    first_login_sent_at = models.DateTimeField(blank=True, null=True, verbose_name='Első bejelentkezés token küldve',
+                                              help_text='Időpont, amikor az első bejelentkezési token ki lett küldve')
+    password_set = models.BooleanField(default=False, verbose_name='Jelszó beállítva',
+                                      help_text='Jelöli, hogy a felhasználó beállította-e már a jelszavát')
 
     def __str__(self):
         return self.user.get_full_name()
@@ -220,13 +232,15 @@ class Profile(models.Model):
         ).order_by('date', 'time_from')
 
 class Osztaly(models.Model):
-    startYear = models.IntegerField(blank=False, null=False)
-    szekcio = models.CharField(max_length=1, blank=False, null=False)
+    startYear = models.IntegerField(blank=False, null=False, verbose_name='Indulási év', 
+                                   help_text='Az év, amikor az osztály első alkalommal megkezdte tanulmányait')
+    szekcio = models.CharField(max_length=1, blank=False, null=False, verbose_name='Szekció', 
+                              help_text='Az osztály szekciója (pl. F, A, B, stb.)')
     tanev = models.ForeignKey('Tanev', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Tanév', 
                               help_text='Az a tanév, amikor ez az osztály aktív volt/lesz')
     osztaly_fonokei = models.ManyToManyField('auth.User', blank=True, related_name='osztaly_fonokei', 
                                            verbose_name='Osztályfőnökei', 
-                                           help_text='Az osztály fő- és helyettes osztályfőnökei')
+                                           help_text='Az osztályfőnök és helyettese')
 
     def __str__(self):
         current_year = datetime.now().year
@@ -298,7 +312,8 @@ class Osztaly(models.Model):
         ordering = ['startYear', 'szekcio']
             
 class Stab(models.Model):
-    name = models.CharField(max_length=50, unique=True, blank=False, null=False)
+    name = models.CharField(max_length=50, unique=True, blank=False, null=False, verbose_name='Stáb neve', 
+                           help_text='A stáb egyedi neve')
 
     def __str__(self):
         return self.name
@@ -320,9 +335,12 @@ class RadioStab(models.Model):
         ('B4', 'B4 rádió csapat'),
     ]
     
-    name = models.CharField(max_length=50, blank=False, null=False, verbose_name='Stáb név')
-    team_code = models.CharField(max_length=2, choices=RADIO_TEAMS, unique=True, verbose_name='Csapat kód')
-    description = models.TextField(max_length=300, blank=True, null=True, verbose_name='Leírás')
+    name = models.CharField(max_length=50, blank=False, null=False, verbose_name='Stáb név',
+                           help_text='A rádiós stáb neve')
+    team_code = models.CharField(max_length=2, choices=RADIO_TEAMS, unique=True, verbose_name='Csapat kód',
+                                help_text='A rádiós csapat egyedi kódja (A1, A2, B3, B4)')
+    description = models.TextField(max_length=300, blank=True, null=True, verbose_name='Leírás',
+                                  help_text='A rádiós stáb részletes leírása (maximum 300 karakter)')
     
     def __str__(self):
         return f"{self.name} ({self.team_code})"
@@ -349,8 +367,10 @@ class RadioStab(models.Model):
         ordering = ['team_code']
             
 class Partner(models.Model):
-    name = models.CharField(max_length=150, unique=True, blank=False, null=False)
-    address = models.CharField(max_length=500, blank=True, null=True)
+    name = models.CharField(max_length=150, unique=True, blank=False, null=False, verbose_name='Partner neve', 
+                           help_text='A partner szervezet vagy intézmény neve')
+    address = models.CharField(max_length=500, blank=True, null=True, verbose_name='Cím', 
+                              help_text='A partner szervezet címe (maximum 500 karakter)')
 
     # intezmeny_tipusok = [
     #     ('iskola', 'Iskola'),
@@ -365,8 +385,10 @@ class Partner(models.Model):
     #     ('egyeb', 'Egyéb'),
     # ]
 
-    institution = models.ForeignKey('PartnerTipus', on_delete=models.PROTECT, related_name='partners', blank=True, null=True)
-    imgUrl = models.URLField(max_length=1000, blank=True, null=True)
+    institution = models.ForeignKey('PartnerTipus', on_delete=models.PROTECT, related_name='partners', blank=True, null=True, 
+                                   verbose_name='Intézmény típusa', help_text='A partner intézmény típusa')
+    imgUrl = models.URLField(max_length=1000, blank=True, null=True, verbose_name='Kép URL', 
+                            help_text='A partnerhez tartozó kép webcíme (opcionális, maximum 1000 karakter)')
 
     def __str__(self):
         return self.name
@@ -377,7 +399,8 @@ class Partner(models.Model):
         ordering = ['name']
 
 class PartnerTipus(models.Model):
-    name = models.CharField(max_length=150, unique=True, blank=False, null=False)
+    name = models.CharField(max_length=150, unique=True, blank=False, null=False, verbose_name='Típus neve', 
+                           help_text='A partner típus neve (pl. Iskola, Múzeum, Vállalat, stb.)')
 
     def __str__(self):
         return self.name
@@ -387,9 +410,11 @@ class PartnerTipus(models.Model):
         verbose_name_plural = "Partner Típusok"
 
 class Config(models.Model):
-    active = models.BooleanField(default=False)
+    active = models.BooleanField(default=False, verbose_name='Aktív', 
+                                help_text='Jelöli, hogy a rendszer aktív-e')
 
-    allowEmails = models.BooleanField(default=False)
+    allowEmails = models.BooleanField(default=False, verbose_name='E-mailek engedélyezése', 
+                                     help_text='Jelöli, hogy a rendszer küldhet-e e-maileket')
 
     def __str__(self):
         return f'active: {self.active}'
@@ -399,14 +424,23 @@ class Config(models.Model):
         verbose_name_plural = "Konfigurációk"
 
 class Forgatas(models.Model):
-    name = models.CharField(max_length=150, blank=False, null=False)
-    description = models.TextField(max_length=500, blank=False, null=False)
-    date = models.DateField(blank=False, null=False)
-    timeFrom = models.TimeField(blank=False, null=False)
-    timeTo = models.TimeField(blank=False, null=False)
-    location = models.ForeignKey('Partner', on_delete=models.PROTECT, blank=True, null=True)
-    contactPerson = models.ForeignKey('ContactPerson', on_delete=models.PROTECT, blank=True, null=True)
-    notes = models.TextField(max_length=500, blank=True, null=True)
+    name = models.CharField(max_length=150, blank=False, null=False, verbose_name='Forgatás neve', 
+                           help_text='A forgatás egyedi neve')
+    description = models.TextField(max_length=500, blank=False, null=False, verbose_name='Leírás', 
+                                  help_text='A forgatás részletes leírása (maximum 500 karakter)')
+    date = models.DateField(blank=False, null=False, verbose_name='Dátum', 
+                           help_text='A forgatás dátuma')
+    timeFrom = models.TimeField(blank=False, null=False, verbose_name='Kezdés ideje', 
+                               help_text='A forgatás kezdési időpontja')
+    timeTo = models.TimeField(blank=False, null=False, verbose_name='Befejezés ideje', 
+                             help_text='A forgatás befejezésének időpontja')
+    location = models.ForeignKey('Partner', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Helyszín', 
+                                help_text='A forgatás helyszíne (partnerintézmény)')
+    riporter = models.ForeignKey('auth.User', null=True, blank=True, verbose_name='Riporter', help_text='A forgatás riportere', on_delete=models.PROTECT)
+    contactPerson = models.ForeignKey('ContactPerson', on_delete=models.PROTECT, blank=True, null=True, 
+                                     verbose_name='Kapcsolattartó', help_text='A forgatáshoz tartozó kapcsolattartó személy')
+    notes = models.TextField(max_length=500, blank=True, null=True, verbose_name='Megjegyzések', 
+                            help_text='További megjegyzések a forgatáshoz (maximum 500 karakter)')
     tanev = models.ForeignKey('Tanev', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Tanév',
                               help_text='A forgatás tanéve (automatikusan meghatározva a dátum alapján)')
 
@@ -417,10 +451,14 @@ class Forgatas(models.Model):
         ('egyeb', 'Egyéb'),
     ]
 
-    forgTipus = models.CharField(max_length=150, choices=tipusok, blank=False, null=False)
+    forgTipus = models.CharField(max_length=150, choices=tipusok, blank=False, null=False, verbose_name='Forgatás típusa', 
+                                help_text='A forgatás típusának kategóriája')
 
-    relatedKaCsa = models.ForeignKey('self', on_delete=models.PROTECT, blank=True, null=True, related_name='related_forgatas', limit_choices_to={'forgTipus': 'kacsa'})
-    equipments = models.ManyToManyField('Equipment', blank=True, related_name='forgatasok')
+    relatedKaCsa = models.ForeignKey('self', on_delete=models.PROTECT, blank=True, null=True, related_name='related_forgatas', 
+                                    limit_choices_to={'forgTipus': 'kacsa'}, verbose_name='Kapcsolódó KaCsa', 
+                                    help_text='A forgatáshoz kapcsolódó KaCsa típusú forgatás')
+    equipments = models.ManyToManyField('Equipment', blank=True, related_name='forgatasok', verbose_name='Felszerelések', 
+                                       help_text='A forgatáshoz szükséges felszerelések')
 
     def __str__(self):
         return f'{self.name} ({self.date})'
@@ -437,13 +475,17 @@ class Forgatas(models.Model):
         ordering = ['date', 'timeFrom']
 
 class Absence(models.Model):
-    diak = models.ForeignKey('auth.User', on_delete=models.CASCADE)
-    forgatas = models.ForeignKey('Forgatas', on_delete=models.CASCADE)
-    date = models.DateField()
-    timeFrom = models.TimeField()
-    timeTo = models.TimeField()
-    excused = models.BooleanField(default=False)
-    unexcused = models.BooleanField(default=False)
+    diak = models.ForeignKey('auth.User', on_delete=models.CASCADE, verbose_name='Diák', 
+                            help_text='A hiányzó diák')
+    forgatas = models.ForeignKey('Forgatas', on_delete=models.CASCADE, verbose_name='Forgatás', 
+                                help_text='A forgatás, ami miatt hiányzik')
+    date = models.DateField(verbose_name='Dátum', help_text='A hiányzás dátuma')
+    timeFrom = models.TimeField(verbose_name='Kezdés ideje', help_text='A hiányzás kezdési időpontja')
+    timeTo = models.TimeField(verbose_name='Befejezés ideje', help_text='A hiányzás befejezési időpontja')
+    excused = models.BooleanField(default=False, verbose_name='Igazolt', 
+                                 help_text='Jelöli, hogy a hiányzás igazolt-e')
+    unexcused = models.BooleanField(default=False, verbose_name='Igazolatlan', 
+                                   help_text='Jelöli, hogy a hiányzás igazolatlan-e')
 
     # Érintett tanórák kiszámítása
     # Csengetési rend:
@@ -485,8 +527,10 @@ class Absence(models.Model):
         return f'{self.diak.get_full_name()} - {self.date} ({self.timeFrom} - {self.timeTo})'
 
 class EquipmentTipus(models.Model):
-    name = models.CharField(max_length=150, unique=True, blank=False, null=False)
-    emoji = models.CharField(max_length=10, blank=True, null=True)
+    name = models.CharField(max_length=150, unique=True, blank=False, null=False, verbose_name='Típus neve', 
+                           help_text='Az eszköz típusának neve')
+    emoji = models.CharField(max_length=10, blank=True, null=True, verbose_name='Emoji', 
+                            help_text='Az eszköz típushoz tartozó emoji ikon (opcionális)')
 
     def __str__(self):
         return f'{self.name} ({self.emoji})'
@@ -496,13 +540,20 @@ class EquipmentTipus(models.Model):
         verbose_name_plural = "Eszköz Típusok"
 
 class Equipment(models.Model):
-    nickname = models.CharField(max_length=150, unique=True, blank=False, null=False)
-    brand = models.CharField(max_length=150, blank=True, null=True)
-    model = models.CharField(max_length=150, blank=True, null=True)
-    serialNumber = models.CharField(max_length=150, unique=True, blank=True, null=True)
-    equipmentType = models.ForeignKey('EquipmentTipus', on_delete=models.PROTECT, related_name='equipments', blank=True, null=True)
-    functional = models.BooleanField(default=True)
-    notes = models.TextField(max_length=500, blank=True, null=True)
+    nickname = models.CharField(max_length=150, blank=False, null=False, verbose_name='Becenév', 
+                               help_text='Az eszköz egyedi beceneve (azonosításhoz)')
+    brand = models.CharField(max_length=150, blank=True, null=True, verbose_name='Márka', 
+                            help_text='Az eszköz gyártójának neve')
+    model = models.CharField(max_length=150, blank=True, null=True, verbose_name='Modell', 
+                            help_text='Az eszköz modell neve vagy száma')
+    serialNumber = models.CharField(max_length=150, unique=True, blank=True, null=True, verbose_name='Sorozatszám', 
+                                   help_text='Az eszköz gyári sorozatszáma (egyedi)')
+    equipmentType = models.ForeignKey('EquipmentTipus', on_delete=models.PROTECT, related_name='equipments', blank=True, null=True, 
+                                     verbose_name='Eszköz típusa', help_text='Az eszköz kategóriája')
+    functional = models.BooleanField(default=True, verbose_name='Működőképes', 
+                                    help_text='Jelöli, hogy az eszköz használható állapotban van-e')
+    notes = models.TextField(max_length=500, blank=True, null=True, verbose_name='Megjegyzések', 
+                            help_text='További információk az eszközről (maximum 500 karakter)')
 
     def __str__(self):
         return f'{self.nickname} ({self.brand} {self.model})'
@@ -576,9 +627,12 @@ class Equipment(models.Model):
         return schedule
 
 class ContactPerson(models.Model):
-    name = models.CharField(max_length=150, blank=False, null=False)
-    email = models.EmailField(max_length=254, blank=True, null=True)
-    phone = models.CharField(max_length=20, blank=True, null=True)
+    name = models.CharField(max_length=150, blank=False, null=False, verbose_name='Név', 
+                           help_text='A kapcsolattartó személy teljes neve')
+    email = models.EmailField(max_length=254, blank=True, null=True, verbose_name='E-mail cím', 
+                             help_text='A kapcsolattartó e-mail címe (opcionális)')
+    phone = models.CharField(max_length=20, blank=True, null=True, verbose_name='Telefonszám', 
+                            help_text='A kapcsolattartó telefonszáma (opcionális)')
     
     def __str__(self):
         return self.name
@@ -588,12 +642,18 @@ class ContactPerson(models.Model):
         verbose_name_plural = "Kapcsolattartók"
 
 class Announcement(models.Model):
-    author = models.ForeignKey('auth.user', related_name='announcements', on_delete=models.PROTECT, blank=True, null=True)
-    title = models.CharField(max_length=200, blank=False, null=False)
-    body = models.TextField(max_length=5000, blank=False, null=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    cimzettek = models.ManyToManyField('auth.User', related_name='uzenetek', blank=True)
+    author = models.ForeignKey('auth.user', related_name='announcements', on_delete=models.PROTECT, blank=True, null=True, 
+                              verbose_name='Szerző', help_text='A közlemény szerzője')
+    title = models.CharField(max_length=200, blank=False, null=False, verbose_name='Cím', 
+                            help_text='A közlemény címe (maximum 200 karakter)')
+    body = models.TextField(max_length=5000, blank=False, null=False, verbose_name='Tartalom', 
+                           help_text='A közlemény tartalma (maximum 5000 karakter)')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Létrehozva', 
+                                     help_text='A közlemény létrehozásának időpontja')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Módosítva', 
+                                     help_text='A közlemény utolsó módosításának időpontja')
+    cimzettek = models.ManyToManyField('auth.User', related_name='uzenetek', blank=True, verbose_name='Címzettek', 
+                                      help_text='A közlemény címzettjei')
 
     def __str__(self):
         return self.title
@@ -604,11 +664,16 @@ class Announcement(models.Model):
         ordering = ['-created_at']
 
 class Tavollet(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    start_date = models.DateField(blank=False, null=False)
-    end_date = models.DateField(blank=False, null=False)
-    reason = models.TextField(max_length=500, blank=True, null=True)
-    denied = models.BooleanField(default=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Felhasználó', 
+                            help_text='A távollétét jelző felhasználó')
+    start_date = models.DateField(blank=False, null=False, verbose_name='Kezdő dátum', 
+                                 help_text='A távollét kezdő dátuma')
+    end_date = models.DateField(blank=False, null=False, verbose_name='Záró dátum', 
+                               help_text='A távollét záró dátuma')
+    reason = models.TextField(max_length=500, blank=True, null=True, verbose_name='Indoklás', 
+                             help_text='A távollét indoklása (opcionális, maximum 500 karakter)')
+    denied = models.BooleanField(default=False, verbose_name='Elutasítva', 
+                                help_text='Jelöli, hogy a távollét kérés el lett-e utasítva')
 
 
     def __str__(self):
@@ -623,15 +688,22 @@ class RadioSession(models.Model):
     """
     Rádiós összejátszások kezelése másodéves (9F) diákok számára
     """
-    radio_stab = models.ForeignKey('RadioStab', on_delete=models.CASCADE, verbose_name='Rádiós stáb')
-    date = models.DateField(blank=False, null=False, verbose_name='Dátum')
-    time_from = models.TimeField(blank=False, null=False, verbose_name='Kezdés ideje')
-    time_to = models.TimeField(blank=False, null=False, verbose_name='Befejezés ideje')
-    description = models.TextField(max_length=500, blank=True, null=True, verbose_name='Leírás')
-    participants = models.ManyToManyField('auth.User', related_name='radio_sessions', blank=True, verbose_name='Résztvevők')
+    radio_stab = models.ForeignKey('RadioStab', on_delete=models.CASCADE, verbose_name='Rádiós stáb',
+                                  help_text='Az összejátszáshoz tartozó rádiós stáb')
+    date = models.DateField(blank=False, null=False, verbose_name='Dátum',
+                           help_text='Az összejátszás dátuma')
+    time_from = models.TimeField(blank=False, null=False, verbose_name='Kezdés ideje',
+                                help_text='Az összejátszás kezdési időpontja')
+    time_to = models.TimeField(blank=False, null=False, verbose_name='Befejezés ideje',
+                              help_text='Az összejátszás befejezési időpontja')
+    description = models.TextField(max_length=500, blank=True, null=True, verbose_name='Leírás',
+                                  help_text='Az összejátszás leírása (opcionális, maximum 500 karakter)')
+    participants = models.ManyToManyField('auth.User', related_name='radio_sessions', blank=True, verbose_name='Résztvevők',
+                                         help_text='Az összejátszásban résztvevő felhasználók')
     tanev = models.ForeignKey('Tanev', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Tanév',
                               help_text='A rádiós összejátszás tanéve (automatikusan meghatározva a dátum alapján)')
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Létrehozva',
+                                     help_text='Az összejátszás létrehozásának időpontja')
     
     def __str__(self):
         return f'{self.radio_stab.name} rádiós összejátszás - {self.date} {self.time_from}-{self.time_to}'
@@ -670,14 +742,19 @@ class RadioSession(models.Model):
         ordering = ['date', 'time_from']
 
 class Beosztas(models.Model):
-    kesz = models.BooleanField(default=False)
-    szerepkor_relaciok = models.ManyToManyField('SzerepkorRelaciok', related_name='beosztasok', blank=True)
-    author = models.ForeignKey('auth.User', related_name='beosztasok', on_delete=models.PROTECT, blank=True, null=True)
+    kesz = models.BooleanField(default=False, verbose_name='Kész', 
+                              help_text='Jelöli, hogy a beosztás elkészült és végleges-e')
+    szerepkor_relaciok = models.ManyToManyField('SzerepkorRelaciok', related_name='beosztasok', blank=True, 
+                                               verbose_name='Szerepkör relációk', 
+                                               help_text='A beosztáshoz tartozó szerepkör hozzárendelések')
+    author = models.ForeignKey('auth.User', related_name='beosztasok', on_delete=models.PROTECT, blank=True, null=True, 
+                              verbose_name='Szerző', help_text='A beosztást végző felhasználó')
     tanev = models.ForeignKey('Tanev', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Tanév',
                               help_text='A beosztás tanéve')
     forgatas = models.ForeignKey('Forgatas', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Forgatás',
                                 help_text='A beosztáshoz tartozó forgatás', related_name='beosztasok')
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Létrehozva', 
+                                     help_text='A beosztás létrehozásának időpontja')
     
     def __str__(self):
         tanev_str = f" ({self.tanev})" if self.tanev else ""
@@ -696,8 +773,10 @@ class Beosztas(models.Model):
         ordering = ['-created_at']
 
 class SzerepkorRelaciok(models.Model):
-    user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
-    szerepkor = models.ForeignKey('Szerepkor', on_delete=models.CASCADE)
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, verbose_name='Felhasználó', 
+                            help_text='A szerepkört betöltő felhasználó')
+    szerepkor = models.ForeignKey('Szerepkor', on_delete=models.CASCADE, verbose_name='Szerepkör', 
+                                 help_text='A hozzárendelt szerepkör')
 
     def __str__(self):
         return f'{self.user.get_full_name()} - {self.szerepkor.name}'
@@ -708,8 +787,10 @@ class SzerepkorRelaciok(models.Model):
         ordering = ['user__last_name', 'user__first_name']
 
 class Szerepkor(models.Model):
-    name = models.CharField(max_length=150, unique=True, blank=False, null=False)
-    ev = models.IntegerField(blank=True, null=True)
+    name = models.CharField(max_length=150, unique=True, blank=False, null=False, verbose_name='Szerepkör neve', 
+                           help_text='A szerepkör egyedi neve')
+    ev = models.IntegerField(blank=True, null=True, verbose_name='Év', 
+                            help_text='Az évfolyam, amelyre a szerepkör vonatkozik (opcionális)')
 
     def __str__(self):
         return self.name

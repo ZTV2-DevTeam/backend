@@ -165,6 +165,29 @@ def create_user_profile_response(profile: Profile) -> dict:
         "is_second_year_radio": profile.is_second_year_radio_student
     }
 
+def get_or_create_user_profile_response(user) -> dict:
+    """
+    Get user profile response, creating profile if it doesn't exist.
+    
+    Args:
+        user: Django User object
+        
+    Returns:
+        Dictionary with user profile information
+    """
+    try:
+        profile = user.profile
+    except:
+        # Create default profile for users without one
+        profile = Profile.objects.create(
+            user=user,
+            medias=True,
+            admin_type='none',
+            password_set=True
+        )
+    
+    return create_user_profile_response(profile)
+
 def check_admin_permissions(user: User) -> tuple[bool, str]:
     """
     Check if user has admin permissions for user management.
