@@ -332,16 +332,16 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching assignments: {str(e)}"}
 
-    @api.get("/assignments/filming-assignments/{assignment_id}", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema})
-    def get_filming_assignment_details(request, assignment_id: int):
+    @api.get("/assignments/filming-assignments/{forgatas_id}", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def get_filming_assignment_details_by_forgatas(request, forgatas_id: int):
         """
-        Get detailed information about a specific assignment.
-        
+        Get detailed information about a specific assignment by forgatas ID.
+
         Requires authentication.
-        
+
         Args:
-            assignment_id: Unique assignment identifier
-            
+            forgatas_id: Unique forgatas identifier
+
         Returns:
             200: Detailed assignment information
             404: Assignment not found
@@ -353,8 +353,8 @@ def register_assignment_endpoints(api):
             ).prefetch_related(
                 'szerepkor_relaciok__user',
                 'szerepkor_relaciok__szerepkor'
-            ).get(id=assignment_id)
-            
+            ).get(forgatas_id=forgatas_id)
+
             return 200, create_beosztas_response(assignment)
         except Beosztas.DoesNotExist:
             return 404, {"message": "Beosztás nem található"}

@@ -674,7 +674,8 @@ class Tavollet(models.Model):
                              help_text='A távollét indoklása (opcionális, maximum 500 karakter)')
     denied = models.BooleanField(default=False, verbose_name='Elutasítva', 
                                 help_text='Jelöli, hogy a távollét kérés el lett-e utasítva')
-
+    approved = models.BooleanField(default=False, verbose_name='Jóváhagyva', 
+                                   help_text='Jelöli, hogy a távollét kérés jóvá lett-e hagyva')
 
     def __str__(self):
         return f'{self.user.get_full_name()}: {self.start_date} - {self.end_date}'

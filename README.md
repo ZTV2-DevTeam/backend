@@ -1,6 +1,6 @@
 # FTV Backend API
 
-Comprehensive REST API for the FTV (Zalaegerszegi Televízió 2) school media management system.
+Comprehensive REST API for the FTV school media management system.
 
 ## 🚀 Quick Start
 

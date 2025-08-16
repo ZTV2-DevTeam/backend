@@ -30,6 +30,7 @@ class TavolletSchema(Schema):
     end_date: str
     reason: Optional[str] = None
     denied: bool
+    approved: bool
     duration_days: int
     status: str
 
@@ -46,6 +47,7 @@ class TavolletUpdateSchema(Schema):
     end_date: Optional[str] = None
     reason: Optional[str] = None
     denied: Optional[bool] = None
+    approved: Optional[bool] = None
 
 # ============================================================================
 # Utility Functions
@@ -82,15 +84,20 @@ def create_tavollet_response(tavollet: Tavollet) -> dict:
     # Calculate duration in days
     duration = (tavollet.end_date - tavollet.start_date).days + 1
     
-    # Determine status
-    if tavollet.denied:
+    # Determine status based on approval/denial state and time
+    if tavollet.denied and tavollet.approved:
+        # This shouldn't happen but handle it gracefully
+        status = "konfliktus"  # Both flags set - should be fixed
+    elif tavollet.denied:
         status = "elutasítva"
+    elif tavollet.approved:
+        status = "jóváhagyva"
     elif tavollet.end_date < date.today():
         status = "lezárt"
     elif tavollet.start_date <= date.today() <= tavollet.end_date:
         status = "folyamatban"
     else:
-        status = "jövőbeli"
+        status = "függőben"  # Changed from "jövőbeli" to be more descriptive of pending approval
     
     return {
         "id": tavollet.id,
@@ -99,6 +106,7 @@ def create_tavollet_response(tavollet: Tavollet) -> dict:
         "end_date": tavollet.end_date.isoformat(),
         "reason": tavollet.reason,
         "denied": tavollet.denied,
+        "approved": tavollet.approved,
         "duration_days": duration,
         "status": status
     }
@@ -288,7 +296,7 @@ def register_absence_endpoints(api):
             if start_date > end_date:
                 return 400, {"message": "A záró dátumnak a kezdő dátum után kell lennie"}
             
-            # Check for overlapping absences
+            # Check for overlapping absences (not denied)
             overlapping = Tavollet.objects.filter(
                 user=target_user,
                 start_date__lte=end_date,
@@ -305,7 +313,8 @@ def register_absence_endpoints(api):
                 start_date=start_date,
                 end_date=end_date,
                 reason=data.reason,
-                denied=False
+                denied=False,
+                approved=False
             )
             
             return 201, create_tavollet_response(absence)
@@ -358,7 +367,7 @@ def register_absence_endpoints(api):
             if updated_start_date > updated_end_date:
                 return 400, {"message": "A záró dátumnak a kezdő dátum után kell lennie"}
             
-            # Check for overlapping absences (excluding current one)
+            # Check for overlapping absences (excluding current one, not denied)
             overlapping = Tavollet.objects.filter(
                 user=absence.user,
                 start_date__lte=updated_end_date,
@@ -388,7 +397,28 @@ def register_absence_endpoints(api):
                 
                 if has_admin_permission:
                     absence.denied = data.denied
+                    # If denied is set to True, ensure approved is False
+                    if data.denied:
+                        absence.approved = False
                 elif data.denied != absence.denied:
+                    return 401, {"message": "Nincs jogosultság a státusz módosításához"}
+            
+            if data.approved is not None:
+                # Only admins can change approved status
+                has_admin_permission = False
+                try:
+                    from api.models import Profile
+                    profile = Profile.objects.get(user=requesting_user)
+                    has_admin_permission = profile.has_admin_permission('any')
+                except Profile.DoesNotExist:
+                    pass
+                
+                if has_admin_permission:
+                    absence.approved = data.approved
+                    # If approved is set to True, ensure denied is False
+                    if data.approved:
+                        absence.denied = False
+                elif data.approved != absence.approved:
                     return 401, {"message": "Nincs jogosultság a státusz módosításához"}
             
             absence.save()
@@ -402,9 +432,9 @@ def register_absence_endpoints(api):
     @api.put("/absences/{absence_id}/approve", auth=JWTAuth(), response={200: TavolletSchema, 401: ErrorSchema, 404: ErrorSchema})
     def approve_absence(request, absence_id: int):
         """
-        Approve absence (set denied=False).
+        Approve absence (set approved=True, denied=False).
         
-        Requires admin permissions. Approves a previously denied absence.
+        Requires admin permissions. Approves an absence.
         
         Args:
             absence_id: Unique absence identifier
@@ -421,7 +451,8 @@ def register_absence_endpoints(api):
                 return 401, {"message": error_message}
             
             absence = Tavollet.objects.get(id=absence_id)
-            absence.denied = False
+            absence.approved = True
+            absence.denied = False  # Ensure mutual exclusivity
             absence.save()
             
             return 200, create_tavollet_response(absence)
@@ -433,7 +464,7 @@ def register_absence_endpoints(api):
     @api.put("/absences/{absence_id}/deny", auth=JWTAuth(), response={200: TavolletSchema, 401: ErrorSchema, 404: ErrorSchema})
     def deny_absence(request, absence_id: int):
         """
-        Deny absence (set denied=True).
+        Deny absence (set denied=True, approved=False).
         
         Requires admin permissions. Denies an absence.
         
@@ -453,6 +484,7 @@ def register_absence_endpoints(api):
             
             absence = Tavollet.objects.get(id=absence_id)
             absence.denied = True
+            absence.approved = False  # Ensure mutual exclusivity
             absence.save()
             
             return 200, create_tavollet_response(absence)
@@ -460,6 +492,38 @@ def register_absence_endpoints(api):
             return 404, {"message": "Távollét nem található"}
         except Exception as e:
             return 400, {"message": f"Error denying absence: {str(e)}"}
+
+    @api.put("/absences/{absence_id}/reset", auth=JWTAuth(), response={200: TavolletSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def reset_absence_status(request, absence_id: int):
+        """
+        Reset absence status (set both approved=False and denied=False).
+        
+        Requires admin permissions. Resets an absence to pending status.
+        
+        Args:
+            absence_id: Unique absence identifier
+            
+        Returns:
+            200: Absence status reset successfully
+            404: Absence not found
+            401: Authentication or permission failed
+        """
+        try:
+            # Check if user has admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 401, {"message": error_message}
+            
+            absence = Tavollet.objects.get(id=absence_id)
+            absence.approved = False
+            absence.denied = False
+            absence.save()
+            
+            return 200, create_tavollet_response(absence)
+        except Tavollet.DoesNotExist:
+            return 404, {"message": "Távollét nem található"}
+        except Exception as e:
+            return 400, {"message": f"Error resetting absence status: {str(e)}"}
 
     @api.delete("/absences/{absence_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
     def delete_absence(request, absence_id: int):
@@ -539,7 +603,7 @@ def register_absence_endpoints(api):
             except ValueError:
                 return 400, {"message": "Hibás dátum formátum"}
             
-            # Find conflicting absences
+            # Find conflicting absences (approved or pending - not denied)
             conflicts = Tavollet.objects.filter(
                 user=target_user,
                 start_date__lte=check_end,

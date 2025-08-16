@@ -2,13 +2,12 @@
 FTV Backend API - Comprehensive Public API Documentation
 
 This is the main API configuration file that provides a complete, organized, and 
-maintainable REST API for the FTV (Zalaegerszegi Televízió 2) school media system.
+maintainable REST API for the FTV school media system.
 
 🎥 OVERVIEW
 ============
 
-FTV is a comprehensive school media management system designed for Zalaegerszegi 
-Televízió, providing complete functionality for:
+FTV is a comprehensive school media management system designed for SZLG, providing complete functionality for:
 
 - Student and teacher management
 - Media equipment tracking and booking
