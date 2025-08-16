@@ -318,7 +318,17 @@ def register_core_endpoints(api):
                 if profile.is_production_leader:
                     role_info["roles"].append("Gyártásvezető")
                 
-                # Class assignment (potential osztályfőnök)
+                # Check if user is osztályfőnök (class teacher)
+                permissions["is_osztaly_fonok"] = profile.is_osztaly_fonok
+                if permissions["is_osztaly_fonok"]:
+                    permissions["can_manage_class_students"] = True
+                    permissions["can_view_class_info"] = True
+                    role_info["roles"].append("Osztályfőnök")
+                    # Override primary role if they are osztályfőnök
+                    if profile.is_teacher_admin:
+                        role_info["primary_role"] = "osztaly_fonok"
+                
+                # Class assignment
                 if profile.osztaly:
                     role_info["class_assignment"] = {
                         "id": profile.osztaly.id,
@@ -327,14 +337,6 @@ def register_core_endpoints(api):
                         "display_name": str(profile.osztaly)
                     }
                     role_info["class_display_name"] = str(profile.osztaly)
-                    
-                    # Check if they are potentially an osztályfőnök (teacher admin with class assignment)
-                    if profile.is_teacher_admin:
-                        permissions["is_osztaly_fonok"] = True
-                        permissions["can_manage_class_students"] = True
-                        permissions["can_view_class_info"] = True
-                        role_info["roles"].append("Osztályfőnök")
-                        role_info["primary_role"] = "osztaly_fonok"
                 
                 # Stab assignment
                 if profile.stab:

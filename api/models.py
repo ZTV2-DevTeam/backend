@@ -136,14 +136,11 @@ class Profile(models.Model):
     
     @property
     def is_osztaly_fonok(self):
-        """Check if user is marked as class teacher or is actually assigned to any class as teacher"""
-        # Check the boolean field first
-        if self.osztalyfonok:
-            return True
-
+        """Check if user is assigned to any class as osztályfőnök (class teacher)"""
         # Check if the user is assigned to any class as a teacher
         try:
-            return self.osztaly and self.osztaly.osztaly_fonokei.filter(id=self.user.id).exists()
+            from api.models import Osztaly
+            return Osztaly.objects.filter(osztaly_fonokei=self.user).exists()
         except Exception as e:
             # Log the error for debugging purposes
             print(f"Error in is_osztaly_fonok: {e}")
