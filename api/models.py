@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
 from datetime import datetime, date, timedelta, time
+from django.db.models.signals import m2m_changed
+from django.dispatch import receiver
 
 # Create your models here.
 
@@ -461,10 +463,40 @@ class Forgatas(models.Model):
         return f'{self.name} ({self.date})'
     
     def save(self, *args, **kwargs):
+        # Store old values for comparison if updating
+        old_date = None
+        old_timeFrom = None
+        old_timeTo = None
+        if self.pk:
+            try:
+                old_forgatas = Forgatas.objects.get(pk=self.pk)
+                old_date = old_forgatas.date
+                old_timeFrom = old_forgatas.timeFrom
+                old_timeTo = old_forgatas.timeTo
+            except Forgatas.DoesNotExist:
+                pass
+        
         # Auto-assign school year based on date
         if not self.tanev and self.date:
             self.tanev = Tanev.get_current_by_date(self.date)
+        
         super().save(*args, **kwargs)
+        
+        # Update related absence records if timing changed
+        if old_date is not None and (
+            old_date != self.date or 
+            old_timeFrom != self.timeFrom or 
+            old_timeTo != self.timeTo
+        ):
+            self.update_related_absences()
+    
+    def update_related_absences(self):
+        """Update all absence records related to this forgatas when timing changes"""
+        Absence.objects.filter(forgatas=self).update(
+            date=self.date,
+            timeFrom=self.timeFrom,
+            timeTo=self.timeTo
+        )
     
     class Meta:
         verbose_name = "Forgatás"
@@ -483,6 +515,8 @@ class Absence(models.Model):
                                  help_text='Jelöli, hogy a hiányzás igazolt-e')
     unexcused = models.BooleanField(default=False, verbose_name='Igazolatlan', 
                                    help_text='Jelöli, hogy a hiányzás igazolatlan-e')
+    auto_generated = models.BooleanField(default=True, verbose_name='Automatikusan generált',
+                                        help_text='Jelöli, hogy ez a hiányzás automatikusan lett-e létrehozva beosztás alapján')
 
     # Érintett tanórák kiszámítása
     # Csengetési rend:
@@ -511,6 +545,10 @@ class Absence(models.Model):
 
     def get_affected_classes(self):
         affected = []
+        # Check if timeFrom and timeTo are not None to avoid TypeError
+        if self.timeFrom is None or self.timeTo is None:
+            return affected
+        
         for hour, (start, end) in self.affected_classes.items():
             if start < self.timeTo and end > self.timeFrom:
                 affected.append(hour)
@@ -763,7 +801,164 @@ class Beosztas(models.Model):
         # Auto-assign current active school year if none specified
         if not self.tanev:
             self.tanev = Tanev.get_active()
+        
+        # Store old state for comparison if updating
+        old_szerepkor_relaciok = None
+        old_forgatas = None
+        if self.pk:
+            try:
+                old_beosztas = Beosztas.objects.get(pk=self.pk)
+                old_szerepkor_relaciok = set(old_beosztas.szerepkor_relaciok.all())
+                old_forgatas = old_beosztas.forgatas
+            except Beosztas.DoesNotExist:
+                pass
+        
         super().save(*args, **kwargs)
+        
+        # Auto-manage absence records after save
+        self.update_absence_records(old_szerepkor_relaciok, old_forgatas)
+    
+    def update_absence_records(self, old_szerepkor_relaciok=None, old_forgatas=None):
+        """
+        Automatically create/update/delete absence records based on assignment changes
+        """
+        if not self.forgatas or not self.kesz:
+            # If no forgatas or not finalized, clean up any existing absences
+            self.clean_absence_records()
+            return
+        
+        # Get current users assigned to this forgatas
+        current_users = set()
+        for relacio in self.szerepkor_relaciok.all():
+            current_users.add(relacio.user)
+        
+        # Get old users if this was an update
+        old_users = set()
+        if old_szerepkor_relaciok:
+            for relacio in old_szerepkor_relaciok:
+                old_users.add(relacio.user)
+        
+        # Create absence records for newly assigned users
+        new_users = current_users - old_users
+        for user in new_users:
+            self.create_absence_for_user(user)
+        
+        # Remove absence records for users no longer assigned
+        removed_users = old_users - current_users
+        for user in removed_users:
+            self.remove_absence_for_user(user)
+        
+        # Update existing absence records if forgatas details changed
+        if old_forgatas and (
+            old_forgatas.date != self.forgatas.date or 
+            old_forgatas.timeFrom != self.forgatas.timeFrom or 
+            old_forgatas.timeTo != self.forgatas.timeTo
+        ):
+            # Update all existing absence records with new timing
+            remaining_users = current_users & old_users
+            for user in remaining_users:
+                self.update_absence_for_user(user)
+    
+    def create_absence_for_user(self, user):
+        """Create an absence record for a user assigned to this forgatas"""
+        if not self.forgatas:
+            return
+        
+        # Check if absence already exists to avoid duplicates
+        existing_absence = Absence.objects.filter(
+            diak=user,
+            forgatas=self.forgatas,
+            date=self.forgatas.date
+        ).first()
+        
+        if not existing_absence:
+            Absence.objects.create(
+                diak=user,
+                forgatas=self.forgatas,
+                date=self.forgatas.date,
+                timeFrom=self.forgatas.timeFrom,
+                timeTo=self.forgatas.timeTo,
+                excused=False,  # Default to not excused
+                unexcused=False,
+                auto_generated=True  # Mark as auto-generated
+            )
+    
+    def update_absence_for_user(self, user):
+        """Update existing absence record for a user when forgatas details change"""
+        if not self.forgatas:
+            return
+        
+        try:
+            absence = Absence.objects.get(
+                diak=user,
+                forgatas=self.forgatas
+            )
+            # Update with new timing from forgatas
+            absence.date = self.forgatas.date
+            absence.timeFrom = self.forgatas.timeFrom
+            absence.timeTo = self.forgatas.timeTo
+            absence.save()
+        except Absence.DoesNotExist:
+            # If absence doesn't exist, create it
+            self.create_absence_for_user(user)
+    
+    def remove_absence_for_user(self, user):
+        """Remove absence record for a user no longer assigned to this forgatas"""
+        if not self.forgatas:
+            return
+        
+        # Only remove auto-generated absence records
+        Absence.objects.filter(
+            diak=user,
+            forgatas=self.forgatas,
+            auto_generated=True
+        ).delete()
+    
+    def clean_absence_records(self):
+        """Remove all auto-generated absence records associated with this assignment"""
+        if self.forgatas:
+            # Only remove auto-generated absences
+            users_in_assignment = set()
+            for relacio in self.szerepkor_relaciok.all():
+                users_in_assignment.add(relacio.user)
+            
+            Absence.objects.filter(
+                forgatas=self.forgatas,
+                diak__in=users_in_assignment,
+                auto_generated=True
+            ).delete()
+    
+    def get_assigned_users(self):
+        """Get all users assigned to roles in this assignment"""
+        return [relacio.user for relacio in self.szerepkor_relaciok.all()]
+    
+    @classmethod
+    def sync_all_absence_records(cls):
+        """
+        Bulk synchronization method to update all absence records for all assignments
+        Useful for initial setup or data cleanup
+        """
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # First, clean up all auto-generated absence records
+            assignments_with_forgatas = cls.objects.filter(forgatas__isnull=False, kesz=True)
+            
+            # Delete existing auto-generated absence records for these forgatások
+            forgatas_ids = [a.forgatas.id for a in assignments_with_forgatas]
+            deleted_count = Absence.objects.filter(
+                forgatas_id__in=forgatas_ids, 
+                auto_generated=True
+            ).delete()[0]
+            
+            # Recreate absence records for all current assignments
+            created_count = 0
+            for beosztas in assignments_with_forgatas:
+                for user in beosztas.get_assigned_users():
+                    beosztas.create_absence_for_user(user)
+                    created_count += 1
+            
+            return {'deleted': deleted_count, 'created': created_count}
     
     class Meta:
         verbose_name = "Beosztás"
@@ -778,6 +973,32 @@ class SzerepkorRelaciok(models.Model):
 
     def __str__(self):
         return f'{self.user.get_full_name()} - {self.szerepkor.name}'
+    
+    def save(self, *args, **kwargs):
+        """Auto-update absence records when role assignments change"""
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        
+        # Update absence records for all assignments using this role relation
+        if not is_new:
+            self.update_related_assignments()
+    
+    def delete(self, *args, **kwargs):
+        """Auto-update absence records when role assignments are deleted"""
+        # Store assignments before deletion
+        related_assignments = list(self.beosztasok.all())
+        super().delete(*args, **kwargs)
+        
+        # Update absence records for affected assignments
+        for beosztas in related_assignments:
+            if beosztas.kesz and beosztas.forgatas:
+                beosztas.remove_absence_for_user(self.user)
+    
+    def update_related_assignments(self):
+        """Update absence records for all assignments that use this role relation"""
+        for beosztas in self.beosztasok.all():
+            if beosztas.kesz and beosztas.forgatas:
+                beosztas.create_absence_for_user(self.user)
     
     class Meta:
         verbose_name = "Szerepkör Reláció"
@@ -797,3 +1018,36 @@ class Szerepkor(models.Model):
         verbose_name = "Szerepkör"
         verbose_name_plural = "Szerepkörök"
         ordering = ['name']
+
+
+# Signal handlers for automatic absence management
+@receiver(m2m_changed, sender=Beosztas.szerepkor_relaciok.through)
+def handle_beosztas_szerepkor_change(sender, instance, action, pk_set, **kwargs):
+    """
+    Handle changes to the szerepkor_relaciok many-to-many field in Beosztas
+    Automatically manage absence records when role assignments change
+    """
+    if not instance.kesz or not instance.forgatas:
+        return
+    
+    if action == 'post_add':
+        # New role relations added - create absence records for new users
+        for relacio_pk in pk_set:
+            try:
+                relacio = SzerepkorRelaciok.objects.get(pk=relacio_pk)
+                instance.create_absence_for_user(relacio.user)
+            except SzerepkorRelaciok.DoesNotExist:
+                pass
+                
+    elif action == 'post_remove':
+        # Role relations removed - delete absence records for removed users
+        for relacio_pk in pk_set:
+            try:
+                relacio = SzerepkorRelaciok.objects.get(pk=relacio_pk)
+                instance.remove_absence_for_user(relacio.user)
+            except SzerepkorRelaciok.DoesNotExist:
+                pass
+                
+    elif action == 'post_clear':
+        # All role relations cleared - remove all related absence records
+        instance.clean_absence_records()

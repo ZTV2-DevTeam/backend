@@ -572,8 +572,8 @@ class AnnouncementAdmin(admin.ModelAdmin):
 
 @admin.register(Absence)
 class AbsenceAdmin(admin.ModelAdmin):
-    list_display = ['absence_display', 'diak', 'forgatas_link', 'date', 'time_display', 'status_display', 'affected_classes']
-    list_filter = ['excused', 'unexcused', 'date', 'forgatas']
+    list_display = ['absence_display', 'diak', 'forgatas_link', 'date', 'time_display', 'status_display', 'auto_generated_display', 'affected_classes']
+    list_filter = ['excused', 'unexcused', 'auto_generated', 'date', 'forgatas']
     search_fields = ['diak__first_name', 'diak__last_name', 'forgatas__name']
     autocomplete_fields = ['diak', 'forgatas']
     date_hierarchy = 'date'
@@ -590,8 +590,8 @@ class AbsenceAdmin(admin.ModelAdmin):
             'description': 'A hiányzás időbeli paraméterei'
         }),
         ('✅ Státusz', {
-            'fields': ('excused', 'unexcused'),
-            'description': 'A hiányzás igazoltsági státusza'
+            'fields': ('excused', 'unexcused', 'auto_generated'),
+            'description': 'A hiányzás igazoltsági státusza és típusa'
         }),
         ('📊 Érintett órák', {
             'fields': ('get_affected_classes_display',),
@@ -619,6 +619,12 @@ class AbsenceAdmin(admin.ModelAdmin):
             return format_html('<span style="color: red; font-weight: bold;">❌ Igazolatlan</span>')
         return format_html('<span style="color: orange; font-weight: bold;">⏳ Függőben</span>')
     status_display.short_description = 'Státusz'
+    
+    def auto_generated_display(self, obj):
+        if obj.auto_generated:
+            return format_html('<span style="color: blue; font-weight: bold;">🤖 Auto</span>')
+        return format_html('<span style="color: gray; font-weight: bold;">👤 Kézi</span>')
+    auto_generated_display.short_description = 'Típus'
     
     def affected_classes(self, obj):
         classes = obj.get_affected_classes()
