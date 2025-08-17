@@ -271,6 +271,7 @@ from .api_modules.assignments import register_assignment_endpoints  # New assign
 from .api_modules.config import register_config_endpoints
 from .api_modules.user_management import register_user_management_endpoints
 from .api_modules.students import register_student_endpoints
+from .api_modules.configuration_wizard import register_configuration_wizard_endpoints
 from .api_modules.legacy import register_legacy_endpoints
 
 # ============================================================================
@@ -306,4 +307,5 @@ register_absence_endpoints(api)         # Absence management endpoints (távoll�
 register_absence_management_endpoints(api)  # School absence management (hiányzás)
 register_assignment_endpoints(api)      # Filming assignment management (beosztás)
 register_config_endpoints(api)          # System configuration endpoints
+register_configuration_wizard_endpoints(api)  # Configuration wizard endpoints
 register_legacy_endpoints(api)          # Legacy system endpoints

@@ -596,6 +596,12 @@ def register_production_endpoints(api):
             if not has_permission:
                 return 401, {"message": error_message}
             
+            # Check equipment assignment permissions (admin only)
+            if data.equipment_ids:
+                is_admin, admin_error = check_admin_permissions(request.auth)
+                if not is_admin:
+                    return 401, {"message": "Eszközök hozzárendelése csak adminisztrátorok számára engedélyezett"}
+            
             # Validate type
             valid_types = [t["value"] for t in FORGATAS_TYPES]
             if data.type not in valid_types:
@@ -720,6 +726,12 @@ def register_production_endpoints(api):
             has_permission, error_message = check_admin_or_teacher_permissions(request.auth)
             if not has_permission:
                 return 401, {"message": error_message}
+            
+            # Check equipment assignment permissions (admin only)
+            if data.equipment_ids is not None:
+                is_admin, admin_error = check_admin_permissions(request.auth)
+                if not is_admin:
+                    return 401, {"message": "Eszközök hozzárendelése csak adminisztrátorok számára engedélyezett"}
             
             forgatas = Forgatas.objects.get(id=forgatas_id)
             
