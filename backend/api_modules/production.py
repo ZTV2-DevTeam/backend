@@ -239,12 +239,14 @@ class ContactPersonSchema(Schema):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    context: Optional[str] = None
 
 class ContactPersonCreateSchema(Schema):
     """Request schema for creating new contact person."""
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    context: Optional[str] = None
 
 class ForgatoTipusSchema(Schema):
     """Schema for filming types."""
@@ -326,7 +328,8 @@ def create_contact_person_response(contact_person: ContactPerson) -> dict:
         "id": contact_person.id,
         "name": contact_person.name,
         "email": contact_person.email,
-        "phone": contact_person.phone
+        "phone": contact_person.phone,
+        "context": contact_person.context
     }
 
 def create_forgatas_response(forgatas: Forgatas) -> dict:
@@ -471,7 +474,8 @@ def register_production_endpoints(api):
             contact = ContactPerson.objects.create(
                 name=data.name,
                 email=data.email,
-                phone=data.phone
+                phone=data.phone,
+                context=data.context
             )
             
             return 201, create_contact_person_response(contact)

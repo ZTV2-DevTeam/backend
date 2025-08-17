@@ -668,8 +668,12 @@ class ContactPerson(models.Model):
                              help_text='A kapcsolattartó e-mail címe (opcionális)')
     phone = models.CharField(max_length=20, blank=True, null=True, verbose_name='Telefonszám', 
                             help_text='A kapcsolattartó telefonszáma (opcionális)')
+    context = models.CharField(max_length=100, blank=True, null=True, verbose_name='Kontextus', 
+                              help_text='Rövid azonosító információ (pl. intézmény + szerepkör, maximum 100 karakter)')
     
     def __str__(self):
+        if self.context:
+            return f"{self.name} ({self.context})"
         return self.name
 
     class Meta:
