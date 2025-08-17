@@ -27,6 +27,7 @@ Filming Sessions:
 - PUT  /filming-sessions/{id}   - Update session (admin only)
 - DELETE /filming-sessions/{id} - Delete session (admin only)
 - GET  /filming-types          - Get available filming types
+- GET  /filming-sessions/kacsa-available - Get available KaCsa sessions for linking
 
 Production System Overview:
 ==========================
@@ -280,6 +281,7 @@ class ForgatCreateSchema(Schema):
     time_to: str
     location_id: Optional[int] = None
     contact_person_id: Optional[int] = None
+    riporter_id: Optional[int] = None
     notes: Optional[str] = None
     type: str
     related_kacsa_id: Optional[int] = None
@@ -294,10 +296,22 @@ class ForgatUpdateSchema(Schema):
     time_to: Optional[str] = None
     location_id: Optional[int] = None
     contact_person_id: Optional[int] = None
+    riporter_id: Optional[int] = None
     notes: Optional[str] = None
     type: Optional[str] = None
     related_kacsa_id: Optional[int] = None
     equipment_ids: Optional[list[int]] = None
+
+class KacsaAvailableSchema(Schema):
+    """Schema for available KaCsa sessions."""
+    id: int
+    name: str
+    date: str
+    time_from: str
+    time_to: str
+    can_link: bool
+    already_linked: bool
+    linked_sessions_count: int = 0
 
 # ============================================================================
 # Constants
@@ -589,9 +603,9 @@ def register_production_endpoints(api):
             
             # Parse date and times
             try:
-                session_date = datetime.fromisoformat(data.date).date()
-                time_from = datetime.fromisoformat(data.time_from).time()
-                time_to = datetime.fromisoformat(data.time_to).time()
+                session_date = date.fromisoformat(data.date)
+                time_from = time.fromisoformat(data.time_from)
+                time_to = time.fromisoformat(data.time_to)
             except ValueError:
                 return 400, {"message": "Hibás dátum vagy idő formátum"}
             
@@ -620,6 +634,34 @@ def register_production_endpoints(api):
                 except Forgatas.DoesNotExist:
                     return 400, {"message": "Kapcsolódó KaCsa forgatás nem található"}
             
+            riporter = None
+            if data.riporter_id:
+                try:
+                    from django.contrib.auth.models import User
+                    riporter = User.objects.get(id=data.riporter_id)
+                    
+                    # Validate reporter eligibility
+                    if not hasattr(riporter, 'profile') or not riporter.profile.medias:
+                        return 400, {"message": "A kiválasztott felhasználó nem lehet riporter"}
+                    
+                    # Check for scheduling conflicts
+                    conflicting_sessions = Forgatas.objects.filter(
+                        riporter=riporter,
+                        date=session_date
+                    ).filter(
+                        timeFrom__lt=time_to,
+                        timeTo__gt=time_from
+                    )
+                    
+                    if conflicting_sessions.exists():
+                        conflicting_session = conflicting_sessions.first()
+                        return 400, {
+                            "message": f"A riporter már be van osztva egy másik forgatásra: {conflicting_session.name} ({conflicting_session.timeFrom}-{conflicting_session.timeTo})"
+                        }
+                        
+                except User.DoesNotExist:
+                    return 400, {"message": "Riporter nem található"}
+            
             # Create filming session
             forgatas = Forgatas.objects.create(
                 name=data.name,
@@ -629,6 +671,7 @@ def register_production_endpoints(api):
                 timeTo=time_to,
                 location=location,
                 contactPerson=contact_person,
+                riporter=riporter,
                 notes=data.notes,
                 forgTipus=data.type,
                 relatedKaCsa=related_kacsa
@@ -691,19 +734,19 @@ def register_production_endpoints(api):
             # Update date and times
             if data.date is not None:
                 try:
-                    forgatas.date = datetime.fromisoformat(data.date).date()
+                    forgatas.date = date.fromisoformat(data.date)
                 except ValueError:
                     return 400, {"message": "Hibás dátum formátum"}
             
             if data.time_from is not None:
                 try:
-                    forgatas.timeFrom = datetime.fromisoformat(data.time_from).time()
+                    forgatas.timeFrom = time.fromisoformat(data.time_from)
                 except ValueError:
                     return 400, {"message": "Hibás kezdő idő formátum"}
             
             if data.time_to is not None:
                 try:
-                    forgatas.timeTo = datetime.fromisoformat(data.time_to).time()
+                    forgatas.timeTo = time.fromisoformat(data.time_to)
                 except ValueError:
                     return 400, {"message": "Hibás befejező idő formátum"}
             
@@ -748,6 +791,37 @@ def register_production_endpoints(api):
                         forgatas.relatedKaCsa = related_kacsa
                     except Forgatas.DoesNotExist:
                         return 400, {"message": "Kapcsolódó KaCsa forgatás nem található"}
+            
+            if data.riporter_id is not None:
+                if data.riporter_id == 0:
+                    forgatas.riporter = None
+                else:
+                    try:
+                        from django.contrib.auth.models import User
+                        riporter = User.objects.get(id=data.riporter_id)
+                        
+                        # Validate reporter eligibility
+                        if not hasattr(riporter, 'profile') or not riporter.profile.medias:
+                            return 400, {"message": "A kiválasztott felhasználó nem lehet riporter"}
+                        
+                        # Check for scheduling conflicts (exclude current session)
+                        conflicting_sessions = Forgatas.objects.filter(
+                            riporter=riporter,
+                            date=forgatas.date
+                        ).exclude(id=forgatas.id).filter(
+                            timeFrom__lt=forgatas.timeTo,
+                            timeTo__gt=forgatas.timeFrom
+                        )
+                        
+                        if conflicting_sessions.exists():
+                            conflicting_session = conflicting_sessions.first()
+                            return 400, {
+                                "message": f"A riporter már be van osztva egy másik forgatásra: {conflicting_session.name} ({conflicting_session.timeFrom}-{conflicting_session.timeTo})"
+                            }
+                        
+                        forgatas.riporter = riporter
+                    except User.DoesNotExist:
+                        return 400, {"message": "Riporter nem található"}
             
             forgatas.save()
             

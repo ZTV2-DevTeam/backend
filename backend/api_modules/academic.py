@@ -184,6 +184,13 @@ class TanevCreateSchema(Schema):
     start_date: str
     end_date: str
 
+class TanevForDateSchema(Schema):
+    """Response schema for school year lookup by date."""
+    id: int
+    display_name: str
+    is_active: bool
+    date_in_range: bool
+
 class OsztalySchema(Schema):
     """Response schema for class data."""
     id: int
@@ -397,6 +404,47 @@ def register_academic_endpoints(api):
             return 200, create_tanev_response(active_tanev)
         except Exception as e:
             return 401, {"message": f"Error fetching active school year: {str(e)}"}
+
+    @api.get("/school-years/for-date/{date}", auth=JWTAuth(), response={200: TanevForDateSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def get_school_year_for_date(request, date: str):
+        """
+        Get school year for specific date.
+        
+        Requires authentication. Returns the school year that contains the specified date.
+        
+        Args:
+            date: Date in YYYY-MM-DD format
+            
+        Returns:
+            200: School year containing the specified date
+            404: No school year found for the date
+            400: Invalid date format
+            401: Authentication failed
+        """
+        try:
+            # Parse the date
+            try:
+                check_date = datetime.strptime(date, '%Y-%m-%d').date()
+            except ValueError:
+                return 400, {"message": "Hibás dátum formátum. Használja: YYYY-MM-DD"}
+            
+            # Find school year for this date
+            tanev = Tanev.get_current_by_date(check_date)
+            if not tanev:
+                return 404, {"message": f"Nincs tanév a megadott dátumhoz: {date}"}
+            
+            # Check if this is also the currently active school year
+            active_tanev = Tanev.get_active()
+            is_active = active_tanev and active_tanev.id == tanev.id
+            
+            return 200, {
+                "id": tanev.id,
+                "display_name": str(tanev),
+                "is_active": is_active,
+                "date_in_range": True
+            }
+        except Exception as e:
+            return 401, {"message": f"Error fetching school year for date: {str(e)}"}
 
     @api.post("/school-years", auth=JWTAuth(), response={201: TanevSchema, 400: ErrorSchema, 401: ErrorSchema})
     def create_school_year(request, data: TanevCreateSchema):
