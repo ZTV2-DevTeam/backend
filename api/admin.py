@@ -4,14 +4,49 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django.urls import reverse
 from django.utils import timezone
+from import_export.admin import ImportExportModelAdmin, ExportActionMixin
 from .models import *
+from .resources import *
 
 # ============================================================================
-# 📚 OKTATÁSI RENDSZER (CORE ACADEMIC MODELS)
+# � USER MANAGEMENT WITH IMPORT/EXPORT
+# ============================================================================
+
+# Unregister the default User admin and add our own with import/export
+admin.site.unregister(User)
+
+@admin.register(User)
+class UserAdmin(ImportExportModelAdmin):
+    resource_class = UserResource
+    list_display = ['username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'date_joined']
+    list_filter = ['is_active', 'is_staff', 'is_superuser', 'date_joined']
+    search_fields = ['username', 'first_name', 'last_name', 'email']
+    readonly_fields = ['date_joined', 'last_login']
+    
+    fieldsets = (
+        ('👤 Felhasználó adatok', {
+            'fields': ('username', 'password')
+        }),
+        ('📝 Személyes adatok', {
+            'fields': ('first_name', 'last_name', 'email')
+        }),
+        ('🔐 Jogosultságok', {
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')
+        }),
+        ('📊 Fontos dátumok', {
+            'fields': ('last_login', 'date_joined'),
+            'classes': ('collapse',)
+        })
+    )
+
+
+# ============================================================================
+# �📚 OKTATÁSI RENDSZER (CORE ACADEMIC MODELS)
 # ============================================================================
 
 @admin.register(Tanev)
-class TanevAdmin(admin.ModelAdmin):
+class TanevAdmin(ImportExportModelAdmin):
+    resource_class = TanevResource
     list_display = ['display_tanev', 'start_date', 'end_date', 'is_active', 'osztaly_count']
     list_filter = ['start_date', 'end_date']
     search_fields = ['start_date', 'end_date']
@@ -51,7 +86,8 @@ class TanevAdmin(admin.ModelAdmin):
     osztaly_count.short_description = 'Osztályok száma'
 
 @admin.register(Osztaly)
-class OsztalyAdmin(admin.ModelAdmin):
+class OsztalyAdmin(ImportExportModelAdmin):
+    resource_class = OsztalyResource
     list_display = ['display_osztaly', 'startYear', 'szekcio', 'tanev', 'student_count', 'fonok_count']
     list_filter = ['szekcio', 'startYear', 'tanev']
     search_fields = ['szekcio', 'startYear']
@@ -83,7 +119,8 @@ class OsztalyAdmin(admin.ModelAdmin):
     fonok_count.short_description = 'Osztályfőnökök'
 
 @admin.register(Profile)
-class ProfileAdmin(admin.ModelAdmin):
+class ProfileAdmin(ImportExportModelAdmin):
+    resource_classes = [ProfileResource, UserProfileCombinedResource]  # Multiple resources
     list_display = ['user_full_name', 'user_status', 'telefonszam', 'medias', 'display_osztaly', 'display_stab', 'admin_level', 'special_role_display']
     list_filter = [
         'medias', 'osztaly', 'stab', 'radio_stab', 'admin_type', 
@@ -179,7 +216,8 @@ class ProfileAdmin(admin.ModelAdmin):
 # ============================================================================
 
 @admin.register(Forgatas)
-class ForgatásAdmin(admin.ModelAdmin):
+class ForgatásAdmin(ImportExportModelAdmin):
+    resource_class = ForgatásResource
     list_display = ['name_with_icon', 'date', 'time_display', 'forgTipus_display', 'location_display', 'equipment_count', 'riporter_display', 'tanev']
     list_filter = ['forgTipus', 'date', 'tanev', 'location', 'riporter']
     search_fields = ['name', 'description', 'notes', 'riporter__first_name', 'riporter__last_name']
@@ -262,7 +300,8 @@ class ForgatásAdmin(admin.ModelAdmin):
     equipment_count.short_description = 'Eszközök'
 
 @admin.register(Beosztas)
-class BeosztasAdmin(admin.ModelAdmin):
+class BeosztasAdmin(ImportExportModelAdmin):
+    resource_class = BeosztasResource
     list_display = ['beosztas_display', 'kesz_status', 'author', 'tanev', 'forgatas_link', 'created_at', 'szerepkor_count']
     list_filter = ['kesz', 'tanev', 'created_at', 'author']
     search_fields = ['author__first_name', 'author__last_name', 'forgatas__name']
@@ -314,7 +353,8 @@ class BeosztasAdmin(admin.ModelAdmin):
 # ============================================================================
 
 @admin.register(RadioStab)
-class RadioStabAdmin(admin.ModelAdmin):
+class RadioStabAdmin(ImportExportModelAdmin):
+    resource_class = RadioStabResource
     list_display = ['stab_display', 'team_code_display', 'member_count', 'session_count']
     list_filter = ['team_code']
     search_fields = ['name', 'team_code', 'description']
@@ -351,7 +391,8 @@ class RadioStabAdmin(admin.ModelAdmin):
     session_count.short_description = 'Összejátszások'
 
 @admin.register(RadioSession)
-class RadioSessionAdmin(admin.ModelAdmin):
+class RadioSessionAdmin(ImportExportModelAdmin):
+    resource_class = RadioSessionResource
     list_display = ['session_display', 'radio_stab', 'date', 'time_display', 'participant_count', 'tanev']
     list_filter = ['radio_stab', 'date', 'tanev']
     search_fields = ['radio_stab__name', 'description']
@@ -401,7 +442,8 @@ class RadioSessionAdmin(admin.ModelAdmin):
 # ============================================================================
 
 @admin.register(Equipment)
-class EquipmentAdmin(admin.ModelAdmin):
+class EquipmentAdmin(ImportExportModelAdmin):
+    resource_class = EquipmentResource
     list_display = ['equipment_display', 'brand', 'model', 'equipmentType', 'functional_status', 'usage_count']
     list_filter = ['equipmentType', 'functional', 'brand']
     search_fields = ['nickname', 'brand', 'model', 'serialNumber']
@@ -440,7 +482,8 @@ class EquipmentAdmin(admin.ModelAdmin):
     usage_count.short_description = 'Használat'
 
 @admin.register(EquipmentTipus)
-class EquipmentTipusAdmin(admin.ModelAdmin):
+class EquipmentTipusAdmin(ImportExportModelAdmin):
+    resource_class = EquipmentTipusResource
     list_display = ['tipus_display', 'equipment_count']
     search_fields = ['name']
     
@@ -459,7 +502,8 @@ class EquipmentTipusAdmin(admin.ModelAdmin):
 # ============================================================================
 
 @admin.register(Partner)
-class PartnerAdmin(admin.ModelAdmin):
+class PartnerAdmin(ImportExportModelAdmin):
+    resource_class = PartnerResource
     list_display = ['partner_display', 'institution', 'address_short', 'forgatas_count']
     list_filter = ['institution']
     search_fields = ['name', 'address']
@@ -492,7 +536,8 @@ class PartnerAdmin(admin.ModelAdmin):
     forgatas_count.short_description = 'Forgatások száma'
 
 @admin.register(PartnerTipus)
-class PartnerTipusAdmin(admin.ModelAdmin):
+class PartnerTipusAdmin(ImportExportModelAdmin):
+    resource_class = PartnerTipusResource
     list_display = ['tipus_display', 'partner_count']
     search_fields = ['name']
     
@@ -506,7 +551,8 @@ class PartnerTipusAdmin(admin.ModelAdmin):
     partner_count.short_description = 'Partnerek száma'
 
 @admin.register(ContactPerson)
-class ContactPersonAdmin(admin.ModelAdmin):
+class ContactPersonAdmin(ImportExportModelAdmin):
+    resource_class = ContactPersonResource
     list_display = ['contact_display', 'email', 'phone', 'forgatas_count']
     search_fields = ['name', 'email', 'phone']
     
@@ -524,7 +570,8 @@ class ContactPersonAdmin(admin.ModelAdmin):
 # ============================================================================
 
 @admin.register(Announcement)
-class AnnouncementAdmin(admin.ModelAdmin):
+class AnnouncementAdmin(ImportExportModelAdmin):
+    resource_class = AnnouncementResource
     list_display = ['announcement_display', 'author', 'created_at', 'updated_at', 'recipient_count']
     list_filter = ['created_at', 'updated_at', 'author']
     search_fields = ['title', 'body']
@@ -566,7 +613,8 @@ class AnnouncementAdmin(admin.ModelAdmin):
 # ============================================================================
 
 @admin.register(Absence)
-class AbsenceAdmin(admin.ModelAdmin):
+class AbsenceAdmin(ImportExportModelAdmin):
+    resource_class = AbsenceResource
     list_display = ['absence_display', 'diak', 'forgatas_link', 'date', 'time_display', 'status_display', 'auto_generated_display', 'affected_classes']
     list_filter = ['excused', 'unexcused', 'auto_generated', 'date', 'forgatas']
     search_fields = ['diak__first_name', 'diak__last_name', 'forgatas__name']
@@ -631,7 +679,8 @@ class AbsenceAdmin(admin.ModelAdmin):
     get_affected_classes_display.short_description = 'Érintett órák'
 
 @admin.register(Tavollet)
-class TavolletAdmin(admin.ModelAdmin):
+class TavolletAdmin(ImportExportModelAdmin):
+    resource_class = TavolletResource
     list_display = ['tavollet_display', 'user', 'date_range', 'duration_days', 'status_display']
     list_filter = ['denied', 'start_date', 'end_date']
     search_fields = ['user__first_name', 'user__last_name', 'reason']
@@ -677,7 +726,8 @@ class TavolletAdmin(admin.ModelAdmin):
 # ============================================================================
 
 @admin.register(Stab)
-class StabAdmin(admin.ModelAdmin):
+class StabAdmin(ImportExportModelAdmin):
+    resource_class = StabResource
     list_display = ['stab_display', 'member_count']
     search_fields = ['name']
     
@@ -695,7 +745,8 @@ class StabAdmin(admin.ModelAdmin):
 # ============================================================================
 
 @admin.register(Config)
-class ConfigAdmin(admin.ModelAdmin):
+class ConfigAdmin(ImportExportModelAdmin):
+    resource_class = ConfigResource
     list_display = ['config_display', 'active_status', 'email_status']
     list_filter = ['active', 'allowEmails']
     
@@ -727,7 +778,8 @@ class ConfigAdmin(admin.ModelAdmin):
 # ============================================================================
 
 @admin.register(Szerepkor)
-class SzerepkorAdmin(admin.ModelAdmin):
+class SzerepkorAdmin(ImportExportModelAdmin):
+    resource_class = SzerepkorResource
     list_display = ['szerepkor_display', 'ev', 'usage_count']
     list_filter = ['ev']
     search_fields = ['name']
@@ -745,11 +797,12 @@ class SzerepkorAdmin(admin.ModelAdmin):
 # 🔗 KAPCSOLÓTÁBLÁK (RELATION TABLES) - Ritkán szerkesztett
 # ============================================================================
 
-class SzerepkorRelaciokAdmin(admin.ModelAdmin):
+class SzerepkorRelaciokAdmin(ImportExportModelAdmin):
     """
     Szerepkör relációk - Ritkán használt kapcsolótábla
     Általában a Beosztas-on keresztül kezelendő
     """
+    resource_class = SzerepkorRelaciokResource
     list_display = ['relacio_display', 'user', 'szerepkor']
     list_filter = ['szerepkor']
     search_fields = ['user__first_name', 'user__last_name', 'szerepkor__name']

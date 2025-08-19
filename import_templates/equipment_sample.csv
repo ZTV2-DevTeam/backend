@@ -1,0 +1,7 @@
+nickname,brand,model,serialNumber,equipment_type_name,functional,notes
+Canon EOS R5,Canon,EOS R5,123456789,Kamera,TRUE,Professzionális tükör nélküli kamera
+Sony A7 III,Sony,Alpha 7 III,987654321,Kamera,TRUE,Kiváló low-light teljesítmény
+Rode VideoMic Pro,Rode,VideoMic Pro Plus,ROD123456,Hang eszköz,TRUE,Shotgun mikrofon kamerához
+Manfrotto MT055,Manfrotto,MT055CXPRO3,MAN789123,Tripod,TRUE,Karbon tripod
+LED Panel 1,Neewer,480 LED,NEW456789,Világítás,TRUE,Bi-color LED panel
+SanDisk 128GB,SanDisk,Extreme Pro 128GB,SD987654,SD kártya,TRUE,Gyors írási sebesség

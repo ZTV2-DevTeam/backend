@@ -271,6 +271,7 @@ from .api_modules.absences import register_absence_management_endpoints  # New a
 from .api_modules.assignments import register_assignment_endpoints  # New assignment management
 from .api_modules.config import register_config_endpoints
 from .api_modules.user_management import register_user_management_endpoints
+from .api_modules.user_import import register_user_import_endpoints
 from .api_modules.students import register_student_endpoints
 from .api_modules.configuration_wizard import register_configuration_wizard_endpoints
 from .api_modules.legacy import register_legacy_endpoints
@@ -299,6 +300,7 @@ register_partner_endpoints(api)         # Partner management endpoints
 register_radio_endpoints(api)           # Radio management endpoints
 register_user_endpoints(api)            # User management endpoints
 register_user_management_endpoints(api) # Comprehensive user CRUD management endpoints
+register_user_import_endpoints(api)     # Bulk user import functionality
 register_student_endpoints(api)         # Student listing and reporter selection endpoints
 register_academic_endpoints(api)        # School years and classes endpoints
 register_equipment_endpoints(api)       # Equipment management endpoints

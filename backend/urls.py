@@ -17,13 +17,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
-from .views import home, config_wizard
+from .views import home
 
 from .api import api
 
 urlpatterns = [
     path('', home, name='home'),
-    path('config-wizard/', config_wizard, name='config_wizard'),
     path('admin/', admin.site.urls),
     path('api/', api.urls),
 ]

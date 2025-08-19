@@ -1,0 +1,6 @@
+username,first_name,last_name,email,is_active,telefonszam,medias,admin_type,special_role,stab_name,radio_stab_team
+john.doe,John,Doe,john@example.com,TRUE,+36301234567,TRUE,none,none,Kamera,
+jane.smith,Jane,Smith,jane@example.com,TRUE,+36307654321,TRUE,teacher,none,Hang,
+student.a1,Student,One,student1@example.com,TRUE,+36309876543,TRUE,none,none,,A1
+student.b2,Student,Two,student2@example.com,TRUE,+36308765432,TRUE,none,none,,B3
+admin.user,Admin,User,admin@example.com,TRUE,+36301111111,FALSE,developer,none,,
