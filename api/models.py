@@ -99,14 +99,6 @@ class Profile(models.Model):
                                  help_text='A felhasználó adminisztrátori jogosultságainak típusa')
     special_role = models.CharField(max_length=20, choices=SPECIAL_ROLES, default='none', verbose_name='Különleges szerep',
                                    help_text='A felhasználó különleges szerepe a rendszerben')
-    osztalyfonok = models.BooleanField(default=False, verbose_name='Osztályfőnök',
-                                      help_text='Jelöli, hogy a felhasználó osztályfőnök-e')
-    first_login_token = models.CharField(max_length=255, blank=True, null=True, verbose_name='Első bejelentkezés token',
-                                        help_text='Token az első bejelentkezéshez és jelszó beállításához')
-    first_login_sent_at = models.DateTimeField(blank=True, null=True, verbose_name='Első bejelentkezés token küldve',
-                                              help_text='Időpont, amikor az első bejelentkezési token ki lett küldve')
-    password_set = models.BooleanField(default=False, verbose_name='Jelszó beállítva',
-                                      help_text='Jelöli, hogy a felhasználó beállította-e már a jelszavát')
 
     def __str__(self):
         return self.user.get_full_name()
@@ -147,6 +139,11 @@ class Profile(models.Model):
             # Log the error for debugging purposes
             print(f"Error in is_osztaly_fonok: {e}")
             return False
+    
+    @property 
+    def osztalyfonok(self):
+        """Backward compatibility property - returns same as is_osztaly_fonok"""
+        return self.is_osztaly_fonok
     
     def get_owned_osztalyok(self):
         """Get all classes where this user is assigned as class teacher"""
@@ -280,26 +277,16 @@ class Osztaly(models.Model):
     def add_osztaly_fonok(self, user):
         """Add a user as class teacher to this class"""
         self.osztaly_fonokei.add(user)
-        # Also mark the user's profile as osztályfonok if it isn't already
-        try:
-            profile = user.profile
-            if not profile.osztalyfonok:
-                profile.osztalyfonok = True
-                profile.save()
-        except Profile.DoesNotExist:
-            pass
+        # User is now assigned as class teacher via the ManyToMany relationship
+        # The is_osztaly_fonok property will calculate this automatically
+        pass
     
     def remove_osztaly_fonok(self, user):
         """Remove a user as class teacher from this class"""
         self.osztaly_fonokei.remove(user)
-        # Check if user is still class teacher of any other class
-        if not Osztaly.objects.filter(osztaly_fonokei=user).exclude(id=self.id).exists():
-            try:
-                profile = user.profile
-                profile.osztalyfonok = False
-                profile.save()
-            except Profile.DoesNotExist:
-                pass
+        # User is no longer class teacher of this specific class
+        # The is_osztaly_fonok property will automatically reflect this change
+        pass
     
     def is_user_osztaly_fonok(self, user):
         """Check if a user is class teacher of this class"""

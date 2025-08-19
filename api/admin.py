@@ -87,7 +87,7 @@ class ProfileAdmin(admin.ModelAdmin):
     list_display = ['user_full_name', 'user_status', 'telefonszam', 'medias', 'display_osztaly', 'display_stab', 'admin_level', 'special_role_display']
     list_filter = [
         'medias', 'osztaly', 'stab', 'radio_stab', 'admin_type', 
-        'special_role', 'password_set', 'osztalyfonok'
+        'special_role'
     ]
     search_fields = ['user__first_name', 'user__last_name', 'user__username', 'telefonszam']
     autocomplete_fields = ['user', 'osztaly', 'stab', 'radio_stab']
@@ -106,7 +106,7 @@ class ProfileAdmin(admin.ModelAdmin):
             'description': 'Osztály és stáb besorolások'
         }),
         ('⚡ Jogosultságok és szerepek', {
-            'fields': ('admin_type', 'special_role', 'osztalyfonok'),
+            'fields': ('admin_type', 'special_role'),
             'description': 'Adminisztrátor jogosultságok és különleges szerepek'
         }),
         ('🔐 Első bejelentkezés', {
@@ -126,7 +126,7 @@ class ProfileAdmin(admin.ModelAdmin):
     user_full_name.short_description = 'Teljes név'
     
     def user_status(self, obj):
-        if not obj.password_set:
+        if not obj.user.has_usable_password():
             return format_html('<span style="color: orange;">⚠️ Jelszó nincs beállítva</span>')
         elif obj.is_admin:
             return format_html('<span style="color: red;">👑 Admin</span>')

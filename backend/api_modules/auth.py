@@ -243,8 +243,13 @@ def register_auth_endpoints(api):
             print(f"User {username} is not active")  # Debug print
             return 401, {"message": "Unauthorized"}
 
+        # Update user's last login timestamp on successful authentication
+        from django.utils import timezone
+        user.last_login = timezone.now()
+        user.save(update_fields=['last_login'])
+
         token = generate_jwt_token(user)
-        print(f"Login successful for user {username}, token generated")  # Debug print
+        print(f"Login successful for user {username}, token generated, last_login updated")  # Debug print
 
         return 200, create_user_response(user, token)
 

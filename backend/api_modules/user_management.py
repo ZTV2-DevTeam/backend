@@ -189,7 +189,7 @@ from django.utils import timezone
 from api.models import Profile, Osztaly, Stab, RadioStab
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 import jwt
 import secrets
 import string
@@ -206,7 +206,6 @@ class UserCreateSchema(Schema):
     email: str
     admin_type: str = 'none'
     special_role: str = 'none'
-    osztalyfonok: bool = False
     telefonszam: Optional[str] = None
     osztaly_id: Optional[int] = None
     stab_id: Optional[int] = None
@@ -221,7 +220,6 @@ class UserUpdateSchema(Schema):
     email: Optional[str] = None
     admin_type: Optional[str] = None
     special_role: Optional[str] = None
-    osztalyfonok: Optional[bool] = None
     telefonszam: Optional[str] = None
     osztaly_id: Optional[int] = None
     stab_id: Optional[int] = None
@@ -240,14 +238,12 @@ class UserDetailSchema(Schema):
     is_active: bool
     admin_type: str
     special_role: str
-    osztalyfonok: bool
     telefonszam: Optional[str] = None
     osztaly: Optional[dict] = None
     stab: Optional[dict] = None
     radio_stab: Optional[dict] = None
     medias: bool
     password_set: bool
-    first_login_token_sent: bool
     date_joined: str
     last_login: Optional[str] = None
     owned_osztaly_count: int = 0
@@ -273,6 +269,19 @@ class BulkEmailResponse(Schema):
     emails_sent: int
     failed_emails: list[str]
     tokens_generated: int
+
+class ClassCreateSchema(Schema):
+    """Schema for creating a new class."""
+    start_year: int
+    section: str
+    school_year: Optional[str] = "2024/2025"
+    class_teacher_id: Optional[int] = None
+
+class StabCreateSchema(Schema):
+    """Schema for creating a new stab."""
+    name: str
+    description: Optional[str] = ""
+    type: Optional[str] = "media"
 
 # ============================================================================
 # Utility Functions
@@ -363,6 +372,8 @@ def create_user_detail_response(user: User, profile: Profile = None) -> dict:
     
     # Count owned classes if user is marked as class teacher
     owned_osztaly_count = 0
+    # Check if user is osztályfőnök of any classes and count them
+    owned_osztaly_count = 0
     if profile and profile.osztalyfonok:
         owned_osztaly_count = Osztaly.objects.filter(osztaly_fonokei=user).count()
     
@@ -376,7 +387,6 @@ def create_user_detail_response(user: User, profile: Profile = None) -> dict:
         "is_active": user.is_active,
         "admin_type": profile.admin_type if profile else 'none',
         "special_role": profile.special_role if profile else 'none',
-        "osztalyfonok": profile.osztalyfonok if profile else False,
         "telefonszam": profile.telefonszam if profile else None,
         "osztaly": {
             "id": profile.osztaly.id,
@@ -394,8 +404,7 @@ def create_user_detail_response(user: User, profile: Profile = None) -> dict:
             "team_code": profile.radio_stab.team_code
         } if profile and profile.radio_stab else None,
         "medias": profile.medias if profile else False,
-        "password_set": profile.password_set if profile else False,
-        "first_login_token_sent": bool(profile.first_login_sent_at) if profile else False,
+        "password_set": user.has_usable_password(),
         "date_joined": user.date_joined.isoformat(),
         "last_login": user.last_login.isoformat() if user.last_login else None,
         "owned_osztaly_count": owned_osztaly_count
@@ -427,7 +436,7 @@ def check_system_admin_permissions(user) -> tuple[bool, str]:
 def register_user_management_endpoints(api):
     """Register all user management endpoints with the API router."""
     
-    @api.get("/manage/users", auth=JWTAuth(), response={200: list[UserDetailSchema], 401: ErrorSchema})
+    @api.get("/manage/users", auth=JWTAuth(), response={200: list[UserDetailSchema], 401: ErrorSchema, 500: ErrorSchema})
     def get_all_users_detailed(request, user_type: str = None, osztaly_id: int = None):
         """
         Get detailed list of all users for management.
@@ -441,6 +450,7 @@ def register_user_management_endpoints(api):
         Returns:
             200: List of detailed user information
             401: Authentication or permission failed
+            500: Internal server error
         """
         try:
             # Check permissions
@@ -554,13 +564,11 @@ def register_user_management_endpoints(api):
                 user=user,
                 admin_type=data.admin_type,
                 special_role=data.special_role,
-                osztalyfonok=data.osztalyfonok,
                 telefonszam=data.telefonszam,
                 osztaly=osztaly,
                 stab=stab,
                 radio_stab=radio_stab,
-                medias=data.medias,
-                password_set=False
+                medias=data.medias
             )
             
             return 201, create_user_detail_response(user, profile)
@@ -630,8 +638,8 @@ def register_user_management_endpoints(api):
                 profile.telefonszam = data.telefonszam
             if data.medias is not None:
                 profile.medias = data.medias
-            if data.osztalyfonok is not None:
-                profile.osztalyfonok = data.osztalyfonok
+            
+            # Note: osztalyfonok is now calculated automatically based on class assignments
             
             # Update related objects
             if data.osztaly_id is not None:
@@ -827,11 +835,9 @@ def register_user_management_endpoints(api):
                         user=user,
                         admin_type='none',
                         special_role='none',
-                        osztalyfonok=False,
                         telefonszam=student_data.get('telefonszam'),
                         osztaly=osztaly,
-                        medias=student_data.get('medias', True),
-                        password_set=False
+                        medias=student_data.get('medias', True)
                     )
                     
                     created_users.append((user, profile))
@@ -931,6 +937,9 @@ def register_user_management_endpoints(api):
             
             # Set password
             user.set_password(password)
+            # Update last login since this is essentially their first successful login
+            from django.utils import timezone
+            user.last_login = timezone.now()
             user.save()
             
             # Update profile
@@ -948,3 +957,166 @@ def register_user_management_endpoints(api):
             }
         except Exception as e:
             return 400, {"message": f"Error setting password: {str(e)}"}
+
+    # ============================================================================
+    # Simple CRUD Endpoints for Configuration Wizard
+    # ============================================================================
+    
+    @api.get("/classes/", auth=JWTAuth(), response=List[dict])
+    def list_classes(request):
+        """List all classes."""
+        try:
+            from api.models import Osztaly
+            classes = Osztaly.objects.all().order_by('start_year', 'section')
+            return [
+                {
+                    "id": cls.id,
+                    "start_year": cls.start_year,
+                    "section": cls.section,
+                    "school_year": cls.school_year,
+                    "display_name": f"{cls.start_year}{cls.section}"
+                }
+                for cls in classes
+            ]
+        except Exception as e:
+            return []
+
+    @api.post("/classes/", auth=JWTAuth(), response={200: dict, 400: ErrorSchema})
+    def create_class(request, data: ClassCreateSchema):
+        """Create a new class."""
+        try:
+            from api.models import Osztaly
+            
+            # Check admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 400, {"message": error_message}
+            
+            # Create class
+            cls = Osztaly.objects.create(
+                start_year=data.start_year,
+                section=data.section.upper(),
+                school_year=data.school_year or '2024/2025'
+            )
+            
+            return 200, {
+                "message": f"Osztály {cls.start_year}{cls.section} sikeresen létrehozva",
+                "class": {
+                    "id": cls.id,
+                    "start_year": cls.start_year,
+                    "section": cls.section,
+                    "school_year": cls.school_year
+                }
+            }
+        except Exception as e:
+            return 400, {"message": f"Hiba az osztály létrehozásakor: {str(e)}"}
+
+    @api.delete("/classes/{class_id}/", auth=JWTAuth(), response={200: dict, 400: ErrorSchema})
+    def delete_class(request, class_id: int):
+        """Delete a class."""
+        try:
+            from api.models import Osztaly
+            
+            # Check admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 400, {"message": error_message}
+            
+            cls = Osztaly.objects.get(id=class_id)
+            cls.delete()
+            
+            return 200, {"message": "Osztály törölve"}
+        except Osztaly.DoesNotExist:
+            return 400, {"message": "Osztály nem található"}
+        except Exception as e:
+            return 400, {"message": f"Hiba az osztály törlésekor: {str(e)}"}
+
+    @api.get("/stabs/", auth=JWTAuth(), response=List[dict])
+    def list_stabs(request):
+        """List all stabs."""
+        try:
+            from api.models import Stab
+            stabs = Stab.objects.all().order_by('name')
+            return [
+                {
+                    "id": stab.id,
+                    "name": stab.name,
+                    "description": stab.description,
+                    "type": getattr(stab, 'type', 'media')
+                }
+                for stab in stabs
+            ]
+        except Exception as e:
+            return []
+
+    @api.post("/stabs/", auth=JWTAuth(), response={200: dict, 400: ErrorSchema})
+    def create_stab(request, data: StabCreateSchema):
+        """Create a new stab."""
+        try:
+            from api.models import Stab
+            
+            # Check admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 400, {"message": error_message}
+            
+            # Create stab
+            stab = Stab.objects.create(
+                name=data.name,
+                description=data.description or '',
+            )
+            
+            return 200, {
+                "message": f"Stáb '{stab.name}' sikeresen létrehozva",
+                "stab": {
+                    "id": stab.id,
+                    "name": stab.name,
+                    "description": stab.description
+                }
+            }
+        except Exception as e:
+            return 400, {"message": f"Hiba a stáb létrehozásakor: {str(e)}"}
+
+    @api.delete("/stabs/{stab_id}/", auth=JWTAuth(), response={200: dict, 400: ErrorSchema})
+    def delete_stab(request, stab_id: int):
+        """Delete a stab."""
+        try:
+            from api.models import Stab
+            
+            # Check admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 400, {"message": error_message}
+            
+            stab = Stab.objects.get(id=stab_id)
+            stab.delete()
+            
+            return 200, {"message": "Stáb törölve"}
+        except Stab.DoesNotExist:
+            return 400, {"message": "Stáb nem található"}
+        except Exception as e:
+            return 400, {"message": f"Hiba a stáb törlésekor: {str(e)}"}
+
+    @api.get("/users/teachers/", auth=JWTAuth(), response=List[dict])
+    def list_teachers(request):
+        """List all teachers."""
+        try:
+            from api.models import Profile
+            
+            teachers = Profile.objects.filter(
+                admin_type__in=['teacher', 'teacher_admin', 'system_admin']
+            ).select_related('user').order_by('user__last_name', 'user__first_name')
+            
+            return [
+                {
+                    "id": teacher.user.id,
+                    "username": teacher.user.username,
+                    "first_name": teacher.user.first_name,
+                    "last_name": teacher.user.last_name,
+                    "email": teacher.user.email,
+                    "admin_type": teacher.admin_type
+                }
+                for teacher in teachers
+            ]
+        except Exception as e:
+            return []

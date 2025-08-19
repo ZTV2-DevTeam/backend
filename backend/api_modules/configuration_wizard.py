@@ -7,7 +7,7 @@ Handles XLSX file uploads, data parsing, validation, and bulk record creation.
 Requires admin permissions for all endpoints.
 """
 
-from ninja import Schema, File, UploadedFile
+from ninja import Schema, File, UploadedFile, Form
 from ninja.files import UploadedFile
 from typing import List, Optional, Dict, Any
 import pandas as pd
@@ -837,7 +837,7 @@ def register_configuration_wizard_endpoints(api):
             return 401, {"message": f"Hiba a varázsló státusz lekérdezésekor: {str(e)}"}
 
     @api.post("/config-wizard/parse-xlsx", auth=JWTAuth(), response={200: ParsedDataSchema, 400: ErrorSchema, 401: ErrorSchema})
-    def parse_xlsx_file(request, file: UploadedFile = File(...), data_type: str = None):
+    def parse_xlsx_file(request, file: UploadedFile = File(...), data_type: str = Form(...)):
         """
         Parse uploaded XLSX file and return parsed data for confirmation.
         
