@@ -15,7 +15,95 @@ from .models import (
 
 
 # ============================================================================
-# 👤 USER AND PROFILE RESOURCES
+# � CUSTOM WIDGETS
+# ============================================================================
+
+class OsztalyWidget(ForeignKeyWidget):
+    """
+    Custom widget for handling Osztaly imports.
+    Supports multiple formats for specifying classes:
+    - "startYear-szekcio" format (e.g., "2023-F", "2022-A")
+    - Dynamic class names (e.g., "9F", "10A") - converted to startYear-szekcio
+    """
+    
+    def clean(self, value, row=None, **kwargs):
+        if not value:
+            return None
+            
+        value = str(value).strip()
+        
+        # Try direct format: "startYear-szekcio" (e.g., "2023-F")
+        if '-' in value:
+            try:
+                start_year, szekcio = value.split('-', 1)
+                return self.model.objects.get(
+                    startYear=int(start_year),
+                    szekcio=szekcio.upper()
+                )
+            except (ValueError, self.model.DoesNotExist):
+                pass
+        
+        # Try dynamic format: "9F", "10A", etc.
+        # For F section: extract year number and calculate startYear
+        if value.upper().endswith('F') and len(value) >= 2:
+            try:
+                year_number = int(value[:-1])
+                if 8 <= year_number <= 12:  # Valid F class years
+                    from datetime import datetime
+                    current_year = datetime.now().year
+                    is_first_semester = datetime.now().month >= 9
+                    
+                    # Calculate startYear based on current year and class year
+                    if is_first_semester:
+                        start_year = current_year - (year_number - 8)
+                    else:
+                        start_year = current_year - (year_number - 8) - 1
+                    
+                    return self.model.objects.get(
+                        startYear=start_year,
+                        szekcio='F'
+                    )
+            except (ValueError, self.model.DoesNotExist):
+                pass
+        
+        # Try other sections: "21A", "22B", etc.
+        if len(value) >= 3 and value[-1].upper() in ['A', 'B', 'C', 'D']:
+            try:
+                year_part = value[:-1]
+                szekcio = value[-1].upper()
+                
+                # Handle 2-digit years (e.g., "21A" -> 2021)
+                if len(year_part) == 2:
+                    year_int = int(year_part)
+                    if year_int <= 50:  # Assume 2000s
+                        start_year = 2000 + year_int
+                    else:  # Assume 1900s
+                        start_year = 1900 + year_int
+                else:
+                    start_year = int(year_part)
+                
+                return self.model.objects.get(
+                    startYear=start_year,
+                    szekcio=szekcio
+                )
+            except (ValueError, self.model.DoesNotExist):
+                pass
+        
+        # If all else fails, raise an error
+        raise ValueError(
+            f"Invalid osztaly format: '{value}'. "
+            f"Use formats like: '2023-F', '9F', '2021-A', '21A'"
+        )
+    
+    def render(self, value, obj=None, **kwargs):
+        """Export format: startYear-szekcio"""
+        if value:
+            return f"{value.startYear}-{value.szekcio}"
+        return ""
+
+
+# ============================================================================
+# �👤 USER AND PROFILE RESOURCES
 # ============================================================================
 
 class UserResource(resources.ModelResource):
@@ -69,17 +157,24 @@ class ProfileResource(resources.ModelResource):
         readonly=True
     )
     
+    # Import/Export field for osztaly using the string representation
+    osztaly_name = fields.Field(
+        column_name='osztaly_name',
+        attribute='osztaly',
+        widget=OsztalyWidget(Osztaly)
+    )
+    
     class Meta:
         model = Profile
         fields = (
             'id', 'username', 'user_first_name', 'user_last_name', 'user_email',
             'telefonszam', 'medias', 'admin_type', 'special_role',
-            'stab_name', 'radio_stab_team', 'osztaly_display'
+            'stab_name', 'radio_stab_team', 'osztaly_display', 'osztaly_name'
         )
         export_order = (
             'id', 'username', 'user_first_name', 'user_last_name', 'user_email',
             'telefonszam', 'medias', 'admin_type', 'special_role',
-            'stab_name', 'radio_stab_team', 'osztaly_display'
+            'stab_name', 'radio_stab_team', 'osztaly_display', 'osztaly_name'
         )
 
 
@@ -89,28 +184,12 @@ class UserProfileCombinedResource(resources.ModelResource):
     This allows creating users and their profiles from one CSV/Excel file.
     """
     
-    # User fields
-    username = fields.Field(
-        column_name='username',
-        attribute='user__username'
-    )
-    first_name = fields.Field(
-        column_name='first_name',
-        attribute='user__first_name'
-    )
-    last_name = fields.Field(
-        column_name='last_name',
-        attribute='user__last_name'
-    )
-    email = fields.Field(
-        column_name='email',
-        attribute='user__email'
-    )
-    is_active = fields.Field(
-        column_name='is_active',
-        attribute='user__is_active',
-        widget=BooleanWidget()
-    )
+    # User fields - these will be handled in the import logic, not as model fields
+    username = fields.Field(column_name='username')
+    first_name = fields.Field(column_name='first_name')
+    last_name = fields.Field(column_name='last_name')
+    email = fields.Field(column_name='email')
+    is_active = fields.Field(column_name='is_active', widget=BooleanWidget())
     
     # Profile fields
     stab_name = fields.Field(
@@ -123,15 +202,20 @@ class UserProfileCombinedResource(resources.ModelResource):
         attribute='radio_stab',
         widget=ForeignKeyWidget(RadioStab, 'team_code')
     )
+    osztaly_name = fields.Field(
+        column_name='osztaly_name',
+        attribute='osztaly',
+        widget=OsztalyWidget(Osztaly)
+    )
     
     class Meta:
         model = Profile
         fields = (
-            'username', 'first_name', 'last_name', 'email', 'is_active',
             'telefonszam', 'medias', 'admin_type', 'special_role',
-            'stab_name', 'radio_stab_team'
+            'stab_name', 'radio_stab_team', 'osztaly_name'
         )
-        
+        # Note: User fields (username, first_name, etc.) are handled in import_obj method
+    
     def before_import_row(self, row, **kwargs):
         """Create or update user before creating/updating profile"""
         username = row.get('username')
@@ -142,7 +226,7 @@ class UserProfileCombinedResource(resources.ModelResource):
                     'first_name': row.get('first_name', ''),
                     'last_name': row.get('last_name', ''),
                     'email': row.get('email', ''),
-                    'is_active': row.get('is_active', True)
+                    'is_active': row.get('is_active', True) if row.get('is_active') else True
                 }
             )
             if not created:
@@ -150,8 +234,56 @@ class UserProfileCombinedResource(resources.ModelResource):
                 user.first_name = row.get('first_name', user.first_name)
                 user.last_name = row.get('last_name', user.last_name)
                 user.email = row.get('email', user.email)
-                user.is_active = row.get('is_active', user.is_active)
+                if row.get('is_active') is not None:
+                    user.is_active = row.get('is_active')
                 user.save()
+    
+    def import_obj(self, obj, data, dry_run, **kwargs):
+        """Custom import logic to handle user-profile relationship"""
+        username = data.get('username')
+        if username:
+            try:
+                user = User.objects.get(username=username)
+                # Get or create profile for this user
+                profile, created = Profile.objects.get_or_create(user=user)
+                
+                # Update profile fields
+                for field_name in ['telefonszam', 'medias', 'admin_type', 'special_role']:
+                    if field_name in data and data[field_name] is not None:
+                        setattr(profile, field_name, data[field_name])
+                
+                # Handle foreign key relationships
+                if data.get('stab_name'):
+                    try:
+                        stab = Stab.objects.get(name=data['stab_name'])
+                        profile.stab = stab
+                    except Stab.DoesNotExist:
+                        pass
+                
+                if data.get('radio_stab_team'):
+                    try:
+                        radio_stab = RadioStab.objects.get(team_code=data['radio_stab_team'])
+                        profile.radio_stab = radio_stab
+                    except RadioStab.DoesNotExist:
+                        pass
+                
+                if data.get('osztaly_name'):
+                    try:
+                        widget = OsztalyWidget(Osztaly)
+                        osztaly = widget.clean(data['osztaly_name'])
+                        profile.osztaly = osztaly
+                    except (ValueError, Osztaly.DoesNotExist):
+                        pass
+                
+                if not dry_run:
+                    profile.save()
+                
+                return profile
+                
+            except User.DoesNotExist:
+                pass
+        
+        return super().import_obj(obj, data, dry_run, **kwargs)
 
 
 # ============================================================================

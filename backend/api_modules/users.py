@@ -186,8 +186,7 @@ def get_or_create_user_profile_response(user) -> dict:
         profile = Profile.objects.create(
             user=user,
             medias=True,
-            admin_type='none',
-            password_set=True
+            admin_type='none'
         )
     
     return create_user_profile_response(profile)
