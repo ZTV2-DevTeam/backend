@@ -98,7 +98,7 @@ class ProfileAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('👤 Felhasználó adatok', {
-            'fields': ('user', 'telefonszam', 'medias', 'password_set'),
+            'fields': ('user', 'telefonszam', 'medias'),
             'description': 'Alapvető felhasználói információk'
         }),
         ('🎓 Oktatási kapcsolatok', {
@@ -108,11 +108,6 @@ class ProfileAdmin(admin.ModelAdmin):
         ('⚡ Jogosultságok és szerepek', {
             'fields': ('admin_type', 'special_role'),
             'description': 'Adminisztrátor jogosultságok és különleges szerepek'
-        }),
-        ('🔐 Első bejelentkezés', {
-            'fields': ('first_login_token', 'first_login_sent_at'),
-            'classes': ('collapse',),
-            'description': 'Első bejelentkezéshez szükséges token adatok'
         }),
         ('📊 Számított jogosultságok', {
             'fields': ('is_admin', 'is_developer_admin', 'is_teacher_admin', 'is_system_admin', 'is_production_leader', 'display_permissions'),
@@ -130,7 +125,7 @@ class ProfileAdmin(admin.ModelAdmin):
             return format_html('<span style="color: orange;">⚠️ Jelszó nincs beállítva</span>')
         elif obj.is_admin:
             return format_html('<span style="color: red;">👑 Admin</span>')
-        elif obj.osztalyfonok:
+        elif obj.is_osztaly_fonok:
             return format_html('<span style="color: blue;">👨‍🏫 Osztályfőnök</span>')
         return format_html('<span style="color: green;">✓ Aktív</span>')
     user_status.short_description = 'Státusz'
@@ -172,7 +167,7 @@ class ProfileAdmin(admin.ModelAdmin):
         perms = []
         if obj.is_admin:
             perms.append('🔑 Adminisztrátor')
-        if obj.osztalyfonok:
+        if obj.is_osztaly_fonok:
             perms.append('👨‍🏫 Osztályfőnök')
         if obj.is_production_leader:
             perms.append('🎬 Gyártásvezető')

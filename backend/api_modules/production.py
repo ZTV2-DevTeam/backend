@@ -406,7 +406,8 @@ def check_admin_or_teacher_permissions(user) -> tuple[bool, str]:
     try:
         from api.models import Profile
         profile = Profile.objects.get(user=user)
-        if not (profile.has_admin_permission('any')):
+        # Allow any admin type (developer, teacher, system_admin) for filming session management
+        if not profile.has_admin_permission('any'):
             return False, "Adminisztrátor vagy tanár jogosultság szükséges"
         return True, ""
     except Profile.DoesNotExist:
@@ -633,13 +634,11 @@ def register_production_endpoints(api):
             401: Authentication or permission failed
         """
         try:
-            # Check if user has appropriate permissions
-            has_permission, error_message = check_admin_or_teacher_permissions(request.auth)
-            if not has_permission:
-                return 401, {"message": error_message}
+            # Basic authentication is handled by JWTAuth decorator
+            # No additional permission check needed for filming session creation
             
             # Check equipment assignment permissions (admin only)
-            if data.equipment_ids:
+            if data.equipment_ids and len(data.equipment_ids) > 0:
                 is_admin, admin_error = check_admin_permissions(request.auth)
                 if not is_admin:
                     return 401, {"message": "Eszközök hozzárendelése csak adminisztrátorok számára engedélyezett"}
@@ -743,6 +742,10 @@ def register_production_endpoints(api):
             
             return 201, create_forgatas_response(forgatas)
         except Exception as e:
+            print(f"Error in create_filming_session: {str(e)}")
+            print(f"Error type: {type(e)}")
+            import traceback
+            traceback.print_exc()
             return 400, {"message": f"Error creating filming session: {str(e)}"}
 
     @api.put("/production/filming-sessions/{forgatas_id}", auth=JWTAuth(), response={200: ForgatSchema, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
@@ -764,13 +767,11 @@ def register_production_endpoints(api):
             401: Authentication or permission failed
         """
         try:
-            # Check if user has appropriate permissions
-            has_permission, error_message = check_admin_or_teacher_permissions(request.auth)
-            if not has_permission:
-                return 401, {"message": error_message}
+            # Basic authentication is handled by JWTAuth decorator
+            # No additional permission check needed for filming session updates
             
             # Check equipment assignment permissions (admin only)
-            if data.equipment_ids is not None:
+            if data.equipment_ids is not None and len(data.equipment_ids) > 0:
                 is_admin, admin_error = check_admin_permissions(request.auth)
                 if not is_admin:
                     return 401, {"message": "Eszközök hozzárendelése csak adminisztrátorok számára engedélyezett"}

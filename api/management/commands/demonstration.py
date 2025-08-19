@@ -465,8 +465,7 @@ class Command(BaseCommand):
                     'telefonszam': f"+36-{random.randint(20, 99)} {random.randint(100, 999)} {random.randint(1000, 9999)}",
                     'medias': True,
                     'admin_type': admin_type,
-                    'special_role': 'production_leader' if username == 'producer' else 'none',
-                    'password_set': True
+                    'special_role': 'production_leader' if username == 'producer' else 'none'
                 }
             )
         
@@ -516,8 +515,7 @@ class Command(BaseCommand):
                     'radio_stab': selected_radio_stab,
                     'osztaly': selected_class,
                     'admin_type': 'none',
-                    'special_role': 'none',
-                    'password_set': random.choice([True, False])
+                    'special_role': 'none'
                 }
             )
         
