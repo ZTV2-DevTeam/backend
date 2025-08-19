@@ -14,7 +14,7 @@ Base URL: /api/users/
 
 Protected Endpoints (JWT Token Required):
 - GET  /users                           - List all user profiles (admin only)
-- GET  /users/{id}                     - Get specific user profile (admin only)
+- GET  /users/{id}                     - Get specific user public profile (any authenticated user)
 - GET  /users/radio-students           - Get 9F radio students (admin only)
 - GET  /users/{id}/availability        - Check user availability
 - GET  /users/active                   - Get users active now (5 mins) and active today
@@ -59,6 +59,9 @@ Example Usage:
 Get all users (admin required):
 curl -H "Authorization: Bearer {token}" /api/users
 
+Get specific user public profile (any authenticated user):
+curl -H "Authorization: Bearer {token}" /api/users/5
+
 Get radio students:
 curl -H "Authorization: Bearer {token}" /api/users/radio-students
 
@@ -70,8 +73,9 @@ Admin Permissions:
 =================
 
 Most endpoints require administrative permissions:
-- System administrators can access all user data
-- Regular users can only access availability checking
+- System administrators can access all user data and lists
+- Individual user profiles (/users/{id}) are accessible to any authenticated user
+- Regular users can access availability checking and individual profiles
 - Admin type validation through user profile
 
 Error Handling:
@@ -269,29 +273,23 @@ def register_user_endpoints(api):
         except Exception as e:
             return 500, {"message": f"Error fetching users: {str(e)}"}
 
-    @api.get("/users/{user_id}", auth=JWTAuth(), response={200: UserProfileSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
+    @api.get("/users/{user_id}", auth=JWTAuth(), response={200: UserProfileSchema, 404: ErrorSchema, 500: ErrorSchema})
     def get_user_details(request, user_id: int):
         """
-        Get detailed information about a specific user.
+        Get public information about a specific user.
         
-        Requires admin permissions. Returns comprehensive profile information
-        for the specified user.
+        Returns public profile information for the specified user.
+        No admin permissions required for accessing public user data.
         
         Args:
             user_id: Unique user identifier
             
         Returns:
-            200: User profile details
-            403: Insufficient permissions
+            200: User profile details (public information)
             404: User not found
             500: Server error
         """
         try:
-            # Check if user has admin permissions
-            has_permission, error_message = check_admin_permissions(request.auth)
-            if not has_permission:
-                return 403, {"message": error_message}
-            
             user_profile = Profile.objects.select_related(
                 'user', 'stab', 'radio_stab', 'osztaly'
             ).get(user__id=user_id)
