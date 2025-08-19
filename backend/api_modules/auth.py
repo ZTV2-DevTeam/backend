@@ -67,7 +67,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
 # Configuration
-TOKEN_EXPIRATION_TIME = timedelta(hours=1)
+TOKEN_EXPIRATION_TIME = timedelta(hours=8)  # Extended to 8 hours for better user experience
 
 # ============================================================================
 # JWT Authentication Class
@@ -90,7 +90,7 @@ class JWTAuth(HttpBearer):
         print(f"Authenticating token: {token[:20]}...")  # Debug: show first 20 chars
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            print(f"JWT payload decoded successfully: {payload}")  # Debug
+            print(f"JWT payload decoded successfully: user_id={payload.get('user_id')}")  # Debug
             
             user_id = payload.get("user_id")
             if user_id:
@@ -106,7 +106,7 @@ class JWTAuth(HttpBearer):
                 return None
                     
         except jwt.ExpiredSignatureError:
-            print("JWT token has expired")
+            print("JWT token has expired - user should refresh or re-login")
             return None
         except jwt.InvalidTokenError as e:
             print(f"JWT token is invalid: {e}")

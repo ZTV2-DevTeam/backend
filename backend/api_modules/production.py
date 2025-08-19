@@ -537,6 +537,60 @@ def register_production_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching filming sessions: {str(e)}"}
 
+    @api.get("/production/filming-sessions/types", response={200: list[ForgatoTipusSchema]})
+    def get_filming_types(request):
+        """
+        Get available filming session types.
+        
+        Public endpoint that returns all available filming session types.
+        
+        Returns:
+            200: List of filming session types
+        """
+        return 200, FORGATAS_TYPES
+
+    @api.get("/production/filming-sessions/kacsa-available", auth=JWTAuth(), response={200: list[KacsaAvailableSchema], 401: ErrorSchema})
+    def get_kacsa_available(request):
+        """
+        Get available KaCsa sessions for linking.
+        
+        Returns KaCsa sessions that can be linked to other filming sessions.
+        Includes information about whether each session can be linked and
+        how many sessions are already linked to it.
+        
+        Returns:
+            200: List of available KaCsa sessions
+            401: Authentication failed
+        """
+        try:
+            # Get all KaCsa sessions
+            kacsa_sessions = Forgatas.objects.filter(forgTipus='kacsa').order_by('-date', '-timeFrom')
+            
+            response = []
+            for session in kacsa_sessions:
+                # Count how many sessions are already linked to this KaCsa
+                linked_count = Forgatas.objects.filter(relatedKaCsa=session).count()
+                
+                # Determine if this session can still be linked
+                # You can adjust this logic based on business rules
+                can_link = True  # For now, allow unlimited linking
+                already_linked = linked_count > 0
+                
+                response.append({
+                    "id": session.id,
+                    "name": session.name,
+                    "date": session.date.isoformat(),
+                    "time_from": session.timeFrom.isoformat(),
+                    "time_to": session.timeTo.isoformat(),
+                    "can_link": can_link,
+                    "already_linked": already_linked,
+                    "linked_sessions_count": linked_count
+                })
+            
+            return 200, response
+        except Exception as e:
+            return 401, {"message": f"Error fetching available KaCsa sessions: {str(e)}"}
+
     @api.get("/production/filming-sessions/{forgatas_id}", auth=JWTAuth(), response={200: ForgatSchema, 401: ErrorSchema, 404: ErrorSchema})
     def get_filming_session(request, forgatas_id: int):
         """
@@ -562,18 +616,6 @@ def register_production_endpoints(api):
             return 404, {"message": "Forgatás nem található"}
         except Exception as e:
             return 401, {"message": f"Error fetching filming session: {str(e)}"}
-
-    @api.get("/production/filming-sessions/types", response={200: list[ForgatoTipusSchema]})
-    def get_filming_types(request):
-        """
-        Get available filming session types.
-        
-        Public endpoint that returns all available filming session types.
-        
-        Returns:
-            200: List of filming session types
-        """
-        return 200, FORGATAS_TYPES
 
     @api.post("/production/filming-sessions", auth=JWTAuth(), response={201: ForgatSchema, 400: ErrorSchema, 401: ErrorSchema})
     def create_filming_session(request, data: ForgatCreateSchema):
