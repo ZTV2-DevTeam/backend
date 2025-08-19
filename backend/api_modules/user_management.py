@@ -284,43 +284,8 @@ class StabCreateSchema(Schema):
     type: Optional[str] = "media"
 
 # ============================================================================
-# Utility Functions
+# Utility Functions  
 # ============================================================================
-
-def generate_first_login_token(user_id: int) -> str:
-    """Generate JWT token for first-time login."""
-    payload = {
-        "user_id": user_id,
-        "type": "first_login",
-        "exp": datetime.utcnow() + timedelta(days=30),  # 30 days validity
-        "iat": datetime.utcnow(),
-    }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
-
-def verify_first_login_token(token: str) -> dict:
-    """Verify first-time login token."""
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-        
-        if payload.get("type") != "first_login":
-            return {"valid": False, "error": "Invalid token type"}
-        
-        user_id = payload.get("user_id")
-        if not user_id:
-            return {"valid": False, "error": "Invalid token payload"}
-        
-        try:
-            user = User.objects.get(id=user_id)
-            profile = Profile.objects.get(user=user)
-            
-            return {"valid": True, "user": user, "profile": profile}
-        except (User.DoesNotExist, Profile.DoesNotExist):
-            return {"valid": False, "error": "User not found"}
-            
-    except jwt.ExpiredSignatureError:
-        return {"valid": False, "error": "Token has expired"}
-    except jwt.InvalidTokenError:
-        return {"valid": False, "error": "Invalid token"}
 
 def generate_random_password(length: int = 12) -> str:
     """Generate a random temporary password."""
@@ -748,6 +713,7 @@ def register_user_management_endpoints(api):
             profile, created = Profile.objects.get_or_create(user=user)
             
             # Generate token
+            from .authentication import generate_first_login_token, send_first_login_email
             token = generate_first_login_token(user.id)
             
             # Update profile
@@ -844,6 +810,7 @@ def register_user_management_endpoints(api):
                     
                     # Generate and send first login token if requested
                     if data.send_emails:
+                        from .authentication import generate_first_login_token, send_first_login_email
                         token = generate_first_login_token(user.id)
                         profile.first_login_token = token
                         profile.first_login_sent_at = timezone.now()
@@ -865,98 +832,6 @@ def register_user_management_endpoints(api):
             }
         except Exception as e:
             return 400, {"message": f"Error creating bulk students: {str(e)}"}
-
-    @api.post("/first-login/verify-token", response={200: dict, 400: ErrorSchema})
-    def verify_first_login_token_endpoint(request, token: str):
-        """
-        Verify first-time login token.
-        
-        Public endpoint for token verification.
-        
-        Args:
-            token: First-time login token
-            
-        Returns:
-            200: Token verification result
-            400: Error occurred
-        """
-        try:
-            result = verify_first_login_token(token)
-            
-            if result["valid"]:
-                user = result["user"]
-                return 200, {
-                    "valid": True,
-                    "user": {
-                        "id": user.id,
-                        "username": user.username,
-                        "full_name": user.get_full_name(),
-                        "email": user.email
-                    }
-                }
-            else:
-                return 200, {
-                    "valid": False,
-                    "error": result["error"]
-                }
-        except Exception as e:
-            return 400, {"message": f"Error verifying token: {str(e)}"}
-
-    @api.post("/first-login/set-password", response={200: dict, 400: ErrorSchema})
-    def set_first_password(request, token: str, password: str, confirm_password: str):
-        """
-        Set password using first-time login token.
-        
-        Public endpoint for setting initial password.
-        
-        Args:
-            token: First-time login token
-            password: New password
-            confirm_password: Password confirmation
-            
-        Returns:
-            200: Password set successfully
-            400: Error occurred
-        """
-        try:
-            # Validate passwords match
-            if password != confirm_password:
-                return 400, {"message": "A jelszavak nem egyeznek"}
-            
-            # Verify token
-            result = verify_first_login_token(token)
-            if not result["valid"]:
-                return 400, {"message": result["error"]}
-            
-            user = result["user"]
-            profile = result["profile"]
-            
-            # Validate password (you can add more validation here)
-            if len(password) < 6:
-                return 400, {"message": "A jelszó legalább 6 karakter hosszú kell legyen"}
-            
-            # Set password
-            user.set_password(password)
-            # Update last login since this is essentially their first successful login
-            from django.utils import timezone
-            user.last_login = timezone.now()
-            user.save()
-            
-            # Update profile
-            profile.password_set = True
-            profile.first_login_token = None  # Clear the token
-            profile.save()
-            
-            return 200, {
-                "message": "Jelszó sikeresen beállítva",
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "full_name": user.get_full_name()
-                }
-            }
-        except Exception as e:
-            return 400, {"message": f"Error setting password: {str(e)}"}
 
     # ============================================================================
     # Simple CRUD Endpoints for Configuration Wizard

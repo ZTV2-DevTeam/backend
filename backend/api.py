@@ -256,6 +256,7 @@ from ninja import NinjaAPI
 
 # Import our modular API components
 from .api_modules.auth import register_auth_endpoints
+from .api_modules.authentication import register_authentication_endpoints
 from .api_modules.partners import register_partner_endpoints
 from .api_modules.radio import register_radio_endpoints
 from .api_modules.users import register_user_endpoints
@@ -292,7 +293,8 @@ api = NinjaAPI(
 
 # Register all endpoint modules with the main API router
 register_core_endpoints(api)            # Basic endpoints like /hello, /test-auth
-register_auth_endpoints(api)            # Authentication endpoints
+register_auth_endpoints(api)            # Basic authentication endpoints (login, profile, logout)
+register_authentication_endpoints(api)  # Comprehensive authentication and password management
 register_partner_endpoints(api)         # Partner management endpoints
 register_radio_endpoints(api)           # Radio management endpoints
 register_user_endpoints(api)            # User management endpoints
