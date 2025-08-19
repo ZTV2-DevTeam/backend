@@ -1042,3 +1042,196 @@ def handle_beosztas_szerepkor_change(sender, instance, action, pk_set, **kwargs)
     elif action == 'post_clear':
         # All role relations cleared - remove all related absence records
         instance.clean_absence_records()
+
+
+# ============================================================================
+# Email Notification Signal Handlers
+# ============================================================================
+
+from django.db.models.signals import post_save, m2m_changed
+from django.dispatch import receiver
+
+@receiver(post_save, sender=Announcement)
+def send_announcement_email(sender, instance, created, **kwargs):
+    """
+    Send email notification when an announcement is created or updated.
+    """
+    if created:
+        print(f"[DEBUG] ========== ANNOUNCEMENT CREATED SIGNAL ==========")
+        print(f"[DEBUG] New announcement created: {instance.title}")
+        
+        try:
+            # Import email function
+            from backend.api_modules.authentication import send_announcement_notification_email
+            
+            # Determine recipients
+            recipients = []
+            if instance.cimzettek.exists():
+                # Targeted announcement - notify specific recipients
+                recipients = list(instance.cimzettek.filter(is_active=True))
+                print(f"[DEBUG] Targeted announcement - {len(recipients)} specific recipients")
+            else:
+                # Global announcement - notify all active users
+                recipients = list(User.objects.filter(is_active=True))
+                print(f"[DEBUG] Global announcement - {len(recipients)} active users")
+            
+            if recipients:
+                print(f"[DEBUG] Sending announcement email to {len(recipients)} recipients")
+                email_sent = send_announcement_notification_email(instance, recipients)
+                
+                if email_sent:
+                    print(f"[SUCCESS] Announcement email sent successfully: {instance.title}")
+                else:
+                    print(f"[WARNING] Failed to send announcement email: {instance.title}")
+            else:
+                print(f"[DEBUG] No recipients found for announcement email")
+                
+        except Exception as e:
+            print(f"[ERROR] Announcement email signal failed: {str(e)}")
+            import traceback
+            print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+
+
+@receiver(m2m_changed, sender=Announcement.cimzettek.through)
+def announcement_recipients_changed(sender, instance, action, pk_set, **kwargs):
+    """
+    Send email notification when announcement recipients are changed after creation.
+    """
+    if action == 'post_add' and pk_set:
+        print(f"[DEBUG] ========== ANNOUNCEMENT RECIPIENTS CHANGED ==========")
+        print(f"[DEBUG] Recipients added to announcement: {instance.title}")
+        
+        try:
+            # Import email function
+            from backend.api_modules.authentication import send_announcement_notification_email
+            
+            # Get newly added recipients
+            new_recipients = list(User.objects.filter(id__in=pk_set, is_active=True))
+            
+            if new_recipients:
+                print(f"[DEBUG] Sending announcement email to {len(new_recipients)} new recipients")
+                email_sent = send_announcement_notification_email(instance, new_recipients)
+                
+                if email_sent:
+                    print(f"[SUCCESS] Announcement email sent to new recipients: {instance.title}")
+                else:
+                    print(f"[WARNING] Failed to send announcement email to new recipients: {instance.title}")
+            else:
+                print(f"[DEBUG] No new active recipients found")
+                
+        except Exception as e:
+            print(f"[ERROR] Announcement recipients change email signal failed: {str(e)}")
+            import traceback
+            print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+
+
+@receiver(post_save, sender=Beosztas)
+def send_assignment_email(sender, instance, created, **kwargs):
+    """
+    Send email notification when an assignment is created or updated.
+    """
+    print(f"[DEBUG] ========== ASSIGNMENT SAVED SIGNAL ==========")
+    print(f"[DEBUG] Assignment saved - Created: {created}, ID: {instance.id}")
+    
+    if not instance.forgatas:
+        print(f"[DEBUG] No forgatas associated with assignment, skipping email")
+        return
+    
+    try:
+        # Import email function
+        from backend.api_modules.authentication import send_assignment_change_notification_email
+        
+        # Get current assigned users
+        current_users = []
+        for relation in instance.szerepkor_relaciok.all():
+            current_users.append(relation.user)
+        
+        print(f"[DEBUG] Current assigned users: {len(current_users)}")
+        
+        if created:
+            # New assignment - notify all assigned users
+            print(f"[DEBUG] New assignment created, notifying all assigned users")
+            
+            if current_users:
+                email_sent = send_assignment_change_notification_email(
+                    instance.forgatas,
+                    current_users,  # added users
+                    []  # no removed users for new assignment
+                )
+                
+                if email_sent:
+                    print(f"[SUCCESS] Assignment creation email sent: {instance.forgatas.name}")
+                else:
+                    print(f"[WARNING] Failed to send assignment creation email: {instance.forgatas.name}")
+            else:
+                print(f"[DEBUG] No users assigned to new assignment")
+        else:
+            # Assignment updated - we would need to track changes
+            # For now, just notify if it's being finalized
+            if instance.kesz:
+                print(f"[DEBUG] Assignment finalized, notifying all assigned users")
+                
+                if current_users:
+                    email_sent = send_assignment_change_notification_email(
+                        instance.forgatas,
+                        current_users,  # notify all assigned users about finalization
+                        []  # no removed users
+                    )
+                    
+                    if email_sent:
+                        print(f"[SUCCESS] Assignment finalization email sent: {instance.forgatas.name}")
+                    else:
+                        print(f"[WARNING] Failed to send assignment finalization email: {instance.forgatas.name}")
+                else:
+                    print(f"[DEBUG] No users assigned to finalized assignment")
+            else:
+                print(f"[DEBUG] Assignment updated but not finalized, no email sent")
+                
+    except Exception as e:
+        print(f"[ERROR] Assignment email signal failed: {str(e)}")
+        import traceback
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+
+
+@receiver(m2m_changed, sender=Beosztas.szerepkor_relaciok.through)
+def assignment_users_changed(sender, instance, action, pk_set, **kwargs):
+    """
+    Send email notification when assignment users are changed.
+    """
+    if action in ['post_add', 'post_remove'] and pk_set and instance.forgatas:
+        print(f"[DEBUG] ========== ASSIGNMENT USERS CHANGED ==========")
+        print(f"[DEBUG] Assignment users changed - Action: {action}, Assignment ID: {instance.id}")
+        
+        try:
+            # Import email function
+            from backend.api_modules.authentication import send_assignment_change_notification_email
+            
+            if action == 'post_add':
+                # Users added to assignment
+                added_relations = SzerepkorRelaciok.objects.filter(id__in=pk_set)
+                added_users = [rel.user for rel in added_relations]
+                
+                print(f"[DEBUG] Users added to assignment: {len(added_users)}")
+                
+                if added_users:
+                    email_sent = send_assignment_change_notification_email(
+                        instance.forgatas,
+                        added_users,  # added users
+                        []  # no removed users
+                    )
+                    
+                    if email_sent:
+                        print(f"[SUCCESS] Assignment addition email sent: {instance.forgatas.name}")
+                    else:
+                        print(f"[WARNING] Failed to send assignment addition email: {instance.forgatas.name}")
+                        
+            elif action == 'post_remove':
+                # Users removed from assignment
+                # Note: We can't get the relation objects after removal, so we'll skip removal emails for now
+                # This is a limitation of the current approach - we'd need to store the old state before removal
+                print(f"[DEBUG] Users removed from assignment - removal emails not implemented in signals yet")
+                
+        except Exception as e:
+            print(f"[ERROR] Assignment users change email signal failed: {str(e)}")
+            import traceback
+            print(f"[ERROR] Full traceback: {traceback.format_exc()}")

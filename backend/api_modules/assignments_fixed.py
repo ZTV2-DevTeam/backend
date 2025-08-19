@@ -441,7 +441,24 @@ def register_assignment_endpoints(api):
                 if not created_relations:
                     return 400, {"message": "Egyetlen érvényes diák-szerepkör párosítás sem található"}
             
-            # Note: Email notifications are now handled automatically by model signals in models.py
+            # Send email notifications to assigned users
+            if assigned_users:
+                try:
+                    from .authentication import send_assignment_change_notification_email
+                    email_sent = send_assignment_change_notification_email(
+                        forgatas, 
+                        assigned_users,  # added users
+                        []  # no removed users for new assignment
+                    )
+                    
+                    if email_sent:
+                        print(f"[SUCCESS] Assignment creation email notifications sent for: {forgatas.name}")
+                    else:
+                        print(f"[WARNING] Failed to send assignment creation email notifications for: {forgatas.name}")
+                        
+                except Exception as email_error:
+                    print(f"[WARNING] Email notification failed for new assignment: {str(email_error)}")
+                    # Don't fail the creation if email fails
             
             return 201, create_beosztas_response(beosztas)
         except Exception as e:
@@ -519,7 +536,28 @@ def register_assignment_endpoints(api):
                     if data.kesz:
                         auto_create_absences_for_beosztas(beosztas)
             
-            # Note: Email notifications for user changes are now handled automatically by model signals in models.py
+            # Send email notifications for user changes
+            if data.student_role_pairs is not None and beosztas.forgatas:
+                added_users = list(new_users - old_users)
+                removed_users = list(old_users - new_users)
+                
+                if added_users or removed_users:
+                    try:
+                        from .authentication import send_assignment_change_notification_email
+                        email_sent = send_assignment_change_notification_email(
+                            beosztas.forgatas, 
+                            added_users, 
+                            removed_users
+                        )
+                        
+                        if email_sent:
+                            print(f"[SUCCESS] Assignment change email notifications sent for: {beosztas.forgatas.name}")
+                        else:
+                            print(f"[WARNING] Failed to send assignment change email notifications for: {beosztas.forgatas.name}")
+                            
+                    except Exception as email_error:
+                        print(f"[WARNING] Email notification failed for assignment {assignment_id}: {str(email_error)}")
+                        # Don't fail the update if email fails
             
             return 200, create_beosztas_response(beosztas)
         except Beosztas.DoesNotExist:
@@ -563,7 +601,25 @@ def register_assignment_endpoints(api):
                 # Create absences for all assigned students
                 auto_create_absences_for_beosztas(beosztas)
             
-            # Note: Email notifications for finalization are now handled automatically by model signals in models.py
+            # Send finalization notification email
+            if assigned_users and beosztas.forgatas:
+                try:
+                    from .authentication import send_assignment_change_notification_email
+                    # Send as "added" users to notify them of the finalization
+                    email_sent = send_assignment_change_notification_email(
+                        beosztas.forgatas, 
+                        assigned_users,  # notify all assigned users
+                        []  # no removed users
+                    )
+                    
+                    if email_sent:
+                        print(f"[SUCCESS] Assignment finalization email notifications sent for: {beosztas.forgatas.name}")
+                    else:
+                        print(f"[WARNING] Failed to send assignment finalization email notifications for: {beosztas.forgatas.name}")
+                        
+                except Exception as email_error:
+                    print(f"[WARNING] Email notification failed for assignment finalization {assignment_id}: {str(email_error)}")
+                    # Don't fail the finalization if email fails
             
             return 200, create_beosztas_response(beosztas)
         except Beosztas.DoesNotExist:

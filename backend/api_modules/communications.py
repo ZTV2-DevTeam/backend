@@ -2,24 +2,46 @@
 FTV Communications API Module
 
 This module provides comprehensive communication functionality for the FTV system,
-including announcement management, targeted messaging, and communication tracking
-for effective school-wide information distribution.
+including announcement management, targeted messaging, communication tracking,
+and automatic email notifications for effective school-wide information distribution.
 
 Public API Overview:
 ==================
 
 The Communications API manages all aspects of internal communication including
-announcements, targeted messaging, and communication tracking with role-based
-access control and recipient management.
+announcements, targeted messaging, communication tracking, and automatic email
+notifications with role-based access control and recipient management.
 
 Base URL: /api/communications/
 
 Protected Endpoints (JWT Token Required):
 - GET  /announcements           - List announcements (filtered by user role)
 - GET  /announcements/{id}      - Get specific announcement details
-- POST /announcements           - Create new announcement (admin only)
-- PUT  /announcements/{id}      - Update announcement (admin/author only)
+- POST /announcements           - Create new announcement (admin only) + auto email
+- PUT  /announcements/{id}      - Update announcement (admin/author only) + auto email
 - DELETE /announcements/{id}    - Delete announcement (admin/author only)
+
+Email Notification System:
+==========================
+
+The system automatically sends email notifications when:
+
+1. **New Announcements**: When an announcement is created
+   - If recipients specified (címzettek): Sends email to those specific users
+   - If no recipients specified: Sends email to ALL active users
+   - Uses BCC to send one email for all recipients (avoids SMTP blocking)
+
+2. **Updated Announcements**: When announcement content or recipients change
+   - Content changes: Notifies existing recipients
+   - Recipient changes: Notifies newly added recipients
+   - Public announcement content changes: Notifies all users
+
+Email Content Features:
+- Professional HTML templates with FTV branding
+- Plain text fallback for compatibility
+- Announcement title and full content
+- Author information and timestamp
+- Direct link to FTV system
 
 Communication System Overview:
 =============================
@@ -31,6 +53,7 @@ The communication system provides:
 3. **Role-based Visibility**: Automatic filtering based on user permissions
 4. **Author Tracking**: Full attribution and edit history
 5. **Recipient Management**: Detailed recipient lists and tracking
+6. **Automatic Email Notifications**: Real-time email alerts for announcements
 
 Announcement Types:
 ==================
@@ -39,12 +62,43 @@ Announcement Types:
 - Visible to all authenticated users
 - System-wide information and updates
 - General school news and events
+- Emails sent to ALL active users automatically
 
 **Targeted Announcements** (Specific recipients):
 - Visible only to selected users
 - Class-specific information
 - Role-specific communications
 - Personal messages
+- Emails sent only to selected recipients
+
+Email Notification Behavior:
+===========================
+
+**Creating Announcements**:
+- Targeted (with recipients): Emails sent to specified users only
+- Global (no recipients): Emails sent to all active users
+- Single BCC email prevents SMTP rate limiting
+- Continues even if email fails (announcement still created)
+
+**Updating Announcements**:
+- Content changes: Emails existing recipients about updates
+- Adding recipients: Emails newly added recipients
+- Removing recipients: No email sent to removed users
+- Public announcement updates: Emails all users
+
+**Email Template Features**:
+- Responsive HTML design
+- FTV branding and colors
+- Announcement content with formatting
+- Author attribution
+- Link to FTV system
+- Professional footer
+
+**SMTP Protection**:
+- Uses BCC for bulk emails (single SMTP connection)
+- Graceful error handling (doesn't break API)
+- Detailed logging for troubleshooting
+- Respects email configuration settings
 
 Data Structure:
 ==============
@@ -77,17 +131,20 @@ Visibility and Access Control:
 - See global announcements
 - See announcements targeted to them
 - Cannot create or modify announcements
+- Receive email notifications for relevant announcements
 
 **Teachers**:
 - See all announcements relevant to them
 - Can create announcements for their classes
 - Can edit their own announcements
+- Email notifications sent when they create/update announcements
 
 **Administrators**:
 - See all announcements in system
 - Can create system-wide announcements
 - Can edit/delete any announcement
 - Full recipient management access
+- Email notifications for all announcement activity
 
 Example Usage:
 =============
@@ -98,7 +155,7 @@ curl -H "Authorization: Bearer {token}" /api/communications/announcements
 Get specific announcement details:
 curl -H "Authorization: Bearer {token}" /api/communications/announcements/123
 
-Create global announcement (admin/teacher):
+Create global announcement (emails all users):
 curl -X POST /api/communications/announcements \
   -H "Authorization: Bearer {token}" \
   -H "Content-Type: application/json" \
@@ -108,7 +165,7 @@ curl -X POST /api/communications/announcements \
     "recipient_ids":[]
   }'
 
-Create targeted announcement:
+Create targeted announcement (emails specific users):
 curl -X POST /api/communications/announcements \
   -H "Authorization: Bearer {token}" \
   -H "Content-Type: application/json" \
@@ -118,7 +175,7 @@ curl -X POST /api/communications/announcements \
     "recipient_ids":[12,34,56]
   }'
 
-Update announcement:
+Update announcement (emails affected users):
 curl -X PUT /api/communications/announcements/123 \
   -H "Authorization: Bearer {token}" \
   -H "Content-Type: application/json" \
@@ -172,6 +229,7 @@ Seamless integration with user management:
 - Class and role integration
 - Profile-based targeting
 - Dynamic recipient lists
+- Email address validation
 
 Permission Requirements:
 =======================
@@ -179,6 +237,7 @@ Permission Requirements:
 **Creating Announcements**:
 - Admin permissions (teacher or system admin)
 - Author automatically set to current user
+- Email notifications sent automatically
 
 **Viewing Announcements**:
 - Authentication required
@@ -187,6 +246,7 @@ Permission Requirements:
 **Editing Announcements**:
 - Admin permissions OR original author
 - Recipient list changes require admin permissions
+- Email notifications for significant changes
 
 **Deleting Announcements**:
 - Admin permissions OR original author
@@ -195,12 +255,15 @@ Permission Requirements:
 Error Handling:
 ==============
 
-- 200/201: Success
+- 200/201: Success (email notifications sent when possible)
 - 400: Validation errors (empty title/body, invalid recipients)
 - 401: Authentication failed or insufficient permissions
 - 403: Access denied (not author/admin for edit/delete)
 - 404: Announcement not found
 - 500: Server error
+
+Note: Email notification failures do not cause API failures.
+Announcements are created/updated successfully even if emails fail.
 
 Validation Rules:
 ================
@@ -210,6 +273,7 @@ Validation Rules:
 - Only authors or admins can modify announcements
 - Recipients can be empty for global announcements
 - HTML content is sanitized for security
+- Email addresses must be valid for notifications
 
 Communication Best Practices:
 ============================
@@ -218,16 +282,25 @@ Communication Best Practices:
 - Use clear, descriptive titles
 - Include all necessary information in body
 - Consider timing for maximum visibility
+- Remember that ALL users will receive emails
 
 **For Targeted Announcements**:
 - Verify recipient lists before sending
 - Use specific, actionable titles
 - Include relevant context for recipients
+- Consider email frequency to avoid spam
 
 **Content Guidelines**:
 - Keep messages concise but informative
 - Use professional language and tone
 - Include contact information if follow-up needed
+- Format content for both web and email viewing
+
+**Email Considerations**:
+- Emails are sent immediately upon announcement creation/update
+- Use BCC to avoid revealing recipient lists
+- Monitor email delivery for important announcements
+- Consider email client compatibility for formatting
 """
 
 from ninja import Schema
@@ -499,7 +572,7 @@ def register_communications_endpoints(api):
         Create new announcement.
         
         Requires admin/teacher permissions. Creates a new announcement, optionally
-        targeting specific users.
+        targeting specific users. Automatically sends email notifications to recipients.
         
         Args:
             data: Announcement creation data
@@ -524,10 +597,20 @@ def register_communications_endpoints(api):
                 author=user
             )
             
-            # Add recipients if provided
+            # Determine recipients
+            recipients_to_notify = []
+            
             if data.recipient_ids:
+                # Targeted announcement - notify specific recipients
                 recipients = User.objects.filter(id__in=data.recipient_ids, is_active=True)
                 announcement.cimzettek.set(recipients)
+                recipients_to_notify = list(recipients)
+            else:
+                # Global announcement - notify all active users
+                all_active_users = User.objects.filter(is_active=True)
+                recipients_to_notify = list(all_active_users)
+            
+            # Note: Email notifications are now handled automatically by model signals in models.py
             
             return 201, create_announcement_response(announcement, include_recipients=True)
         except Exception as e:
@@ -540,6 +623,7 @@ def register_communications_endpoints(api):
         
         Requires admin/teacher permissions or being the author of the announcement.
         Updates announcement with provided data. Only non-None fields are updated.
+        If recipient list changes significantly, sends notifications to new recipients.
         
         Args:
             announcement_id: Unique announcement identifier
@@ -562,21 +646,55 @@ def register_communications_endpoints(api):
             if not (has_general_permission or is_author):
                 return 401, {"message": "Nincs jogosultság a közlemény szerkesztéséhez"}
             
+            # Store old recipients for comparison
+            old_recipients = set(announcement.cimzettek.all()) if announcement.cimzettek.exists() else set()
+            
             # Update fields only if they are provided (not None)
+            content_changed = False
             if data.title is not None:
                 announcement.title = data.title
+                content_changed = True
             if data.body is not None:
                 announcement.body = data.body
+                content_changed = True
             
             announcement.save()
             
-            # Update recipients if provided
+            # Handle recipient changes
+            recipients_changed = False
+            new_recipients = set()
+            
             if data.recipient_ids is not None:
+                recipients_changed = True
                 if data.recipient_ids:  # Non-empty list
                     recipients = User.objects.filter(id__in=data.recipient_ids, is_active=True)
                     announcement.cimzettek.set(recipients)
+                    new_recipients = set(recipients)
                 else:  # Empty list - make it public
                     announcement.cimzettek.clear()
+                    # For public announcements, we could notify all users, but let's be conservative
+                    new_recipients = set()
+            else:
+                # Recipients not changed
+                new_recipients = old_recipients
+            
+            # Send email notifications for significant changes
+            if content_changed or recipients_changed:
+                # Only notify if content changed or new recipients were added
+                recipients_to_notify = []
+                
+                if recipients_changed:
+                    # Notify newly added recipients
+                    newly_added = new_recipients - old_recipients
+                    recipients_to_notify = list(newly_added)
+                elif content_changed and new_recipients:
+                    # If just content changed, notify existing recipients
+                    recipients_to_notify = list(new_recipients)
+                elif content_changed and not announcement.cimzettek.exists():
+                    # Public announcement content changed - notify all users
+                    recipients_to_notify = list(User.objects.filter(is_active=True))
+                
+                # Note: Email notifications for recipient changes are now handled automatically by model signals in models.py
             
             return 200, create_announcement_response(announcement, include_recipients=True)
         except Announcement.DoesNotExist:
@@ -669,3 +787,58 @@ def register_communications_endpoints(api):
             return 404, {"message": "Közlemény nem található"}
         except Exception as e:
             return 401, {"message": f"Error fetching announcement recipients: {str(e)}"}
+
+    @api.post("/communications/test-email", auth=JWTAuth(), response={200: dict, 400: ErrorSchema, 401: ErrorSchema})
+    def test_email_notification(request):
+        """
+        Test email notification system.
+        
+        Sends a test email to the current user to verify email configuration.
+        Requires admin/teacher permissions.
+        
+        Returns:
+            200: Test email sent successfully
+            400: Email configuration error
+            401: Authentication or permission failed
+        """
+        try:
+            user = request.auth
+            
+            # Check if user has appropriate permissions
+            has_permission, error_message = check_announcement_permissions(user)
+            if not has_permission:
+                return 401, {"message": error_message}
+            
+            if not user.email:
+                return 400, {"message": "A felhasználóhoz nincs email cím rendelve"}
+            
+            # Create a test announcement (don't save to database)
+            from api.models import Announcement
+            test_announcement = Announcement(
+                title="🧪 FTV Email Teszt",
+                body=f"Ez egy teszt email az FTV rendszerből.\n\nKedves {user.get_full_name()}!\n\nHa ezt az emailt megkapja, akkor az email értesítő rendszer megfelelően működik.\n\nTeszt időpontja: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                author=user,
+                created_at=datetime.now(),
+                updated_at=datetime.now()
+            )
+            
+            # Import email function
+            from .authentication import send_announcement_notification_email
+            
+            # Send test email
+            success = send_announcement_notification_email(test_announcement, [user])
+            
+            if success:
+                return 200, {
+                    "message": f"Teszt email sikeresen elküldve a következő címre: {user.email}",
+                    "email": user.email,
+                    "test_time": datetime.now().isoformat()
+                }
+            else:
+                return 400, {
+                    "message": "Hiba történt a teszt email küldése során. Ellenőrizze az email beállításokat.",
+                    "email": user.email
+                }
+                
+        except Exception as e:
+            return 400, {"message": f"Error sending test email: {str(e)}"}

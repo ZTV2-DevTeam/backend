@@ -526,6 +526,552 @@ Ez egy automatikus email, kérjük ne válaszoljon rá.
         return False
 
 # ============================================================================
+# Notification Email Utilities
+# ============================================================================
+
+def send_announcement_notification_email(announcement, recipients_list: list) -> bool:
+    """
+    Send announcement notification email to multiple recipients.
+    
+    Args:
+        announcement: Announcement model instance
+        recipients_list: List of User objects to send email to
+        
+    Returns:
+        True if all emails sent successfully, False otherwise
+    """
+    try:
+        print(f"[DEBUG] ========== ANNOUNCEMENT EMAIL DEBUG ==========")
+        print(f"[DEBUG] Starting announcement email send process")
+        print(f"[DEBUG] Announcement: {announcement.title}")
+        print(f"[DEBUG] Recipients count: {len(recipients_list)}")
+        
+        # Debug email settings
+        print(f"[DEBUG] Email backend: {getattr(settings, 'EMAIL_BACKEND', 'Not set')}")
+        print(f"[DEBUG] SMTP host: {getattr(settings, 'EMAIL_HOST', 'Not set')}")
+        print(f"[DEBUG] SMTP port: {getattr(settings, 'EMAIL_PORT', 'Not set')}")
+        print(f"[DEBUG] Use TLS: {getattr(settings, 'EMAIL_USE_TLS', 'Not set')}")
+        print(f"[DEBUG] From email: {getattr(settings, 'DEFAULT_FROM_EMAIL', 'Not set')}")
+        
+        # Get frontend URL from settings
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'https://ftv.szlg.info')
+        print(f"[DEBUG] Frontend URL: {frontend_url}")
+        
+        # Create recipient list for BCC (bulk email)
+        recipient_emails = []
+        for user in recipients_list:
+            print(f"[DEBUG] Checking user: {user.username} (ID: {user.id})")
+            print(f"[DEBUG] - Email: {user.email}")
+            print(f"[DEBUG] - Is active: {user.is_active}")
+            if user.email and user.is_active:
+                recipient_emails.append(user.email)
+                print(f"[DEBUG] - Added to recipient list")
+            else:
+                print(f"[DEBUG] - Skipped (no email or inactive)")
+        
+        if not recipient_emails:
+            print("[DEBUG] No valid email addresses found")
+            return True  # No emails to send, but not an error
+        
+        print(f"[DEBUG] Valid email addresses: {len(recipient_emails)}")
+        print(f"[DEBUG] Email list: {recipient_emails}")
+        
+        subject = f"FTV - Új közlemény: {announcement.title}"
+        print(f"[DEBUG] Email subject: {subject}")
+        
+        # Author info
+        author_name = announcement.author.get_full_name() if announcement.author else "FTV Rendszer"
+        print(f"[DEBUG] Author: {author_name}")
+        
+        # Create HTML email content
+        html_message = f"""
+        <html>
+            <head>
+                <style>
+                    body {{ font-family: Roboto, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background-color: #2c3e50; color: white; padding: 20px; text-align: center; }}
+                    .content {{ padding: 20px; background-color: #f9f9f9; }}
+                    .announcement-body {{ 
+                        background-color: white; 
+                        padding: 20px; 
+                        margin: 20px 0; 
+                        border-left: 4px solid #3498db; 
+                        border-radius: 5px;
+                    }}
+                    .footer {{ 
+                        background-color: #34495e; 
+                        color: white; 
+                        padding: 20px; 
+                        text-align: center; 
+                        font-size: 12px; 
+                    }}
+                    .meta-info {{ 
+                        color: #666; 
+                        font-size: 14px; 
+                        margin-bottom: 15px; 
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>📢 Új közlemény érkezett</h1>
+                    </div>
+                    <div class="content">
+                        <h2>{announcement.title}</h2>
+                        
+                        <div class="meta-info">
+                            <strong>Feladó:</strong> {author_name}<br>
+                            <strong>Dátum:</strong> {announcement.created_at.strftime('%Y. %m. %d. %H:%M')}
+                        </div>
+                        
+                        <div class="announcement-body">
+                            {announcement.body.replace(chr(10), '<br>')}
+                        </div>
+                        
+                        <p>A teljes közlemény megtekintéséhez látogassa meg a FTV rendszert:</p>
+                        <p><a href="{frontend_url}" target="_blank">{frontend_url}</a></p>
+                    </div>
+                    <div class="footer">
+                        <p>Ez egy automatikus értesítés az FTV rendszerből.</p>
+                        <p>© 2025 FTV. Minden jog fenntartva.</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+        
+        # Create plain text version
+        plain_message = f"""
+📢 Új közlemény érkezett az FTV rendszerben
+
+Cím: {announcement.title}
+Feladó: {author_name}
+Dátum: {announcement.created_at.strftime('%Y. %m. %d. %H:%M')}
+
+Tartalom:
+{announcement.body}
+
+A teljes közlemény megtekintéséhez látogassa meg a FTV rendszert:
+{frontend_url}
+
+Ez egy automatikus értesítés az FTV rendszerből.
+© 2025 FTV. Minden jog fenntartva.
+        """
+        
+        print(f"[DEBUG] About to send announcement emails to {len(recipient_emails)} recipients using mass mail")
+        print(f"[DEBUG] Recipients: {recipient_emails}")
+        print(f"[DEBUG] From email: {settings.DEFAULT_FROM_EMAIL}")
+        
+        # Use send_mass_mail for efficient bulk email sending
+        try:
+            print(f"[DEBUG] Preparing mass mail messages...")
+            from django.core.mail import send_mass_mail
+            
+            # Prepare all messages for mass sending
+            messages = []
+            for email_address in recipient_emails:
+                message_tuple = (
+                    subject,           # subject
+                    plain_message,     # message (plain text)
+                    settings.DEFAULT_FROM_EMAIL,  # from_email
+                    [email_address],   # recipient_list
+                )
+                messages.append(message_tuple)
+            
+            print(f"[DEBUG] Sending {len(messages)} messages via send_mass_mail...")
+            emails_sent = send_mass_mail(messages, fail_silently=False)
+            
+            print(f"[DEBUG] send_mass_mail completed successfully")
+            print(f"[SUCCESS] Announcement emails sent to {emails_sent} recipients via mass mail")
+            success = True if emails_sent > 0 else False
+                
+        except Exception as send_error:
+            print(f"[ERROR] Mass mail sending failed: {str(send_error)}")
+            import traceback
+            print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+            success = False
+        
+        print(f"[DEBUG] ========== ANNOUNCEMENT EMAIL DEBUG END ==========")
+        return success
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to send announcement email: {str(e)}")
+        import traceback
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        return False
+
+def send_assignment_change_notification_email(forgatas, added_users: list, removed_users: list) -> bool:
+    """
+    Send notification email for assignment changes.
+    
+    Args:
+        forgatas: Forgatas model instance
+        added_users: List of User objects who were added to the assignment
+        removed_users: List of User objects who were removed from the assignment
+        
+    Returns:
+        True if all emails sent successfully, False otherwise
+    """
+    try:
+        print(f"[DEBUG] ========== ASSIGNMENT EMAIL DEBUG ==========")
+        print(f"[DEBUG] Starting assignment change email notification")
+        print(f"[DEBUG] Forgatas: {forgatas.name}")
+        print(f"[DEBUG] Added users: {len(added_users)}")
+        print(f"[DEBUG] Removed users: {len(removed_users)}")
+        
+        # Debug email settings
+        print(f"[DEBUG] Email backend: {getattr(settings, 'EMAIL_BACKEND', 'Not set')}")
+        print(f"[DEBUG] SMTP host: {getattr(settings, 'EMAIL_HOST', 'Not set')}")
+        print(f"[DEBUG] SMTP port: {getattr(settings, 'EMAIL_PORT', 'Not set')}")
+        print(f"[DEBUG] Use TLS: {getattr(settings, 'EMAIL_USE_TLS', 'Not set')}")
+        print(f"[DEBUG] From email: {getattr(settings, 'DEFAULT_FROM_EMAIL', 'Not set')}")
+        
+        # Get frontend URL from settings
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'https://ftv.szlg.info')
+        
+        # Get full crew details from the assignment
+        from api.models import Beosztas
+        try:
+            beosztas = Beosztas.objects.filter(forgatas=forgatas).first()
+            full_crew = []
+            crew_by_role = {}
+            
+            if beosztas:
+                for relation in beosztas.szerepkor_relaciok.all():
+                    user = relation.user
+                    role = relation.szerepkor.name
+                    
+                    full_crew.append({
+                        'name': user.get_full_name() or user.username,
+                        'role': role
+                    })
+                    
+                    if role not in crew_by_role:
+                        crew_by_role[role] = []
+                    crew_by_role[role].append(user.get_full_name() or user.username)
+            
+            print(f"[DEBUG] Full crew size: {len(full_crew)}")
+            print(f"[DEBUG] Crew roles: {list(crew_by_role.keys())}")
+            
+        except Exception as e:
+            print(f"[DEBUG] Could not get full crew details: {str(e)}")
+            full_crew = []
+            crew_by_role = {}
+        
+        success = True
+        
+        # Send notification to added users
+        if added_users:
+            print(f"[DEBUG] Processing {len(added_users)} added users")
+            added_emails = []
+            for user in added_users:
+                print(f"[DEBUG] Checking added user: {user.username} (ID: {user.id})")
+                print(f"[DEBUG] - Email: {user.email}")
+                print(f"[DEBUG] - Is active: {user.is_active}")
+                if user.email and user.is_active:
+                    added_emails.append(user.email)
+                    print(f"[DEBUG] - Added to email list")
+                else:
+                    print(f"[DEBUG] - Skipped (no email or inactive)")
+            
+            print(f"[DEBUG] Valid added user emails: {len(added_emails)}")
+            print(f"[DEBUG] Added emails list: {added_emails}")
+            
+            if added_emails:
+                subject = f"FTV - Új beosztás: {forgatas.name}"
+                print(f"[DEBUG] Assignment addition email subject: {subject}")
+                
+                # Create crew list HTML
+                crew_html = ""
+                if crew_by_role:
+                    crew_html = "<div style='background-color: #ecf0f1; padding: 15px; margin: 10px 0; border-radius: 5px;'>"
+                    crew_html += "<h4 style='margin-top: 0; color: #2c3e50;'>🎬 Forgatási csapat:</h4>"
+                    for role, members in crew_by_role.items():
+                        crew_html += f"<p><strong>{role}:</strong> {', '.join(members)}</p>"
+                    crew_html += "</div>"
+                
+                # Create crew list for plain text
+                crew_text = ""
+                if crew_by_role:
+                    crew_text = "\n🎬 Forgatási csapat:\n"
+                    for role, members in crew_by_role.items():
+                        crew_text += f"{role}: {', '.join(members)}\n"
+                    crew_text += "\n"
+                
+                html_message = f"""
+                <html>
+                    <head>
+                        <style>
+                            body {{ font-family: Roboto, sans-serif; line-height: 1.6; color: #333; }}
+                            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                            .header {{ background-color: #27ae60; color: white; padding: 20px; text-align: center; }}
+                            .content {{ padding: 20px; background-color: #f9f9f9; }}
+                            .forgatas-info {{ 
+                                background-color: white; 
+                                padding: 20px; 
+                                margin: 20px 0; 
+                                border-left: 4px solid #27ae60; 
+                                border-radius: 5px;
+                            }}
+                            .footer {{ 
+                                background-color: #2c3e50; 
+                                color: white; 
+                                padding: 20px; 
+                                text-align: center; 
+                                font-size: 12px; 
+                            }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1>🎬 Új forgatási beosztás</h1>
+                            </div>
+                            <div class="content">
+                                <p>Kedves Kollégák!</p>
+                                
+                                <p>Önt beosztották a következő forgatáshoz:</p>
+                                
+                                <div class="forgatas-info">
+                                    <h3>{forgatas.name}</h3>
+                                    <p><strong>Leírás:</strong> {forgatas.description}</p>
+                                    <p><strong>Dátum:</strong> {forgatas.date.strftime('%Y. %m. %d.')}</p>
+                                    <p><strong>Időpont:</strong> {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}</p>
+                                    {f'<p><strong>Helyszín:</strong> {forgatas.location.name}</p>' if forgatas.location else ''}
+                                    {f'<p><strong>Kapcsolattartó:</strong> {forgatas.contactPerson.name}</p>' if forgatas.contactPerson else ''}
+                                </div>
+                                
+                                {crew_html}
+                                
+                                <p>Kérjük, jegyezze fel a forgatás részleteit és készüljön fel a megadott időpontra!</p>
+                                
+                                <p>A részletes információkat a FTV rendszerben találja:</p>
+                                <p><a href="{frontend_url}" target="_blank">{frontend_url}</a></p>
+                            </div>
+                            <div class="footer">
+                                <p>Ez egy automatikus értesítés az FTV rendszerből.</p>
+                                <p>© 2025 FTV. Minden jog fenntartva.</p>
+                            </div>
+                        </div>
+                    </body>
+                </html>
+                """
+                
+                plain_message = f"""
+🎬 Új forgatási beosztás
+
+Kedves Kollégák!
+
+Önt beosztották a következő forgatáshoz:
+
+Forgatás: {forgatas.name}
+Leírás: {forgatas.description}
+Dátum: {forgatas.date.strftime('%Y. %m. %d.')}
+Időpont: {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}
+{f'Helyszín: {forgatas.location.name}' if forgatas.location else ''}
+{f'Kapcsolattartó: {forgatas.contactPerson.name}' if forgatas.contactPerson else ''}
+{crew_text}
+Kérjük, jegyezze fel a forgatás részleteit és készüljön fel a megadott időpontra!
+
+A részletes információkat a FTV rendszerben találja:
+{frontend_url}
+
+Ez egy automatikus értesítés az FTV rendszerből.
+© 2025 FTV. Minden jog fenntartva.
+                """
+                
+                try:
+                    print(f"[DEBUG] About to send assignment addition emails to {len(added_emails)} recipients using mass mail")
+                    print(f"[DEBUG] Recipients: {added_emails}")
+                    print(f"[DEBUG] From email: {settings.DEFAULT_FROM_EMAIL}")
+                    
+                    from django.core.mail import send_mass_mail
+                    
+                    # Prepare all messages for mass sending
+                    messages = []
+                    for email_address in added_emails:
+                        message_tuple = (
+                            subject,           # subject
+                            plain_message,     # message (plain text)
+                            settings.DEFAULT_FROM_EMAIL,  # from_email
+                            [email_address],   # recipient_list
+                        )
+                        messages.append(message_tuple)
+                    
+                    print(f"[DEBUG] Sending {len(messages)} assignment addition messages via send_mass_mail...")
+                    emails_sent = send_mass_mail(messages, fail_silently=False)
+                    
+                    print(f"[DEBUG] Assignment addition mass mail completed successfully")
+                    print(f"[SUCCESS] Assignment addition emails sent to {emails_sent} users via mass mail")
+                except Exception as e:
+                    print(f"[ERROR] Failed to send assignment addition email: {str(e)}")
+                    import traceback
+                    print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+                    success = False
+        
+        # Send notification to removed users
+        if removed_users:
+            print(f"[DEBUG] Processing {len(removed_users)} removed users")
+            removed_emails = []
+            for user in removed_users:
+                print(f"[DEBUG] Checking removed user: {user.username} (ID: {user.id})")
+                print(f"[DEBUG] - Email: {user.email}")
+                print(f"[DEBUG] - Is active: {user.is_active}")
+                if user.email and user.is_active:
+                    removed_emails.append(user.email)
+                    print(f"[DEBUG] - Added to email list")
+                else:
+                    print(f"[DEBUG] - Skipped (no email or inactive)")
+            
+            print(f"[DEBUG] Valid removed user emails: {len(removed_emails)}")
+            print(f"[DEBUG] Removed emails list: {removed_emails}")
+            
+            if removed_emails:
+                subject = f"FTV - Beosztás módosítás: {forgatas.name}"
+                print(f"[DEBUG] Assignment removal email subject: {subject}")
+                
+                # Create crew list HTML for removal email
+                crew_html = ""
+                if crew_by_role:
+                    crew_html = "<div style='background-color: #ecf0f1; padding: 15px; margin: 10px 0; border-radius: 5px;'>"
+                    crew_html += "<h4 style='margin-top: 0; color: #2c3e50;'>🎬 Jelenlegi forgatási csapat:</h4>"
+                    for role, members in crew_by_role.items():
+                        crew_html += f"<p><strong>{role}:</strong> {', '.join(members)}</p>"
+                    crew_html += "</div>"
+                
+                # Create crew list for plain text
+                crew_text = ""
+                if crew_by_role:
+                    crew_text = "\n🎬 Jelenlegi forgatási csapat:\n"
+                    for role, members in crew_by_role.items():
+                        crew_text += f"{role}: {', '.join(members)}\n"
+                    crew_text += "\n"
+                
+                html_message = f"""
+                <html>
+                    <head>
+                        <style>
+                            body {{ font-family: Roboto, sans-serif; line-height: 1.6; color: #333; }}
+                            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                            .header {{ background-color: #e74c3c; color: white; padding: 20px; text-align: center; }}
+                            .content {{ padding: 20px; background-color: #f9f9f9; }}
+                            .forgatas-info {{ 
+                                background-color: white; 
+                                padding: 20px; 
+                                margin: 20px 0; 
+                                border-left: 4px solid #e74c3c; 
+                                border-radius: 5px;
+                            }}
+                            .footer {{ 
+                                background-color: #2c3e50; 
+                                color: white; 
+                                padding: 20px; 
+                                text-align: center; 
+                                font-size: 12px; 
+                            }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1>📝 Beosztás módosítás</h1>
+                            </div>
+                            <div class="content">
+                                <p>Kedves Kollégák!</p>
+                                
+                                <p>A beosztása módosításra került a következő forgatásnál:</p>
+                                
+                                <div class="forgatas-info">
+                                    <h3>{forgatas.name}</h3>
+                                    <p><strong>Dátum:</strong> {forgatas.date.strftime('%Y. %m. %d.')}</p>
+                                    <p><strong>Időpont:</strong> {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}</p>
+                                </div>
+                                
+                                <p><strong>Önt eltávolították ebből a beosztásból.</strong></p>
+                                <p>Már nem szükséges részt vennie ezen a forgatáson.</p>
+                                
+                                {crew_html}
+                                
+                                <p>Az aktuális beosztásokat a FTV rendszerben ellenőrizheti:</p>
+                                <p><a href="{frontend_url}" target="_blank">{frontend_url}</a></p>
+                            </div>
+                            <div class="footer">
+                                <p>Ez egy automatikus értesítés az FTV rendszerből.</p>
+                                <p>© 2025 FTV. Minden jog fenntartva.</p>
+                            </div>
+                        </div>
+                    </body>
+                </html>
+                """
+                
+                plain_message = f"""
+📝 Beosztás módosítás
+
+Kedves Kollégák!
+
+A beosztása módosításra került a következő forgatásnál:
+
+Forgatás: {forgatas.name}
+Dátum: {forgatas.date.strftime('%Y. %m. %d.')}
+Időpont: {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}
+
+Önt eltávolították ebből a beosztásból.
+Már nem szükséges részt vennie ezen a forgatáson.
+{crew_text}
+Az aktuális beosztásokat a FTV rendszerben ellenőrizheti:
+{frontend_url}
+
+Ez egy automatikus értesítés az FTV rendszerből.
+© 2025 FTV. Minden jog fenntartva.
+                """
+
+                try:
+                    print(f"[DEBUG] About to send assignment removal emails to {len(removed_emails)} recipients using mass mail")
+                    print(f"[DEBUG] Recipients: {removed_emails}")
+                    print(f"[DEBUG] From email: {settings.DEFAULT_FROM_EMAIL}")
+                    
+                    from django.core.mail import send_mass_mail
+                    
+                    # Prepare all messages for mass sending
+                    messages = []
+                    for email_address in removed_emails:
+                        message_tuple = (
+                            subject,           # subject
+                            plain_message,     # message (plain text)
+                            settings.DEFAULT_FROM_EMAIL,  # from_email
+                            [email_address],   # recipient_list
+                        )
+                        messages.append(message_tuple)
+                    
+                    print(f"[DEBUG] Sending {len(messages)} assignment removal messages via send_mass_mail...")
+                    emails_sent = send_mass_mail(messages, fail_silently=False)
+                    
+                    print(f"[DEBUG] Assignment removal mass mail completed successfully")
+                    print(f"[SUCCESS] Assignment removal emails sent to {emails_sent} users via mass mail")
+                    email.content_subtype = "html"
+                    email.send(fail_silently=False)
+                    
+                    print(f"[DEBUG] EmailMessage completed successfully for removal email")
+                    print(f"[SUCCESS] Assignment removal email sent to {len(removed_emails)} users")
+                except Exception as e:
+                    print(f"[ERROR] Failed to send assignment removal email: {str(e)}")
+                    import traceback
+                    print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+                    success = False
+        
+        print(f"[DEBUG] Assignment email notification process completed with success: {success}")
+        print(f"[DEBUG] ========== ASSIGNMENT EMAIL DEBUG END ==========")
+        return success
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to send assignment change notification email: {str(e)}")
+        import traceback
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        return False
+
+# ============================================================================
 # Password Validation Utilities
 # ============================================================================
 
