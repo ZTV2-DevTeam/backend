@@ -6,6 +6,8 @@ and the Django management command for user import.
 """
 
 from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password
+from django.utils.crypto import get_random_string
 from django.db import transaction
 from django.utils import timezone
 from api.models import Profile, Osztaly, Stab, RadioStab, Tanev
@@ -26,6 +28,7 @@ class UserImportData:
         self.keresztNev = kwargs.get('keresztNev', '')
         self.telefonszam = kwargs.get('telefonszam')
         self.email = kwargs.get('email', '')
+        self.password = kwargs.get('password', '')
         self.stab = kwargs.get('stab')
         self.kezdesEve = kwargs.get('kezdesEve')
         self.tagozat = kwargs.get('tagozat')
@@ -224,6 +227,7 @@ def parse_csv_file(file_content: bytes) -> dict:
             'keresztNev': ['keresztNev', 'Keresztnév', 'first_name'], 
             'telefonszam': ['telefonszam', 'Telefonszám', 'phone', 'telefon'],
             'email': ['email', 'E-mail cím', 'Email', 'e_mail'],
+            'password': ['password', 'Jelszó', 'Password', 'jelszo'],
             'stab': ['stab', 'Stáb'],
             'kezdesEve': ['kezdesEve', 'Kezdés éve', 'starting_year'],
             'tagozat': ['tagozat', 'Tagozat', 'department'],

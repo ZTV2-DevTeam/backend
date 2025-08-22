@@ -6,6 +6,8 @@ Comprehensive import/export functionality for the FTV system.
 from import_export import resources, fields, widgets
 from import_export.widgets import ForeignKeyWidget, ManyToManyWidget, DateWidget, TimeWidget, BooleanWidget
 from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password
+from django.utils.crypto import get_random_string
 from .models import (
     Profile, Tanev, Osztaly, Stab, RadioStab, Partner, PartnerTipus,
     Equipment, EquipmentTipus, ContactPerson, Forgatas, Absence,
@@ -107,12 +109,68 @@ class OsztalyWidget(ForeignKeyWidget):
 # ============================================================================
 
 class UserResource(resources.ModelResource):
-    """User import/export with comprehensive fields"""
+    """User import/export with comprehensive fields including password handling"""
+    
+    # Custom field for password that won't be directly assigned
+    password = fields.Field(column_name='password', attribute=None, readonly=False)
     
     class Meta:
         model = User
         fields = ('id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'date_joined')
         export_order = ('id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'date_joined')
+        
+    def skip_row(self, instance, original, row, import_validation_errors=None):
+        """Skip rows that are completely empty or have no meaningful data"""
+        username = row.get('username')
+        first_name = row.get('first_name', '')
+        last_name = row.get('last_name', '')
+        email = row.get('email', '')
+        
+        # Skip if username is empty or all key fields are empty
+        if not username or not str(username).strip():
+            return True
+            
+        # Skip if all key fields are empty
+        if not any([str(field).strip() for field in [username, first_name, last_name, email] if field]):
+            return True
+            
+        return super().skip_row(instance, original, row, import_validation_errors)
+        
+    def after_import_instance(self, instance, new, row_number=None, **kwargs):
+        """Set password after the instance is created"""
+        if instance and not kwargs.get('dry_run', False):
+            # Get the password from the current row being processed
+            if hasattr(self, '_current_row_data'):
+                password = self._current_row_data.get('password')
+                if password and str(password).strip():
+                    # Use set_password to properly hash the password
+                    instance.set_password(str(password).strip())
+                    instance.save()
+                    print(f"Password set for user: {instance.username}")
+                elif new:  # Only set random password for new users
+                    random_password = get_random_string(8)
+                    instance.set_password(random_password)
+                    instance.save()
+                    print(f"Random password set for new user: {instance.username}")
+    
+    def import_obj(self, obj, data, dry_run, **kwargs):
+        """Store row data for password processing and prevent password from being set directly"""
+        # Store the current row data for use in after_import_instance
+        self._current_row_data = data.copy()
+        
+        # Remove password from data so it's not set directly on the model
+        if 'password' in data:
+            data_copy = data.copy()
+            del data_copy['password']
+        else:
+            data_copy = data
+        
+        # Call the default import without password
+        return super().import_obj(obj, data_copy, dry_run, **kwargs)
+            
+    def dehydrate_password(self, user):
+        """Don't export actual password hashes for security"""
+        return "*** HIDDEN ***"
 
 
 class ProfileResource(resources.ModelResource):
@@ -182,14 +240,16 @@ class UserProfileCombinedResource(resources.ModelResource):
     """
     Combined User + Profile resource for importing both from a single file.
     This allows creating users and their profiles from one CSV/Excel file.
+    Includes password handling functionality.
     """
     
     # User fields - these will be handled in the import logic, not as model fields
-    username = fields.Field(column_name='username')
-    first_name = fields.Field(column_name='first_name')
-    last_name = fields.Field(column_name='last_name')
-    email = fields.Field(column_name='email')
-    is_active = fields.Field(column_name='is_active', widget=BooleanWidget())
+    username = fields.Field(column_name='username', readonly=True)
+    first_name = fields.Field(column_name='first_name', readonly=True)
+    last_name = fields.Field(column_name='last_name', readonly=True)
+    email = fields.Field(column_name='email', readonly=True)
+    password = fields.Field(column_name='password', readonly=True)
+    is_active = fields.Field(column_name='is_active', widget=BooleanWidget(), readonly=True)
     
     # Profile fields
     stab_name = fields.Field(
@@ -211,77 +271,146 @@ class UserProfileCombinedResource(resources.ModelResource):
     class Meta:
         model = Profile
         fields = (
+            'username', 'first_name', 'last_name', 'email', 'password', 'is_active',
             'telefonszam', 'medias', 'admin_type', 'special_role',
             'stab_name', 'radio_stab_team', 'osztaly_name'
         )
         # Note: User fields (username, first_name, etc.) are handled in import_obj method
     
+    def skip_row(self, instance, original, row, import_validation_errors=None):
+        """Skip rows that are completely empty or have no meaningful data"""
+        username = row.get('username')
+        first_name = row.get('first_name', '')
+        last_name = row.get('last_name', '')
+        email = row.get('email', '')
+        
+        # Skip if username is empty or all key fields are empty
+        if not username or not str(username).strip():
+            return True
+            
+        # Skip if all key fields are empty
+        if not any([str(field).strip() for field in [username, first_name, last_name, email] if field]):
+            return True
+            
+        return super().skip_row(instance, original, row, import_validation_errors)
+    
     def before_import_row(self, row, **kwargs):
         """Create or update user before creating/updating profile"""
         username = row.get('username')
-        if username:
-            user, created = User.objects.get_or_create(
-                username=username,
-                defaults={
-                    'first_name': row.get('first_name', ''),
-                    'last_name': row.get('last_name', ''),
-                    'email': row.get('email', ''),
-                    'is_active': row.get('is_active', True) if row.get('is_active') else True
-                }
-            )
-            if not created:
-                # Update existing user
-                user.first_name = row.get('first_name', user.first_name)
-                user.last_name = row.get('last_name', user.last_name)
-                user.email = row.get('email', user.email)
-                if row.get('is_active') is not None:
-                    user.is_active = row.get('is_active')
-                user.save()
+        
+        # Skip empty rows - if no username provided, skip processing
+        if not username or not str(username).strip():
+            return
+            
+        # Also check if other required fields are empty
+        first_name = row.get('first_name', '')
+        last_name = row.get('last_name', '')
+        email = row.get('email', '')
+        
+        # Skip if all key fields are empty
+        if not any([str(field).strip() for field in [username, first_name, last_name, email] if field]):
+            return
+            
+        password = row.get('password')
+        
+        # Handle password processing
+        if password:
+            hashed_password = make_password(password)
+        else:
+            # Generate random password if none provided
+            random_password = get_random_string(8)
+            hashed_password = make_password(random_password)
+            row['generated_password'] = random_password  # Store for logging/reference
+        
+        # Generate unique username if this one already exists
+        base_username = username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}_{counter}"
+            counter += 1
+        
+        # Update the row with the unique username
+        if username != base_username:
+            row['username'] = username
+        
+        user, created = User.objects.get_or_create(
+            username=username,
+            defaults={
+                'first_name': row.get('first_name', ''),
+                'last_name': row.get('last_name', ''),
+                'email': row.get('email', ''),
+                'password': hashed_password,
+                'is_active': row.get('is_active', True) if row.get('is_active') else True
+            }
+        )
+        if not created:
+            # Update existing user
+            user.first_name = row.get('first_name', user.first_name)
+            user.last_name = row.get('last_name', user.last_name)
+            user.email = row.get('email', user.email)
+            if password:  # Only update password if provided
+                user.password = hashed_password
+            if row.get('is_active') is not None:
+                user.is_active = row.get('is_active')
+            user.save()
     
     def import_obj(self, obj, data, dry_run, **kwargs):
         """Custom import logic to handle user-profile relationship"""
         username = data.get('username')
-        if username:
-            try:
-                user = User.objects.get(username=username)
-                # Get or create profile for this user
-                profile, created = Profile.objects.get_or_create(user=user)
+        
+        # Skip empty rows - if no username provided, skip processing
+        if not username or not str(username).strip():
+            return None
+            
+        # Also check if other required fields are empty
+        first_name = data.get('first_name', '')
+        last_name = data.get('last_name', '')
+        email = data.get('email', '')
+        
+        # Skip if all key fields are empty
+        if not any([str(field).strip() for field in [username, first_name, last_name, email] if field]):
+            return None
+            
+        try:
+            user = User.objects.get(username=username)
+            # Get or create profile for this user
+            profile, created = Profile.objects.get_or_create(user=user)
+            
+            # Update profile fields
+            for field_name in ['telefonszam', 'medias', 'admin_type', 'special_role']:
+                if field_name in data and data[field_name] is not None:
+                    setattr(profile, field_name, data[field_name])
+            
+            # Handle foreign key relationships
+            if data.get('stab_name'):
+                try:
+                    stab = Stab.objects.get(name=data['stab_name'])
+                    profile.stab = stab
+                except Stab.DoesNotExist:
+                    pass
+            
+            if data.get('radio_stab_team'):
+                try:
+                    radio_stab = RadioStab.objects.get(team_code=data['radio_stab_team'])
+                    profile.radio_stab = radio_stab
+                except RadioStab.DoesNotExist:
+                    pass
+            
+            if data.get('osztaly_name'):
+                try:
+                    widget = OsztalyWidget(Osztaly)
+                    osztaly = widget.clean(data['osztaly_name'])
+                    profile.osztaly = osztaly
+                except (ValueError, Osztaly.DoesNotExist):
+                    pass
+            
+            if not dry_run:
+                profile.save()
+            
+            return profile
                 
-                # Update profile fields
-                for field_name in ['telefonszam', 'medias', 'admin_type', 'special_role']:
-                    if field_name in data and data[field_name] is not None:
-                        setattr(profile, field_name, data[field_name])
-                
-                # Handle foreign key relationships
-                if data.get('stab_name'):
-                    try:
-                        stab = Stab.objects.get(name=data['stab_name'])
-                        profile.stab = stab
-                    except Stab.DoesNotExist:
-                        pass
-                
-                if data.get('radio_stab_team'):
-                    try:
-                        radio_stab = RadioStab.objects.get(team_code=data['radio_stab_team'])
-                        profile.radio_stab = radio_stab
-                    except RadioStab.DoesNotExist:
-                        pass
-                
-                if data.get('osztaly_name'):
-                    try:
-                        widget = OsztalyWidget(Osztaly)
-                        osztaly = widget.clean(data['osztaly_name'])
-                        profile.osztaly = osztaly
-                    except (ValueError, Osztaly.DoesNotExist):
-                        pass
-                
-                if not dry_run:
-                    profile.save()
-                
-                return profile
-                
-            except User.DoesNotExist:
-                pass
+        except User.DoesNotExist:
+            pass
         
         return super().import_obj(obj, data, dry_run, **kwargs)
 

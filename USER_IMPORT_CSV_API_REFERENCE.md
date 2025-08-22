@@ -141,6 +141,7 @@ The CSV file should contain the following columns (Hungarian headers supported):
 | `vezetekNev` | `Vezetéknév` | ✅ | Last name |
 | `keresztNev` | `Keresztnév` | ✅ | First name |
 | `email` | `E-mail cím` | ✅ | Email address |
+| `password` | `Jelszó` | ❌ | Password (will be auto-generated if empty) |
 | `telefonszam` | `Telefonszám` | ❌ | Phone number |
 | `stab` | `Stáb` | ❌ | Radio stab assignment |
 | `kezdesEve` | `Kezdés éve` | ❌ | Starting year |
