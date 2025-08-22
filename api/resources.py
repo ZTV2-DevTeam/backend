@@ -111,12 +111,9 @@ class OsztalyWidget(ForeignKeyWidget):
 class UserResource(resources.ModelResource):
     """User import/export with comprehensive fields including password handling"""
     
-    # Custom field for password that won't be directly assigned
-    password = fields.Field(column_name='password', attribute=None, readonly=False)
-    
     class Meta:
         model = User
-        fields = ('id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'date_joined')
+        fields = ('id', 'username', 'first_name', 'last_name', 'email', 'password', 'is_active', 'is_staff', 'date_joined')
         export_order = ('id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'date_joined')
         
     def skip_row(self, instance, original, row, import_validation_errors=None):
@@ -136,37 +133,36 @@ class UserResource(resources.ModelResource):
             
         return super().skip_row(instance, original, row, import_validation_errors)
         
+    def before_import_row(self, row, **kwargs):
+        """Process password field before importing - hash it immediately"""
+        username = row.get('username')
+        
+        # Skip empty rows - if no username provided, skip processing
+        if not username or not str(username).strip():
+            return
+            
+        # Hash the password immediately if provided
+        password = row.get('password')
+        if password and str(password).strip():
+            # Hash the password using Django's make_password
+            hashed_password = make_password(str(password).strip())
+            row['password'] = hashed_password
+            print(f"Password hashed for user: {username}")
+        elif row.get('password') == '':
+            # If password is empty string, generate random password
+            random_password = get_random_string(8)
+            hashed_password = make_password(random_password)
+            row['password'] = hashed_password
+            row['generated_password'] = random_password
+            print(f"Random password generated and hashed for user: {username}")
+    
     def after_import_instance(self, instance, new, row_number=None, **kwargs):
-        """Set password after the instance is created"""
-        if instance and not kwargs.get('dry_run', False):
-            # Get the password from the current row being processed
-            if hasattr(self, '_current_row_data'):
-                password = self._current_row_data.get('password')
-                if password and str(password).strip():
-                    # Use set_password to properly hash the password
-                    instance.set_password(str(password).strip())
-                    instance.save()
-                    print(f"Password set for user: {instance.username}")
-                elif new:  # Only set random password for new users
-                    random_password = get_random_string(8)
-                    instance.set_password(random_password)
-                    instance.save()
-                    print(f"Random password set for new user: {instance.username}")
+        """No longer needed since password is hashed in before_import_row"""
+        pass
     
     def import_obj(self, obj, data, dry_run, **kwargs):
-        """Store row data for password processing and prevent password from being set directly"""
-        # Store the current row data for use in after_import_instance
-        self._current_row_data = data.copy()
-        
-        # Remove password from data so it's not set directly on the model
-        if 'password' in data:
-            data_copy = data.copy()
-            del data_copy['password']
-        else:
-            data_copy = data
-        
-        # Call the default import without password
-        return super().import_obj(obj, data_copy, dry_run, **kwargs)
+        """Standard import - password is already hashed"""
+        return super().import_obj(obj, data, dry_run, **kwargs)
             
     def dehydrate_password(self, user):
         """Don't export actual password hashes for security"""
