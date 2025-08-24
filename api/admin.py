@@ -827,3 +827,11 @@ admin.site.register(SzerepkorRelaciok, SzerepkorRelaciokAdmin)
 admin.site.site_header = '🎬 FTV Adminisztráció'
 admin.site.site_title = 'FTV Admin'
 admin.site.index_title = 'FTV Rendszer Adminisztráció'
+
+# Register Atigazolas model
+@admin.register(Atigazolas)
+class AtigazolasAdmin(ImportExportModelAdmin):
+    resource_class = AtigazolasResource if 'AtigazolasResource' in globals() else None
+    list_display = ['profile', 'previous_stab', 'previous_radio_stab', 'new_stab', 'new_radio_stab', 'datetime']
+    search_fields = ['profile__user__username', 'profile__user__first_name', 'profile__user__last_name', 'previous_stab', 'new_stab', 'previous_radio_stab', 'new_radio_stab']
+    list_filter = ['previous_stab', 'new_stab', 'previous_radio_stab', 'new_radio_stab', 'datetime']

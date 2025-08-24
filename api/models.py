@@ -100,6 +100,30 @@ class Profile(models.Model):
     special_role = models.CharField(max_length=20, choices=SPECIAL_ROLES, default='none', verbose_name='Különleges szerep',
                                    help_text='A felhasználó különleges szerepe a rendszerben')
 
+    def save(self, *args, **kwargs):
+        creating = self.pk is None
+        previous_stab = None
+        previous_radio_stab = None
+        if not creating:
+            old = Profile.objects.get(pk=self.pk)
+            previous_stab = old.stab.name if old.stab else None
+            previous_radio_stab = old.radio_stab.name if old.radio_stab else None
+        super().save(*args, **kwargs)
+        if not creating:
+            new_stab = self.stab.name if self.stab else None
+            new_radio_stab = self.radio_stab.name if self.radio_stab else None
+            stab_changed = previous_stab != new_stab and previous_stab is not None
+            radio_stab_changed = previous_radio_stab != new_radio_stab and previous_radio_stab is not None
+            if stab_changed or radio_stab_changed:
+                from api.models import Atigazolas
+                Atigazolas.objects.create(
+                    profile=self,
+                    previous_stab=previous_stab if stab_changed else None,
+                    previous_radio_stab=previous_radio_stab if radio_stab_changed else None,
+                    new_stab=new_stab if stab_changed else None,
+                    new_radio_stab=new_radio_stab if radio_stab_changed else None
+                )
+
     def __str__(self):
         return self.user.get_full_name()
     
@@ -226,6 +250,22 @@ class Profile(models.Model):
             date__gte=start_date,
             date__lte=end_date
         ).order_by('date', 'time_from')
+
+class Atigazolas(models.Model):
+    # Atigazolas records get automatically generated via saving the Profile and stores, whether the Stáb or Rádiós stáb fields got changed and if they did, it keeps track of the previous values. Does not apply for null -> data
+    profile = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='atigazolasok')
+    previous_stab = models.CharField(max_length=100, blank=True, null=True)
+    previous_radio_stab = models.CharField(max_length=100, blank=True, null=True)
+    new_stab = models.CharField(max_length=100, blank=True, null=True)
+    new_radio_stab = models.CharField(max_length=100, blank=True, null=True)
+    datetime = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Átigazolas'
+        verbose_name_plural = 'Átigazolasok'
+
+    def __str__(self):
+        return f'Átigazolas: {self.profile} - {self.datetime}'
 
 class Osztaly(models.Model):
     startYear = models.IntegerField(blank=False, null=False, verbose_name='Indulási év', 
