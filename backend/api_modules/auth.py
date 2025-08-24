@@ -88,6 +88,8 @@ class JWTAuth(HttpBearer):
                 user = User.objects.get(id=user_id)
                 if user.is_active:  # Check if user is active
                     print(f"User {user.username} authenticated successfully")  # Debug
+                    user.last_login = datetime.now()
+                    user.save(update_fields=["last_login"])
                     return user
                 else:
                     print(f"User {user.username} is not active")  # Debug
