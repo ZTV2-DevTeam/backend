@@ -23,7 +23,7 @@ django.setup()
 
 from django.contrib.auth.models import User
 from api.models import Profile, Osztaly, Tanev, Stab, RadioStab
-from api.resources import UserProfileCombinedResource, OsztalyWidget
+from api.resources import ProfileResource, OsztalyWidget
 from import_export import resources
 import tablib
 
@@ -130,7 +130,7 @@ test.teacher,Test,Teacher,teacher@example.com,TRUE,+36304444444,FALSE,teacher,no
     User.objects.filter(username__startswith='test.').delete()
     
     # Import the data
-    resource = UserProfileCombinedResource()
+    resource = ProfileResource()
     dataset = tablib.Dataset().load(csv_data, format='csv', headers=True)
     
     print("Importing data...")

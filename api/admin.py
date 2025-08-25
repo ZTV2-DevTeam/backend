@@ -120,7 +120,7 @@ class OsztalyAdmin(ImportExportModelAdmin):
 
 @admin.register(Profile)
 class ProfileAdmin(ImportExportModelAdmin):
-    resource_classes = [ProfileResource, UserProfileCombinedResource]  # Multiple resources
+    resource_classes = [ProfileResource]  # Use only ProfileResource which handles both osztaly_name and osztaly_display
     list_display = ['user_full_name', 'user_status', 'telefonszam', 'medias', 'display_osztaly', 'display_stab', 'admin_level', 'special_role_display']
     list_filter = [
         'medias', 'osztaly', 'stab', 'radio_stab', 'admin_type', 

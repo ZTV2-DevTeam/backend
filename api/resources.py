@@ -30,19 +30,24 @@ class OsztalyWidget(ForeignKeyWidget):
     
     def clean(self, value, row=None, **kwargs):
         if not value:
+            print(f"[DEBUG] OsztalyWidget: No value provided")
             return None
             
         value = str(value).strip()
+        print(f"[DEBUG] OsztalyWidget: Processing value '{value}'")
         
         # Try direct format: "startYear-szekcio" (e.g., "2023-F")
         if '-' in value:
             try:
                 start_year, szekcio = value.split('-', 1)
-                return self.model.objects.get(
+                osztaly = self.model.objects.get(
                     startYear=int(start_year),
                     szekcio=szekcio.upper()
                 )
-            except (ValueError, self.model.DoesNotExist):
+                print(f"[DEBUG] OsztalyWidget: Found osztaly by direct format: {osztaly}")
+                return osztaly
+            except (ValueError, self.model.DoesNotExist) as e:
+                print(f"[DEBUG] OsztalyWidget: Direct format failed: {e}")
                 pass
         
         # Try dynamic format: "9F", "10A", etc.
@@ -50,6 +55,7 @@ class OsztalyWidget(ForeignKeyWidget):
         if value.upper().endswith('F') and len(value) >= 2:
             try:
                 year_number = int(value[:-1])
+                print(f"[DEBUG] OsztalyWidget: F format - year_number: {year_number}")
                 if 8 <= year_number <= 12:  # Valid F class years
                     from datetime import datetime
                     current_year = datetime.now().year
@@ -61,11 +67,15 @@ class OsztalyWidget(ForeignKeyWidget):
                     else:
                         start_year = current_year - (year_number - 8) - 1
                     
-                    return self.model.objects.get(
+                    print(f"[DEBUG] OsztalyWidget: F format - calculated startYear: {start_year}")
+                    osztaly = self.model.objects.get(
                         startYear=start_year,
                         szekcio='F'
                     )
-            except (ValueError, self.model.DoesNotExist):
+                    print(f"[DEBUG] OsztalyWidget: Found osztaly by F format: {osztaly}")
+                    return osztaly
+            except (ValueError, self.model.DoesNotExist) as e:
+                print(f"[DEBUG] OsztalyWidget: F format failed: {e}")
                 pass
         
         # Try other sections: "21A", "22B", etc.
@@ -84,14 +94,18 @@ class OsztalyWidget(ForeignKeyWidget):
                 else:
                     start_year = int(year_part)
                 
-                return self.model.objects.get(
+                osztaly = self.model.objects.get(
                     startYear=start_year,
                     szekcio=szekcio
                 )
-            except (ValueError, self.model.DoesNotExist):
+                print(f"[DEBUG] OsztalyWidget: Found osztaly by section format: {osztaly}")
+                return osztaly
+            except (ValueError, self.model.DoesNotExist) as e:
+                print(f"[DEBUG] OsztalyWidget: Section format failed: {e}")
                 pass
         
         # If all else fails, raise an error
+        print(f"[ERROR] OsztalyWidget: All format attempts failed for value '{value}'")
         raise ValueError(
             f"Invalid osztaly format: '{value}'. "
             f"Use formats like: '2023-F', '9F', '2021-A', '21A'"
@@ -170,31 +184,36 @@ class UserResource(resources.ModelResource):
 
 
 class ProfileResource(resources.ModelResource):
-    """Profile import/export with user relationship and related objects"""
+    """
+    Profile import/export with user relationship and profile fields.
+    Only username is needed to establish User foreign key connection.
+    """
     
-    # User fields
+    # Username field to establish User foreign key connection
     username = fields.Field(
         column_name='username',
         attribute='user',
         widget=ForeignKeyWidget(User, 'username')
     )
-    user_first_name = fields.Field(
-        column_name='user_first_name',
-        attribute='user__first_name',
-        readonly=True
-    )
-    user_last_name = fields.Field(
-        column_name='user_last_name', 
-        attribute='user__last_name',
-        readonly=True
-    )
-    user_email = fields.Field(
-        column_name='user_email',
-        attribute='user__email',
-        readonly=True
-    )
     
-    # Related objects by name
+    # Profile fields only
+    telefonszam = fields.Field(
+        column_name='telefonszam',
+        attribute='telefonszam'
+    )
+    medias = fields.Field(
+        column_name='medias',
+        attribute='medias',
+        widget=BooleanWidget()
+    )
+    admin_type = fields.Field(
+        column_name='admin_type',
+        attribute='admin_type'
+    )
+    special_role = fields.Field(
+        column_name='special_role',
+        attribute='special_role'
+    )
     stab_name = fields.Field(
         column_name='stab_name',
         attribute='stab',
@@ -208,207 +227,139 @@ class ProfileResource(resources.ModelResource):
     osztaly_display = fields.Field(
         column_name='osztaly_display',
         attribute='osztaly',
-        readonly=True
-    )
-    
-    # Import/Export field for osztaly using the string representation
-    osztaly_name = fields.Field(
-        column_name='osztaly_name',
-        attribute='osztaly',
         widget=OsztalyWidget(Osztaly)
     )
     
     class Meta:
         model = Profile
         fields = (
-            'id', 'username', 'user_first_name', 'user_last_name', 'user_email',
-            'telefonszam', 'medias', 'admin_type', 'special_role',
-            'stab_name', 'radio_stab_team', 'osztaly_display', 'osztaly_name'
+            'username', 'telefonszam', 'medias', 'admin_type', 'special_role', 
+            'stab_name', 'radio_stab_team', 'osztaly_display'
         )
         export_order = (
-            'id', 'username', 'user_first_name', 'user_last_name', 'user_email',
-            'telefonszam', 'medias', 'admin_type', 'special_role',
-            'stab_name', 'radio_stab_team', 'osztaly_display', 'osztaly_name'
+            'id', 'username', 'telefonszam', 'medias', 'admin_type', 'special_role', 
+            'stab_name', 'radio_stab_team', 'osztaly_display'
         )
-
-
-class UserProfileCombinedResource(resources.ModelResource):
-    """
-    Combined User + Profile resource for importing both from a single file.
-    This allows creating users and their profiles from one CSV/Excel file.
-    Includes password handling functionality.
-    """
-    
-    # User fields - these will be handled in the import logic, not as model fields
-    username = fields.Field(column_name='username', readonly=True)
-    first_name = fields.Field(column_name='first_name', readonly=True)
-    last_name = fields.Field(column_name='last_name', readonly=True)
-    email = fields.Field(column_name='email', readonly=True)
-    password = fields.Field(column_name='password', readonly=True)
-    is_active = fields.Field(column_name='is_active', widget=BooleanWidget(), readonly=True)
-    
-    # Profile fields
-    stab_name = fields.Field(
-        column_name='stab_name',
-        attribute='stab',
-        widget=ForeignKeyWidget(Stab, 'name')
-    )
-    radio_stab_team = fields.Field(
-        column_name='radio_stab_team',
-        attribute='radio_stab',
-        widget=ForeignKeyWidget(RadioStab, 'team_code')
-    )
-    osztaly_name = fields.Field(
-        column_name='osztaly_name',
-        attribute='osztaly',
-        widget=OsztalyWidget(Osztaly)
-    )
-    
-    class Meta:
-        model = Profile
-        fields = (
-            'username', 'first_name', 'last_name', 'email', 'password', 'is_active',
-            'telefonszam', 'medias', 'admin_type', 'special_role',
-            'stab_name', 'radio_stab_team', 'osztaly_name'
-        )
-        # Note: User fields (username, first_name, etc.) are handled in import_obj method
     
     def skip_row(self, instance, original, row, import_validation_errors=None):
-        """Skip rows that are completely empty or have no meaningful data"""
+        """Skip rows with empty username"""
         username = row.get('username')
-        first_name = row.get('first_name', '')
-        last_name = row.get('last_name', '')
-        email = row.get('email', '')
-        
-        # Skip if username is empty or all key fields are empty
         if not username or not str(username).strip():
+            print(f"[DEBUG] Skipping row - username is empty")
             return True
-            
-        # Skip if all key fields are empty
-        if not any([str(field).strip() for field in [username, first_name, last_name, email] if field]):
-            return True
-            
         return super().skip_row(instance, original, row, import_validation_errors)
     
     def before_import_row(self, row, **kwargs):
-        """Create or update user before creating/updating profile"""
+        """Create or update User before creating Profile - User fields are already defined in User model"""
         username = row.get('username')
-        
-        # Skip empty rows - if no username provided, skip processing
         if not username or not str(username).strip():
             return
+        
+        username = str(username).strip()
+        row['username'] = username
+        
+        print(f"[DEBUG] Processing user: {username}")
+        
+        # Handle osztaly - try osztaly_display first, then osztaly_name
+        osztaly_value = row.get('osztaly_display') or row.get('osztaly_name')
+        if osztaly_value:
+            # Set osztaly_display so the widget can process it
+            row['osztaly_display'] = osztaly_value
+            print(f"[DEBUG] Setting osztaly_display to: {osztaly_value}")
+        
+        # User model already has first_name, last_name, email, is_active fields
+        # We just need to ensure the User exists with the username
+        try:
+            user, created = User.objects.get_or_create(
+                username=username,
+                defaults={
+                    'password': make_password(get_random_string(8)),  # Default password for new users
+                }
+            )
             
-        # Also check if other required fields are empty
-        first_name = row.get('first_name', '')
-        last_name = row.get('last_name', '')
-        email = row.get('email', '')
-        
-        # Skip if all key fields are empty
-        if not any([str(field).strip() for field in [username, first_name, last_name, email] if field]):
-            return
+            print(f"[DEBUG] User {'created' if created else 'found'}: {username} (ID: {user.id})")
             
-        password = row.get('password')
-        
-        # Handle password processing
-        if password:
-            hashed_password = make_password(password)
-        else:
-            # Generate random password if none provided
-            random_password = get_random_string(8)
-            hashed_password = make_password(random_password)
-            row['generated_password'] = random_password  # Store for logging/reference
-        
-        # Generate unique username if this one already exists
-        base_username = username
-        counter = 1
-        while User.objects.filter(username=username).exists():
-            username = f"{base_username}_{counter}"
-            counter += 1
-        
-        # Update the row with the unique username
-        if username != base_username:
-            row['username'] = username
-        
-        user, created = User.objects.get_or_create(
-            username=username,
-            defaults={
-                'first_name': row.get('first_name', ''),
-                'last_name': row.get('last_name', ''),
-                'email': row.get('email', ''),
-                'password': hashed_password,
-                'is_active': row.get('is_active', True) if row.get('is_active') else True
-            }
-        )
-        if not created:
-            # Update existing user
-            user.first_name = row.get('first_name', user.first_name)
-            user.last_name = row.get('last_name', user.last_name)
-            user.email = row.get('email', user.email)
-            if password:  # Only update password if provided
-                user.password = hashed_password
-            if row.get('is_active') is not None:
-                user.is_active = row.get('is_active')
-            user.save()
+        except Exception as e:
+            print(f"[ERROR] Failed to create/update user {username}: {e}")
+            raise
     
-    def import_obj(self, obj, data, dry_run, **kwargs):
-        """Custom import logic to handle user-profile relationship"""
-        username = data.get('username')
-        
-        # Skip empty rows - if no username provided, skip processing
-        if not username or not str(username).strip():
+    def get_instance(self, instance_loader, row):
+        """Get existing Profile instance based on username"""
+        username = row.get('username')
+        if not username:
             return None
-            
-        # Also check if other required fields are empty
-        first_name = data.get('first_name', '')
-        last_name = data.get('last_name', '')
-        email = data.get('email', '')
         
-        # Skip if all key fields are empty
-        if not any([str(field).strip() for field in [username, first_name, last_name, email] if field]):
-            return None
-            
+        username = str(username).strip()
+        
         try:
             user = User.objects.get(username=username)
-            # Get or create profile for this user
-            profile, created = Profile.objects.get_or_create(user=user)
-            
-            # Update profile fields
-            for field_name in ['telefonszam', 'medias', 'admin_type', 'special_role']:
-                if field_name in data and data[field_name] is not None:
-                    setattr(profile, field_name, data[field_name])
-            
-            # Handle foreign key relationships
-            if data.get('stab_name'):
-                try:
-                    stab = Stab.objects.get(name=data['stab_name'])
-                    profile.stab = stab
-                except Stab.DoesNotExist:
-                    pass
-            
-            if data.get('radio_stab_team'):
-                try:
-                    radio_stab = RadioStab.objects.get(team_code=data['radio_stab_team'])
-                    profile.radio_stab = radio_stab
-                except RadioStab.DoesNotExist:
-                    pass
-            
-            if data.get('osztaly_name'):
-                try:
-                    widget = OsztalyWidget(Osztaly)
-                    osztaly = widget.clean(data['osztaly_name'])
-                    profile.osztaly = osztaly
-                except (ValueError, Osztaly.DoesNotExist):
-                    pass
-            
-            if not dry_run:
-                profile.save()
-            
-            return profile
-                
+            try:
+                profile = Profile.objects.get(user=user)
+                print(f"[DEBUG] Found existing profile for {username}")
+                return profile
+            except Profile.DoesNotExist:
+                print(f"[DEBUG] No existing profile for {username}")
+                return None
         except User.DoesNotExist:
-            pass
+            print(f"[DEBUG] User {username} does not exist")
+            return None
+    
+    def import_obj(self, obj, data, dry_run, **kwargs):
+        """Import Profile object with User relationship based on username"""
+        username = data.get('username')
+        if not username or not str(username).strip():
+            print(f"[ERROR] No username provided for Profile import")
+            return None
         
-        return super().import_obj(obj, data, dry_run, **kwargs)
+        username = str(username).strip()
+        print(f"[DEBUG] import_obj for username: {username}")
+        
+        # Get the user based on username
+        try:
+            user = User.objects.get(username=username)
+            print(f"[DEBUG] Found user: {user.username} (ID: {user.id})")
+        except User.DoesNotExist:
+            print(f"[ERROR] User {username} not found during profile import")
+            return None
+        
+        # Create or update Profile and ensure user is linked
+        if obj is None:
+            obj = Profile(user=user)
+            print(f"[DEBUG] Creating new profile for {username}")
+        else:
+            obj.user = user  # Ensure user is linked
+            print(f"[DEBUG] Updating existing profile for {username}")
+        
+        # Set Profile-specific fields only
+        obj.telefonszam = data.get('telefonszam', '') or None
+        obj.medias = self._convert_boolean(data.get('medias', True))
+        obj.admin_type = data.get('admin_type', 'none') or 'none'
+        obj.special_role = data.get('special_role', 'none') or 'none'
+        
+        print(f"[DEBUG] Profile import completed for {username}, user_id will be: {user.id}")
+        return obj
+    
+    def _convert_boolean(self, value):
+        """Convert various boolean representations to actual boolean"""
+        if isinstance(value, str):
+            value = value.strip().upper()
+            return value in ['IGAZ', 'TRUE', '1', 'YES', 'Y']
+        return bool(value)
+    
+    # Dehydrate methods for export
+    def dehydrate_username(self, profile):
+        return profile.user.username if profile.user else ''
+    
+    def dehydrate_stab_name(self, profile):
+        return profile.stab.name if profile.stab else ''
+    
+    def dehydrate_radio_stab_team(self, profile):
+        return profile.radio_stab.team_code if profile.radio_stab else ''
+    
+    def dehydrate_osztaly(self, profile):
+        if profile.osztaly:
+            return f"{profile.osztaly.startYear}-{profile.osztaly.szekcio}"
+        return ""
 
 
 # ============================================================================
