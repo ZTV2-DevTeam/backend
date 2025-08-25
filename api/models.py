@@ -1,8 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import User
 from datetime import datetime, date, timedelta, time
-from django.db.models.signals import m2m_changed
+from django.db.models.signals import m2m_changed, pre_save, post_save
 from django.dispatch import receiver
+from django.contrib.auth.hashers import make_password
 
 # Monkey patch Django's User model to change get_full_name format
 def get_full_name_flipped(self):
@@ -22,6 +23,45 @@ def get_full_name_flipped(self):
 
 # Apply the monkey patch
 User.get_full_name = get_full_name_flipped
+
+# ============================================================================
+# SIGNAL HANDLERS FOR USER PASSWORD MANAGEMENT
+# ============================================================================
+
+@receiver(pre_save, sender=User)
+def hash_unhashed_password(sender, instance, **kwargs):
+    """
+    Automatically hash unhashed passwords when User is saved.
+    Only hashes passwords that are not already hashed.
+    """
+    # Skip if no password is set
+    if not instance.password:
+        return
+    
+    # Check if password is already hashed (Django hash formats)
+    if instance.password.startswith(('pbkdf2_sha256$', 'bcrypt$', 'argon2$', 'scrypt$')):
+        return
+    
+    # Check if this is actually a password change
+    try:
+        if instance.pk:
+            # Get the current instance from database
+            old_instance = User.objects.get(pk=instance.pk)
+            # If password hasn't changed, don't rehash
+            if old_instance.password == instance.password:
+                return
+    except User.DoesNotExist:
+        # New user, proceed with hashing
+        pass
+    
+    # Hash the plain text password
+    original_password = instance.password
+    instance.password = make_password(instance.password)
+    print(f"🔐 Password auto-hashed for user: {instance.username} (was: {original_password[:10]}...)")
+
+# ============================================================================
+# MODEL DEFINITIONS
+# ============================================================================
 
 # Create your models here.
 

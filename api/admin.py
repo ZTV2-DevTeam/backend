@@ -1,9 +1,15 @@
 from django.contrib import admin
 from django.contrib.auth.models import User
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django.urls import reverse
 from django.utils import timezone
+from django.contrib.auth.hashers import check_password, make_password
+from django.core.exceptions import ValidationError
+from django.contrib.auth.password_validation import validate_password
+from django import forms
 from import_export.admin import ImportExportModelAdmin, ExportActionMixin
 from .models import *
 from .resources import *
@@ -12,23 +18,85 @@ from .resources import *
 # � USER MANAGEMENT WITH IMPORT/EXPORT
 # ============================================================================
 
+class CustomUserChangeForm(UserChangeForm):
+    """Custom user change form with proper password handling"""
+    password = forms.CharField(
+        label="Jelszó",
+        widget=forms.PasswordInput(attrs={'placeholder': 'Új jelszó (hagyja üresen, ha nem változtatja)'}),
+        required=False,
+        help_text="Írjon be egy új jelszót, ha meg szeretné változtatni. Hagyja üresen, ha nem szeretné módosítani."
+    )
+    
+    class Meta:
+        model = User
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Remove the default password field help text and widget
+        if 'password' in self.fields:
+            self.fields['password'].help_text = "Írjon be egy új jelszót, ha meg szeretné változtatni."
+    
+    def clean_password(self):
+        password = self.cleaned_data.get('password')
+        if password:
+            # Only validate if a new password is provided
+            try:
+                validate_password(password, self.instance)
+            except ValidationError as e:
+                raise ValidationError(' '.join(e.messages))
+        return password
+    
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        password = self.cleaned_data.get('password')
+        
+        if password:
+            # Check if the password is already hashed
+            if not password.startswith(('pbkdf2_sha256$', 'bcrypt$', 'argon2$')):
+                # Only hash unhashed passwords
+                user.set_password(password)
+            else:
+                # If it's already hashed (shouldn't happen with our form), use as is
+                user.password = password
+        
+        if commit:
+            user.save()
+        return user
+
+class CustomUserCreationForm(UserCreationForm):
+    """Custom user creation form with proper password handling"""
+    
+    class Meta:
+        model = User
+        fields = ('username', 'email', 'first_name', 'last_name')
+    
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        if commit:
+            user.save()
+        return user
+
 # Unregister the default User admin and add our own with import/export
 admin.site.unregister(User)
 
 @admin.register(User)
 class UserAdmin(ImportExportModelAdmin):
     resource_class = UserResource
-    list_display = ['username', 'first_name', 'last_name', 'email', 'is_active', 'is_staff', 'date_joined']
+    form = CustomUserChangeForm
+    add_form = CustomUserCreationForm
+    
+    list_display = ['username', 'last_name', 'first_name', 'email', 'password_status', 'is_active', 'is_staff', 'date_joined']
     list_filter = ['is_active', 'is_staff', 'is_superuser', 'date_joined']
     search_fields = ['username', 'first_name', 'last_name', 'email']
-    readonly_fields = ['date_joined', 'last_login']
+    readonly_fields = ['date_joined', 'last_login', 'password_info']
     
     fieldsets = (
         ('👤 Felhasználó adatok', {
-            'fields': ('username', 'password')
+            'fields': ('username', 'password', 'password_info')
         }),
         ('📝 Személyes adatok', {
-            'fields': ('first_name', 'last_name', 'email')
+            'fields': ('last_name', 'first_name', 'email')
         }),
         ('🔐 Jogosultságok', {
             'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')
@@ -38,6 +106,66 @@ class UserAdmin(ImportExportModelAdmin):
             'classes': ('collapse',)
         })
     )
+    
+    add_fieldsets = (
+        ('👤 Új felhasználó', {
+            'classes': ('wide',),
+            'fields': ('username', 'email', 'last_name', 'first_name', 'password1', 'password2'),
+        }),
+        ('🔐 Jogosultságok', {
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups'),
+        }),
+    )
+    
+    def password_status(self, obj):
+        """Show password status in list view (dark mode support)"""
+        if obj.has_usable_password():
+            return format_html(
+                '<span style="color: #4caf50; font-weight: bold; background: #222; padding: 2px 6px; border-radius: 3px;">✅ Beállítva</span>'
+            )
+        else:
+            return format_html(
+                '<span style="color: #f44336; font-weight: bold; background: #222; padding: 2px 6px; border-radius: 3px;">❌ Nincs jelszó</span>'
+            )
+    password_status.short_description = 'Jelszó státusz'
+
+    def password_info(self, obj):
+        """Show password information in detail view (dark mode support)"""
+        if obj.has_usable_password():
+            if obj.password:
+                algorithm = obj.password.split('$')[0] if '$' in obj.password else 'unknown'
+                return format_html(
+                    '<div style="background: #222; color: #eee; padding: 10px; border-radius: 5px;">'
+                    '<strong style="color: #4caf50;">✅ Jelszó beállítva</strong><br>'
+                    '<small>Algoritmus: {}<br>'
+                    'Hash: {}...</small>'
+                    '</div>',
+                    algorithm, obj.password[:20]
+                )
+            return format_html(
+                '<span style="color: #4caf50; background: #222; padding: 2px 6px; border-radius: 3px;">✅ Jelszó beállítva</span>'
+            )
+        else:
+            return format_html(
+                '<div style="background: #330000; color: #ffcccc; padding: 10px; border-radius: 5px;">'
+                '<strong>❌ Nincs használható jelszó</strong><br>'
+                '<small>A felhasználó nem tud bejelentkezni</small>'
+                '</div>'
+            )
+    password_info.short_description = 'Jelszó információ'
+
+    def save_model(self, request, obj, form, change):
+        """Override save to ensure proper password handling"""
+        if change:  # Editing existing user
+            password = form.cleaned_data.get('password')
+            if password:
+                # Check if password is already hashed
+                if not password.startswith(('pbkdf2_sha256$', 'bcrypt$', 'argon2$')):
+                    # Hash the unhashed password
+                    obj.set_password(password)
+                # If already hashed, it was set in the form's save method
+        
+        super().save_model(request, obj, form, change)
 
 
 # ============================================================================
