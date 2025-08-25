@@ -100,6 +100,10 @@ class Profile(models.Model):
     special_role = models.CharField(max_length=20, choices=SPECIAL_ROLES, default='none', verbose_name='Különleges szerep',
                                    help_text='A felhasználó különleges szerepe a rendszerben')
 
+    class Meta:
+        verbose_name = 'Profil'
+        verbose_name_plural = 'Profilok'
+
     def save(self, *args, **kwargs):
         creating = self.pk is None
         previous_stab = None
