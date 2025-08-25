@@ -4,6 +4,25 @@ from datetime import datetime, date, timedelta, time
 from django.db.models.signals import m2m_changed
 from django.dispatch import receiver
 
+# Monkey patch Django's User model to change get_full_name format
+def get_full_name_flipped(self):
+    """
+    Return the last_name + ', ' + first_name, with a space in between.
+    If either name is missing, return the available name.
+    If both are missing, return empty string.
+    """
+    if self.last_name and self.first_name:
+        return f"{self.last_name} {self.first_name}"
+    elif self.last_name:
+        return self.last_name
+    elif self.first_name:
+        return self.first_name
+    else:
+        return ""
+
+# Apply the monkey patch
+User.get_full_name = get_full_name_flipped
+
 # Create your models here.
 
 
