@@ -17,6 +17,12 @@ class Command(BaseCommand):
             action='store_true',
             help='Perform a dry run without actually creating users',
         )
+        parser.add_argument(
+            '--chunk-size',
+            type=int,
+            default=3,
+            help='Number of users to process in each chunk (default: 3)',
+        )
 
     def handle(self, *args, **options):
         # Sample data from the attachment
@@ -262,12 +268,14 @@ class Command(BaseCommand):
         ]
 
         dry_run = options['dry_run']
+        chunk_size = options['chunk_size']
         
         if dry_run:
             self.stdout.write(self.style.WARNING('🔍 DRY RUN MODE - No data will be actually created'))
         
         self.stdout.write(f"🎬 Starting FTV User Import...")
         self.stdout.write(f"📊 Total users to import: {len(SAMPLE_USERS)}")
+        self.stdout.write(f"🔄 Processing in chunks of {chunk_size} users")
         
         # Create current school year
         current_tanev = self.get_or_create_current_tanev(dry_run)
@@ -288,7 +296,22 @@ class Command(BaseCommand):
         created_radio_stabs = set()
         created_classes = set()
         
-        for i, user_data in enumerate(SAMPLE_USERS, 1):
+        # Process users in chunks
+        total_users = len(SAMPLE_USERS)
+        for chunk_start in range(0, total_users, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, total_users)
+            chunk_users = SAMPLE_USERS[chunk_start:chunk_end]
+            
+            self.stdout.write(f"\n{'='*20} CHUNK {chunk_start//chunk_size + 1} {'='*20}")
+            self.stdout.write(f"📦 Processing users {chunk_start + 1}-{chunk_end} of {total_users}")
+            
+            # Force garbage collection before processing chunk
+            if not dry_run:
+                import gc
+                gc.collect()
+            
+            # Process each user in the current chunk
+            for i, user_data in enumerate(chunk_users, chunk_start + 1):
             self.stdout.write(f"\n{i:2d}. Processing: {user_data['vezetekNev']} {user_data['keresztNev']}")
             
             try:
@@ -328,6 +351,21 @@ class Command(BaseCommand):
                 error = f"Hiba a felhasználó {'létrehozásakor' if not dry_run else 'feldolgozásakor'} ({user_data['email']}): {str(e)}"
                 stats['errors'].append(error)
                 self.stdout.write(f"   ❌ {error}")
+            
+            # Force database connection cleanup and garbage collection after each chunk
+            if not dry_run:
+                from django.db import connection
+                connection.close()
+                import gc
+                gc.collect()
+            
+            self.stdout.write(f"📊 Chunk completed. Users {'would be ' if dry_run else ''}created so far: {stats['created_users']}")
+            self.stdout.write(f"💾 Memory cleanup performed. Ready for next chunk...")
+            
+            # Optional: Add a small delay between chunks to allow memory cleanup
+            if chunk_end < total_users and not dry_run:
+                import time
+                time.sleep(1)  # 1 second pause between chunks
         
         # Print final statistics
         self.stdout.write("\n" + "=" * 60)

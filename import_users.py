@@ -364,11 +364,31 @@ def parse_radio_stab_name(start_year: str, radio_code: str) -> str:
         return None
     return f"{start_year} {radio_code}"
 
-def import_users():
-    """Import all users from the sample data."""
+def import_users(chunk_size=3, disable_signals=True):
+    """Import all users from the sample data in chunks to avoid memory issues."""
     print("🎬 Starting FTV User Import...")
     print(f"📊 Total users to import: {len(SAMPLE_USERS)}")
+    print(f"🔄 Processing in chunks of {chunk_size} users")
+    
+    if disable_signals:
+        print("🔇 Email signals will be disabled during import")
+    
     print("=" * 60)
+    
+    # Disable email signals during import to reduce memory usage
+    if disable_signals:
+        from django.db.models.signals import post_save, m2m_changed
+        from api.models import Announcement, Beosztas
+        
+        # Disconnect email signal handlers
+        try:
+            from api.models import send_announcement_email, send_assignment_email, assignment_users_changed
+            post_save.disconnect(send_announcement_email, sender=Announcement)
+            post_save.disconnect(send_assignment_email, sender=Beosztas) 
+            m2m_changed.disconnect(assignment_users_changed, sender=Beosztas.szerepkor_relaciok.through)
+            print("✅ Email signals disconnected successfully")
+        except Exception as e:
+            print(f"⚠️  Warning: Could not disconnect some signals: {e}")
     
     # Create current school year
     current_tanev = create_current_tanev()
@@ -389,113 +409,153 @@ def import_users():
     created_radio_stabs = set()
     created_classes = set()
     
-    for i, user_data in enumerate(SAMPLE_USERS, 1):
-        print(f"\n{i:2d}. Processing: {user_data['vezetekNev']} {user_data['keresztNev']}")
+    # Process users in chunks
+    total_users = len(SAMPLE_USERS)
+    for chunk_start in range(0, total_users, chunk_size):
+        chunk_end = min(chunk_start + chunk_size, total_users)
+        chunk_users = SAMPLE_USERS[chunk_start:chunk_end]
         
+        print(f"\n{'='*20} CHUNK {chunk_start//chunk_size + 1} ({'='*20}")
+        print(f"📦 Processing users {chunk_start + 1}-{chunk_end} of {total_users}")
+        
+        # Force garbage collection before processing chunk
+        import gc
+        gc.collect()
+        
+        # Process each user in the current chunk
+        for i, user_data in enumerate(chunk_users, chunk_start + 1):
+            print(f"\n{i:2d}. Processing: {user_data['vezetekNev']} {user_data['keresztNev']}")
+            
+            try:
+                # Generate username from email
+                username = extract_username_from_email(user_data['email'])
+                
+                # Check for duplicate username or email
+                if User.objects.filter(username=username).exists():
+                    error = f"Felhasználónév már létezik: {username}"
+                    stats['errors'].append(error)
+                    print(f"   ❌ {error}")
+                    continue
+                
+                if User.objects.filter(email=user_data['email']).exists():
+                    error = f"Email cím már létezik: {user_data['email']}"
+                    stats['errors'].append(error)
+                    print(f"   ❌ {error}")
+                    continue
+                
+                # Determine admin type and special role
+                admin_type = 'teacher' if normalize_yes_no(user_data['mediatana']) else 'none'
+                special_role = 'production_leader' if normalize_yes_no(user_data['gyartasvezeto']) else 'none'
+                
+                print(f"   👤 Username: {username}")
+                print(f"   🎭 Admin Type: {admin_type}, Special Role: {special_role}")
+                
+                # Handle class creation if student
+                osztaly = None
+                if user_data['kezdesEve'] and user_data['tagozat']:
+                    start_year = int(user_data['kezdesEve'])
+                    section = user_data['tagozat'].upper()
+                    osztaly = get_or_create_class(start_year, section, current_tanev)
+                    
+                    class_key = f"{start_year}{section}"
+                    if class_key not in created_classes:
+                        created_classes.add(class_key)
+                        stats['created_classes'] += 1
+                
+                # Handle stab creation
+                stab = None
+                if user_data['stab']:
+                    stab = get_or_create_stab(user_data['stab'])
+                    if stab and stab.name not in created_stabs:
+                        created_stabs.add(stab.name)
+                        stats['created_stabs'] += 1
+                
+                # Handle radio stab creation
+                radio_stab = None
+                if user_data['radio'] and user_data['kezdesEve']:
+                    radio_name = parse_radio_stab_name(user_data['kezdesEve'], user_data['radio'])
+                    if radio_name:
+                        radio_stab = get_or_create_radio_stab(radio_name, user_data['radio'])
+                        if radio_stab and radio_name not in created_radio_stabs:
+                            created_radio_stabs.add(radio_name)
+                            stats['created_radio_stabs'] += 1
+                
+                # Create user
+                user = User.objects.create_user(
+                    username=username,
+                    email=user_data['email'],
+                    first_name=user_data['keresztNev'],
+                    last_name=user_data['vezetekNev'],
+                    is_active=True
+                )
+                
+                # Create profile
+                profile = Profile.objects.create(
+                    user=user,
+                    admin_type=admin_type,
+                    special_role=special_role,
+                    telefonszam=user_data['telefonszam'] if user_data['telefonszam'] else None,
+                    osztaly=osztaly,
+                    stab=stab,
+                    radio_stab=radio_stab,
+                    medias=True  # Default to true for media students
+                )
+                
+                # Handle class teacher assignment
+                if normalize_yes_no(user_data['osztalyfonok']):
+                    # Parse and assign to classes mentioned in osztalyai
+                    if user_data['osztalyai']:
+                        for class_name in user_data['osztalyai'].split(','):
+                            class_name = class_name.strip()
+                            # Parse class string like '2023F' into start_year and section
+                            import re
+                            match = re.match(r'(\d{4})([A-Z]+)', class_name)
+                            if match:
+                                target_start_year = int(match.group(1))
+                                target_section = match.group(2)
+                                target_osztaly = get_or_create_class(target_start_year, target_section, current_tanev)
+                                if target_osztaly:
+                                    target_osztaly.add_osztaly_fonok(user)
+                                    print(f"   👨‍🏫 Added as class teacher: {class_name}")
+                    
+                    # Also assign to their own class if they're a student
+                    if osztaly:
+                        osztaly.add_osztaly_fonok(user)
+                        print(f"   👨‍🏫 Added as class teacher to own class")
+                
+                stats['created_users'] += 1
+                print(f"   ✅ User created successfully")
+                
+            except Exception as e:
+                error = f"Hiba a felhasználó létrehozásakor ({user_data['email']}): {str(e)}"
+                stats['errors'].append(error)
+                print(f"   ❌ {error}")
+        
+        # Force database connection cleanup and garbage collection after each chunk
+        from django.db import connection
+        connection.close()
+        gc.collect()
+        
+        print(f"📊 Chunk completed. Users created so far: {stats['created_users']}")
+        print(f"💾 Memory cleanup performed. Ready for next chunk...")
+        
+        # Optional: Add a small delay between chunks to allow memory cleanup
+        if chunk_end < total_users:
+            import time
+            time.sleep(1)  # 1 second pause between chunks
+    
+    # Reconnect email signals after import
+    if disable_signals:
         try:
-            # Generate username from email
-            username = extract_username_from_email(user_data['email'])
+            from django.db.models.signals import post_save, m2m_changed
+            from api.models import Announcement, Beosztas, send_announcement_email, send_assignment_email, assignment_users_changed
             
-            # Check for duplicate username or email
-            if User.objects.filter(username=username).exists():
-                error = f"Felhasználónév már létezik: {username}"
-                stats['errors'].append(error)
-                print(f"   ❌ {error}")
-                continue
-            
-            if User.objects.filter(email=user_data['email']).exists():
-                error = f"Email cím már létezik: {user_data['email']}"
-                stats['errors'].append(error)
-                print(f"   ❌ {error}")
-                continue
-            
-            # Determine admin type and special role
-            admin_type = 'teacher' if normalize_yes_no(user_data['mediatana']) else 'none'
-            special_role = 'production_leader' if normalize_yes_no(user_data['gyartasvezeto']) else 'none'
-            
-            print(f"   👤 Username: {username}")
-            print(f"   🎭 Admin Type: {admin_type}, Special Role: {special_role}")
-            
-            # Handle class creation if student
-            osztaly = None
-            if user_data['kezdesEve'] and user_data['tagozat']:
-                start_year = int(user_data['kezdesEve'])
-                section = user_data['tagozat'].upper()
-                osztaly = get_or_create_class(start_year, section, current_tanev)
-                
-                class_key = f"{start_year}{section}"
-                if class_key not in created_classes:
-                    created_classes.add(class_key)
-                    stats['created_classes'] += 1
-            
-            # Handle stab creation
-            stab = None
-            if user_data['stab']:
-                stab = get_or_create_stab(user_data['stab'])
-                if stab and stab.name not in created_stabs:
-                    created_stabs.add(stab.name)
-                    stats['created_stabs'] += 1
-            
-            # Handle radio stab creation
-            radio_stab = None
-            if user_data['radio'] and user_data['kezdesEve']:
-                radio_name = parse_radio_stab_name(user_data['kezdesEve'], user_data['radio'])
-                if radio_name:
-                    radio_stab = get_or_create_radio_stab(radio_name, user_data['radio'])
-                    if radio_stab and radio_name not in created_radio_stabs:
-                        created_radio_stabs.add(radio_name)
-                        stats['created_radio_stabs'] += 1
-            
-            # Create user
-            user = User.objects.create_user(
-                username=username,
-                email=user_data['email'],
-                first_name=user_data['keresztNev'],
-                last_name=user_data['vezetekNev'],
-                is_active=True
-            )
-            
-            # Create profile
-            profile = Profile.objects.create(
-                user=user,
-                admin_type=admin_type,
-                special_role=special_role,
-                telefonszam=user_data['telefonszam'] if user_data['telefonszam'] else None,
-                osztaly=osztaly,
-                stab=stab,
-                radio_stab=radio_stab,
-                medias=True  # Default to true for media students
-            )
-            
-            # Handle class teacher assignment
-            if normalize_yes_no(user_data['osztalyfonok']):
-                # Parse and assign to classes mentioned in osztalyai
-                if user_data['osztalyai']:
-                    for class_name in user_data['osztalyai'].split(','):
-                        class_name = class_name.strip()
-                        # Parse class string like '2023F' into start_year and section
-                        import re
-                        match = re.match(r'(\d{4})([A-Z]+)', class_name)
-                        if match:
-                            target_start_year = int(match.group(1))
-                            target_section = match.group(2)
-                            target_osztaly = get_or_create_class(target_start_year, target_section, current_tanev)
-                            if target_osztaly:
-                                target_osztaly.add_osztaly_fonok(user)
-                                print(f"   👨‍🏫 Added as class teacher: {class_name}")
-                
-                # Also assign to their own class if they're a student
-                if osztaly:
-                    osztaly.add_osztaly_fonok(user)
-                    print(f"   👨‍🏫 Added as class teacher to own class")
-            
-            stats['created_users'] += 1
-            print(f"   ✅ User created successfully")
-            
+            post_save.connect(send_announcement_email, sender=Announcement)
+            post_save.connect(send_assignment_email, sender=Beosztas)
+            m2m_changed.connect(assignment_users_changed, sender=Beosztas.szerepkor_relaciok.through)
+            print("\n✅ Email signals reconnected successfully")
         except Exception as e:
-            error = f"Hiba a felhasználó létrehozásakor ({user_data['email']}): {str(e)}"
-            stats['errors'].append(error)
-            print(f"   ❌ {error}")
+            print(f"\n⚠️  Warning: Could not reconnect some signals: {e}")
     
     # Print final statistics
     print("\n" + "=" * 60)
@@ -522,7 +582,8 @@ def import_users():
 
 if __name__ == "__main__":
     try:
-        stats = import_users()
+        # Import users in chunks of 3 with signals disabled to avoid memory issues
+        stats = import_users(chunk_size=3, disable_signals=True)
         
         if stats['errors']:
             sys.exit(1)  # Exit with error code if there were errors
