@@ -153,11 +153,13 @@ class BeosztasWithAvailabilitySchema(Schema):
 class BeosztasCreateSchema(Schema):
     """Request schema for creating new assignment."""
     forgatas_id: int
+    stab_id: Optional[int] = None
     student_role_pairs: List[dict]  # [{"user_id": 1, "szerepkor_id": 2}, ...]
 
 class BeosztasUpdateSchema(Schema):
     """Request schema for updating assignment."""
     student_role_pairs: Optional[List[dict]] = None
+    stab_id: Optional[int] = None
     kesz: Optional[bool] = None
 
 class StudentRolePairSchema(Schema):
@@ -374,6 +376,7 @@ def create_beosztas_response(beosztas: Beosztas) -> dict:
         "szerepkor_relaciok": [create_szerepkor_relacio_response(rel) for rel in szerepkor_relaciok],
         "kesz": beosztas.kesz,
         "author": create_user_basic_response(beosztas.author) if beosztas.author else None,
+        "stab": {"id": beosztas.stab.id, "name": beosztas.stab.name} if beosztas.stab else None,
         "created_at": beosztas.created_at.isoformat(),
         "student_count": len(szerepkor_relaciok),
         "roles_summary": roles_summary_list
@@ -552,6 +555,7 @@ def create_beosztas_with_availability_response(beosztas: Beosztas) -> dict:
         "szerepkor_relaciok": [create_szerepkor_relacio_response(rel) for rel in szerepkor_relaciok],
         "kesz": beosztas.kesz,
         "author": create_user_basic_response(beosztas.author) if beosztas.author else None,
+        "stab": {"id": beosztas.stab.id, "name": beosztas.stab.name} if beosztas.stab else None,
         "created_at": beosztas.created_at.isoformat(),
         "student_count": len(szerepkor_relaciok),
         "roles_summary": roles_summary_list,
@@ -613,7 +617,7 @@ def register_assignment_endpoints(api):
     
     @api.get("/assignments/filming-assignments", auth=JWTAuth(), response={200: List[BeosztasSchema], 401: ErrorSchema})
     def get_filming_assignments(request, forgatas_id: int = None, kesz: bool = None, 
-                               start_date: str = None, end_date: str = None):
+                               start_date: str = None, end_date: str = None, stab_id: int = None):
         """
         Get filming assignments with optional filtering.
         
@@ -624,6 +628,7 @@ def register_assignment_endpoints(api):
             kesz: Optional filter by completion status
             start_date: Optional start date filter for associated filming sessions
             end_date: Optional end date filter for associated filming sessions
+            stab_id: Optional filter by stab ID
             
         Returns:
             200: List of assignments
@@ -634,7 +639,7 @@ def register_assignment_endpoints(api):
             
             # Build queryset
             assignments = Beosztas.objects.select_related(
-                'forgatas', 'author'
+                'forgatas', 'author', 'stab'
             ).prefetch_related(
                 'szerepkor_relaciok__user',
                 'szerepkor_relaciok__szerepkor'
@@ -646,6 +651,9 @@ def register_assignment_endpoints(api):
             
             if kesz is not None:
                 assignments = assignments.filter(kesz=kesz)
+            
+            if stab_id:
+                assignments = assignments.filter(stab_id=stab_id)
             
             if start_date or end_date:
                 if start_date:
@@ -684,7 +692,7 @@ def register_assignment_endpoints(api):
             # Debug: Check if assignment exists
             print(f"🔍 [DEBUG] Searching for Beosztas with forgatas_id: {forgatas_id}")
             assignment = Beosztas.objects.select_related(
-                'forgatas', 'author'
+                'forgatas', 'author', 'stab'
             ).prefetch_related(
                 'szerepkor_relaciok__user',
                 'szerepkor_relaciok__szerepkor'
@@ -848,6 +856,14 @@ def register_assignment_endpoints(api):
             except Forgatas.DoesNotExist:
                 return 400, {"message": "Forgatás nem található"}
             
+            # Validate stab exists if provided
+            stab = None
+            if data.stab_id:
+                try:
+                    stab = Stab.objects.get(id=data.stab_id)
+                except Stab.DoesNotExist:
+                    return 400, {"message": "Stáb nem található"}
+            
             # Check if assignment already exists for this forgatas
             existing = Beosztas.objects.filter(forgatas=forgatas).first()
             if existing:
@@ -864,6 +880,7 @@ def register_assignment_endpoints(api):
                 beosztas = Beosztas.objects.create(
                     forgatas=forgatas,
                     author=requesting_user,
+                    stab=stab,
                     kesz=False
                 )
                 
@@ -909,7 +926,7 @@ def register_assignment_endpoints(api):
         """
         Update existing filming assignment.
         
-        Requires proper permissions. Can update student-role relations and completion status.
+        Requires proper permissions. Can update student-role relations, stab assignment, and completion status.
         Automatically sends email notifications to users who are added or removed.
         
         Args:
@@ -944,6 +961,17 @@ def register_assignment_endpoints(api):
                     old_users.add(relation.user)
             
             with transaction.atomic():
+                # Update stab if provided
+                if data.stab_id is not None:
+                    if data.stab_id == 0:  # Allow explicit removal of stab
+                        beosztas.stab = None
+                    else:
+                        try:
+                            stab = Stab.objects.get(id=data.stab_id)
+                            beosztas.stab = stab
+                        except Stab.DoesNotExist:
+                            return 400, {"message": "Stáb nem található"}
+                
                 # Update student-role pairs if provided
                 if data.student_role_pairs is not None:
                     # Remove existing relations
@@ -975,6 +1003,8 @@ def register_assignment_endpoints(api):
                     # If finalizing, create absences
                     if data.kesz:
                         auto_create_absences_for_beosztas(beosztas)
+                else:
+                    beosztas.save()  # Save the stab changes
             
             # Note: Email notifications for user changes are now handled automatically by model signals in models.py
             
@@ -1159,7 +1189,7 @@ def register_assignment_endpoints(api):
 
     @api.get("/assignments/filming-assignments-with-availability", auth=JWTAuth(), response={200: List[BeosztasWithAvailabilitySchema], 401: ErrorSchema})
     def get_filming_assignments_with_availability(request, forgatas_id: int = None, kesz: bool = None, 
-                                                 start_date: str = None, end_date: str = None):
+                                                 start_date: str = None, end_date: str = None, stab_id: int = None):
         """
         Get filming assignments with detailed user availability information.
         
@@ -1173,6 +1203,7 @@ def register_assignment_endpoints(api):
             kesz: Optional filter by completion status
             start_date: Optional start date filter for associated filming sessions
             end_date: Optional end date filter for associated filming sessions
+            stab_id: Optional filter by stab ID
             
         Returns:
             200: List of assignments with availability data
@@ -1183,7 +1214,7 @@ def register_assignment_endpoints(api):
             
             # Build queryset
             assignments = Beosztas.objects.select_related(
-                'forgatas', 'author'
+                'forgatas', 'author', 'stab'
             ).prefetch_related(
                 'szerepkor_relaciok__user',
                 'szerepkor_relaciok__szerepkor'
@@ -1195,6 +1226,9 @@ def register_assignment_endpoints(api):
             
             if kesz is not None:
                 assignments = assignments.filter(kesz=kesz)
+            
+            if stab_id:
+                assignments = assignments.filter(stab_id=stab_id)
             
             if start_date or end_date:
                 if start_date:
@@ -1232,7 +1266,7 @@ def register_assignment_endpoints(api):
         """
         try:
             assignment = Beosztas.objects.select_related(
-                'forgatas', 'author'
+                'forgatas', 'author', 'stab'
             ).prefetch_related(
                 'szerepkor_relaciok__user',
                 'szerepkor_relaciok__szerepkor'

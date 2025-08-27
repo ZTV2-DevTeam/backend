@@ -886,13 +886,16 @@ class Beosztas(models.Model):
                               help_text='A beosztás tanéve')
     forgatas = models.ForeignKey('Forgatas', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Forgatás',
                                 help_text='A beosztáshoz tartozó forgatás', related_name='beosztasok')
+    stab = models.ForeignKey('Stab', related_name='beosztasok', on_delete=models.PROTECT, blank=True, null=True, 
+                            verbose_name='Stáb', help_text='A beosztáshoz tartozó stáb')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Létrehozva', 
                                      help_text='A beosztás létrehozásának időpontja')
     
     def __str__(self):
         tanev_str = f" ({self.tanev})" if self.tanev else ""
         forgatas_str = f" - {self.forgatas.name}" if self.forgatas else ""
-        return f'Beosztás {self.id}{tanev_str}{forgatas_str} - Kész: {self.kesz}'
+        stab_str = f" [{self.stab.name}]" if self.stab else ""
+        return f'Beosztás {self.id}{tanev_str}{forgatas_str}{stab_str} - Kész: {self.kesz}'
     
     def save(self, *args, **kwargs):
         # Auto-assign current active school year if none specified

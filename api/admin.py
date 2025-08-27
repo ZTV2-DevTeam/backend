@@ -430,17 +430,17 @@ class ForgatásAdmin(ImportExportModelAdmin):
 @admin.register(Beosztas)
 class BeosztasAdmin(ImportExportModelAdmin):
     resource_class = BeosztasResource
-    list_display = ['beosztas_display', 'kesz_status', 'author', 'tanev', 'forgatas_link', 'created_at', 'szerepkor_count']
-    list_filter = ['kesz', 'tanev', 'created_at', 'author']
-    search_fields = ['author__first_name', 'author__last_name', 'forgatas__name']
-    autocomplete_fields = ['author', 'tanev', 'forgatas']
+    list_display = ['beosztas_display', 'kesz_status', 'author', 'tanev', 'forgatas_link', 'stab_display', 'created_at', 'szerepkor_count']
+    list_filter = ['kesz', 'tanev', 'stab', 'created_at', 'author']
+    search_fields = ['author__first_name', 'author__last_name', 'forgatas__name', 'stab__name']
+    autocomplete_fields = ['author', 'tanev', 'forgatas', 'stab']
     filter_horizontal = ['szerepkor_relaciok']
     date_hierarchy = 'created_at'
     readonly_fields = ['created_at']
     
     fieldsets = (
         ('📋 Beosztás adatok', {
-            'fields': ('kesz', 'author', 'tanev', 'forgatas'),
+            'fields': ('kesz', 'author', 'tanev', 'forgatas', 'stab'),
             'description': 'A beosztás alapvető információi'
         }),
         ('👥 Szerepkör relációk', {
@@ -470,6 +470,12 @@ class BeosztasAdmin(ImportExportModelAdmin):
             return format_html('<a href="{}" target="_blank">🎬 {}</a>', url, obj.forgatas.name)
         return '-'
     forgatas_link.short_description = 'Kapcsolódó forgatás'
+    
+    def stab_display(self, obj):
+        if obj.stab:
+            return format_html('🎬 <span style="color: #0066cc;">{}</span>', obj.stab.name)
+        return '-'
+    stab_display.short_description = 'Stáb'
     
     def szerepkor_count(self, obj):
         count = obj.szerepkor_relaciok.count()

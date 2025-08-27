@@ -771,6 +771,11 @@ class BeosztasResource(resources.ModelResource):
         attribute='forgatas',
         widget=ForeignKeyWidget(Forgatas, 'name')
     )
+    stab_name = fields.Field(
+        column_name='stab_name',
+        attribute='stab',
+        widget=ForeignKeyWidget(Stab, 'name')
+    )
     szerepkor_relaciok_ids = fields.Field(
         column_name='szerepkor_relaciok_ids',
         attribute='szerepkor_relaciok',
@@ -781,11 +786,11 @@ class BeosztasResource(resources.ModelResource):
         model = Beosztas
         fields = (
             'id', 'kesz', 'author_username', 'tanev_display',
-            'forgatas_name', 'szerepkor_relaciok_ids', 'created_at'
+            'forgatas_name', 'stab_name', 'szerepkor_relaciok_ids', 'created_at'
         )
         export_order = (
             'id', 'kesz', 'author_username', 'tanev_display',
-            'forgatas_name', 'szerepkor_relaciok_ids', 'created_at'
+            'forgatas_name', 'stab_name', 'szerepkor_relaciok_ids', 'created_at'
         )
 
 

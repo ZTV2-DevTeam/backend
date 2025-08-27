@@ -61,6 +61,7 @@ class BeosztasSchema(Schema):
     kesz: bool
     author: Optional[UserBasicSchema] = None
     tanev: Optional[dict] = None
+    stab: Optional[StabSchema] = None
     created_at: str
     role_relation_count: int = 0
 
@@ -68,6 +69,7 @@ class BeosztasCreateSchema(Schema):
     """Request schema for creating new assignment."""
     kesz: bool = False
     tanev_id: Optional[int] = None
+    stab_id: Optional[int] = None
     szerepkor_relacio_ids: list[int] = []
 
 class BeosztasDetailSchema(Schema):
@@ -76,6 +78,7 @@ class BeosztasDetailSchema(Schema):
     kesz: bool
     author: Optional[UserBasicSchema] = None
     tanev: Optional[dict] = None
+    stab: Optional[StabSchema] = None
     created_at: str
     szerepkor_relaciok: list[SzerepkorRelacioSchema] = []
 
@@ -170,6 +173,7 @@ def create_beosztas_response(beosztas: Beosztas, include_relations: bool = False
             "display_name": str(beosztas.tanev),
             "is_active": Tanev.get_active() and Tanev.get_active().id == beosztas.tanev.id
         } if beosztas.tanev else None,
+        "stab": create_stab_response(beosztas.stab) if beosztas.stab else None,
         "created_at": beosztas.created_at.isoformat(),
         "role_relation_count": beosztas.szerepkor_relaciok.count()
     }
@@ -442,7 +446,7 @@ def register_organization_endpoints(api):
     # ========================================================================
     
     @api.get("/assignments", auth=JWTAuth(), response={200: list[BeosztasSchema], 401: ErrorSchema})
-    def get_assignments(request, tanev_id: int = None, kesz: bool = None):
+    def get_assignments(request, tanev_id: int = None, kesz: bool = None, stab_id: int = None):
         """
         Get assignments (beosztasok).
         
@@ -451,18 +455,21 @@ def register_organization_endpoints(api):
         Args:
             tanev_id: Optional school year filter
             kesz: Optional completion status filter
+            stab_id: Optional stab filter
             
         Returns:
             200: List of assignments
             401: Authentication failed
         """
         try:
-            assignments = Beosztas.objects.select_related('author', 'tanev').prefetch_related('szerepkor_relaciok').all()
+            assignments = Beosztas.objects.select_related('author', 'tanev', 'stab').prefetch_related('szerepkor_relaciok').all()
             
             if tanev_id:
                 assignments = assignments.filter(tanev_id=tanev_id)
             if kesz is not None:
                 assignments = assignments.filter(kesz=kesz)
+            if stab_id:
+                assignments = assignments.filter(stab_id=stab_id)
             
             response = []
             for assignment in assignments:
@@ -488,7 +495,7 @@ def register_organization_endpoints(api):
             401: Authentication failed
         """
         try:
-            assignment = Beosztas.objects.select_related('author', 'tanev').prefetch_related(
+            assignment = Beosztas.objects.select_related('author', 'tanev', 'stab').prefetch_related(
                 'szerepkor_relaciok__user', 'szerepkor_relaciok__szerepkor'
             ).get(id=assignment_id)
             
@@ -529,11 +536,20 @@ def register_organization_endpoints(api):
                 except Tanev.DoesNotExist:
                     return 400, {"message": "Tanév nem található"}
             
+            # Get stab if provided
+            stab = None
+            if data.stab_id:
+                try:
+                    stab = Stab.objects.get(id=data.stab_id)
+                except Stab.DoesNotExist:
+                    return 400, {"message": "Stáb nem található"}
+            
             # Create assignment
             assignment = Beosztas.objects.create(
                 kesz=data.kesz,
                 author=user,
-                tanev=tanev
+                tanev=tanev,
+                stab=stab
             )
             
             # Add role relations if provided
