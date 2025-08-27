@@ -273,15 +273,18 @@ class Profile(models.Model):
         """
         from datetime import datetime, date
         
-        # Check regular absences
-        start_date = start_datetime.date() if hasattr(start_datetime, 'date') else start_datetime
-        end_date = end_datetime.date() if hasattr(end_datetime, 'date') else end_datetime
+        # Ensure we have datetime objects
+        if isinstance(start_datetime, date) and not isinstance(start_datetime, datetime):
+            start_datetime = datetime.combine(start_datetime, datetime.min.time())
+        if isinstance(end_datetime, date) and not isinstance(end_datetime, datetime):
+            end_datetime = datetime.combine(end_datetime, datetime.max.time())
         
         # Check if user has marked absence during this period
+        # Now using datetime comparison for more precise overlaps
         absence_overlap = Tavollet.objects.filter(
             user=self.user,
-            start_date__lte=end_date,
-            end_date__gte=start_date,
+            start_date__lt=end_datetime,
+            end_date__gt=start_datetime,
             denied=False
         ).exists()
         
@@ -795,10 +798,10 @@ class Announcement(models.Model):
 class Tavollet(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Felhasználó', 
                             help_text='A távollétét jelző felhasználó')
-    start_date = models.DateField(blank=False, null=False, verbose_name='Kezdő dátum', 
-                                 help_text='A távollét kezdő dátuma')
-    end_date = models.DateField(blank=False, null=False, verbose_name='Záró dátum', 
-                               help_text='A távollét záró dátuma')
+    start_date = models.DateTimeField(blank=False, null=False, verbose_name='Kezdő időpont', 
+                                     help_text='A távollét kezdő időpontja (dátum és idő)')
+    end_date = models.DateTimeField(blank=False, null=False, verbose_name='Záró időpont', 
+                                   help_text='A távollét záró időpontja (dátum és idő)')
     reason = models.TextField(max_length=500, blank=True, null=True, verbose_name='Indoklás', 
                              help_text='A távollét indoklása (opcionális, maximum 500 karakter)')
     denied = models.BooleanField(default=False, verbose_name='Elutasítva', 
@@ -807,7 +810,7 @@ class Tavollet(models.Model):
                                    help_text='Jelöli, hogy a távollét kérés jóvá lett-e hagyva')
 
     def __str__(self):
-        return f'{self.user.get_full_name()}: {self.start_date} - {self.end_date}'
+        return f'{self.user.get_full_name()}: {self.start_date.strftime("%Y-%m-%d %H:%M")} - {self.end_date.strftime("%Y-%m-%d %H:%M")}'
     
     class Meta:
         verbose_name = "Távollét"

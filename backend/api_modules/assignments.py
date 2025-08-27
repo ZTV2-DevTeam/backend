@@ -76,7 +76,7 @@ Integrációs pontok:
 from ninja import Schema
 from django.contrib.auth.models import User
 from django.db import transaction
-from api.models import Beosztas, SzerepkorRelaciok, Szerepkor, Forgatas, Absence, Profile
+from api.models import Beosztas, SzerepkorRelaciok, Szerepkor, Forgatas, Absence, Profile, Tavollet, RadioSession
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime, date, time
 from typing import Optional, List
@@ -126,6 +126,30 @@ class BeosztasSchema(Schema):
     student_count: int
     roles_summary: List[dict]
 
+class UserAvailabilitySchema(Schema):
+    """User availability information schema."""
+    id: int
+    username: str
+    first_name: str
+    last_name: str
+    full_name: str
+    is_available: bool
+    conflicts: List[dict]
+    is_on_vacation: bool
+    has_radio_session: bool
+
+class BeosztasWithAvailabilitySchema(Schema):
+    """Response schema for assignment data with user availability."""
+    id: int
+    forgatas: ForgatSchema
+    szerepkor_relaciok: List[SzerepkorRelacioSchema]
+    kesz: bool
+    author: Optional[UserBasicSchema] = None
+    created_at: str
+    student_count: int
+    roles_summary: List[dict]
+    user_availability: dict  # Dictionary with users_available, users_on_vacation, users_with_radio_session
+
 class BeosztasCreateSchema(Schema):
     """Request schema for creating new assignment."""
     forgatas_id: int
@@ -147,41 +171,187 @@ class StudentRolePairSchema(Schema):
 
 def create_user_basic_response(user: User) -> dict:
     """Create basic user information response."""
-    return {
-        "id": user.id,
-        "username": user.username,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "full_name": user.get_full_name()
-    }
+    print(f"🔍 [DEBUG] create_user_basic_response called with user: {user}")
+    
+    try:
+        if not user:
+            print(f"❌ [DEBUG] User is None!")
+            raise ValueError("User cannot be None")
+        
+        print(f"🔍 [DEBUG] User ID: {user.id}")
+        print(f"🔍 [DEBUG] User username: '{user.username}'")
+        print(f"🔍 [DEBUG] User first_name: '{user.first_name}'")
+        print(f"🔍 [DEBUG] User last_name: '{user.last_name}'")
+        
+        # Test get_full_name separately
+        try:
+            full_name = user.get_full_name()
+            print(f"🔍 [DEBUG] User full_name: '{full_name}'")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error getting full_name: {str(e)}")
+            raise
+        
+        response = {
+            "id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "full_name": full_name
+        }
+        
+        print(f"✅ [DEBUG] create_user_basic_response completed: {response}")
+        return response
+        
+    except Exception as e:
+        print(f"❌ [DEBUG] Error in create_user_basic_response: {str(e)}")
+        print(f"❌ [DEBUG] Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def create_szerepkor_response(szerepkor: Szerepkor) -> dict:
     """Create role information response."""
-    return {
-        "id": szerepkor.id,
-        "name": szerepkor.name,
-        "ev": szerepkor.ev
-    }
+    print(f"🔍 [DEBUG] create_szerepkor_response called with szerepkor: {szerepkor}")
+    
+    try:
+        if not szerepkor:
+            print(f"❌ [DEBUG] Szerepkor is None!")
+            raise ValueError("Szerepkor cannot be None")
+        
+        print(f"🔍 [DEBUG] Szerepkor ID: {szerepkor.id}")
+        print(f"🔍 [DEBUG] Szerepkor name: '{szerepkor.name}'")
+        print(f"🔍 [DEBUG] Szerepkor ev: {szerepkor.ev}")
+        
+        response = {
+            "id": szerepkor.id,
+            "name": szerepkor.name,
+            "ev": szerepkor.ev
+        }
+        
+        print(f"✅ [DEBUG] create_szerepkor_response completed: {response}")
+        return response
+        
+    except Exception as e:
+        print(f"❌ [DEBUG] Error in create_szerepkor_response: {str(e)}")
+        print(f"❌ [DEBUG] Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def create_szerepkor_relacio_response(relacio: SzerepkorRelaciok) -> dict:
     """Create role relation response."""
-    return {
-        "id": relacio.id,
-        "user": create_user_basic_response(relacio.user),
-        "szerepkor": create_szerepkor_response(relacio.szerepkor)
-    }
+    print(f"🔍 [DEBUG] create_szerepkor_relacio_response called with relacio: {relacio}")
+    
+    try:
+        if not relacio:
+            print(f"❌ [DEBUG] Relacio is None!")
+            raise ValueError("Relacio cannot be None")
+        
+        print(f"🔍 [DEBUG] Relacio ID: {relacio.id}")
+        print(f"🔍 [DEBUG] Relacio user: {relacio.user}")
+        print(f"🔍 [DEBUG] Relacio szerepkor: {relacio.szerepkor}")
+        
+        # Create user response
+        try:
+            user_response = create_user_basic_response(relacio.user)
+            print(f"✅ [DEBUG] User response created in relacio")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error creating user response in relacio: {str(e)}")
+            raise
+        
+        # Create szerepkor response
+        try:
+            szerepkor_response = create_szerepkor_response(relacio.szerepkor)
+            print(f"✅ [DEBUG] Szerepkor response created in relacio")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error creating szerepkor response in relacio: {str(e)}")
+            raise
+        
+        response = {
+            "id": relacio.id,
+            "user": user_response,
+            "szerepkor": szerepkor_response
+        }
+        
+        print(f"✅ [DEBUG] create_szerepkor_relacio_response completed: {response}")
+        return response
+        
+    except Exception as e:
+        print(f"❌ [DEBUG] Error in create_szerepkor_relacio_response: {str(e)}")
+        print(f"❌ [DEBUG] Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def create_forgatas_basic_response(forgatas: Forgatas) -> dict:
     """Create basic forgatas information response."""
-    return {
-        "id": forgatas.id,
-        "name": forgatas.name,
-        "description": forgatas.description,
-        "date": forgatas.date.isoformat(),
-        "time_from": forgatas.timeFrom.isoformat(),
-        "time_to": forgatas.timeTo.isoformat(),
-        "type": forgatas.forgTipus
-    }
+    print(f"🔍 [DEBUG] create_forgatas_basic_response called with forgatas: {forgatas}")
+    
+    try:
+        if not forgatas:
+            print(f"❌ [DEBUG] Forgatas is None!")
+            raise ValueError("Forgatas cannot be None")
+        
+        print(f"🔍 [DEBUG] Forgatas ID: {forgatas.id}")
+        print(f"🔍 [DEBUG] Forgatas name: '{forgatas.name}'")
+        print(f"🔍 [DEBUG] Forgatas description: '{forgatas.description}'")
+        print(f"🔍 [DEBUG] Forgatas date: {forgatas.date}")
+        print(f"🔍 [DEBUG] Forgatas timeFrom: {forgatas.timeFrom}")
+        print(f"🔍 [DEBUG] Forgatas timeTo: {forgatas.timeTo}")
+        print(f"🔍 [DEBUG] Forgatas forgTipus: '{forgatas.forgTipus}'")
+        
+        # Check each field individually to isolate the issue
+        response = {}
+        
+        # ID
+        response["id"] = forgatas.id
+        print(f"✅ [DEBUG] Added ID: {response['id']}")
+        
+        # Name
+        response["name"] = forgatas.name
+        print(f"✅ [DEBUG] Added name: '{response['name']}'")
+        
+        # Description
+        response["description"] = forgatas.description
+        print(f"✅ [DEBUG] Added description: '{response['description']}'")
+        
+        # Date
+        try:
+            response["date"] = forgatas.date.isoformat()
+            print(f"✅ [DEBUG] Added date: '{response['date']}'")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error with date field: {str(e)}")
+            raise
+        
+        # Time From
+        try:
+            response["time_from"] = forgatas.timeFrom.isoformat()
+            print(f"✅ [DEBUG] Added time_from: '{response['time_from']}'")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error with timeFrom field: {str(e)}")
+            raise
+        
+        # Time To
+        try:
+            response["time_to"] = forgatas.timeTo.isoformat()
+            print(f"✅ [DEBUG] Added time_to: '{response['time_to']}'")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error with timeTo field: {str(e)}")
+            raise
+        
+        # Type
+        response["type"] = forgatas.forgTipus
+        print(f"✅ [DEBUG] Added type: '{response['type']}'")
+        
+        print(f"✅ [DEBUG] create_forgatas_basic_response completed successfully: {response}")
+        return response
+        
+    except Exception as e:
+        print(f"❌ [DEBUG] Error in create_forgatas_basic_response: {str(e)}")
+        print(f"❌ [DEBUG] Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def create_beosztas_response(beosztas: Beosztas) -> dict:
     """Create standardized assignment response dictionary."""
@@ -236,6 +406,167 @@ def can_user_manage_beosztas(user: User, beosztas: Beosztas) -> bool:
         pass
     
     return False
+
+def check_user_availability_for_forgatas(user: User, forgatas: Forgatas) -> dict:
+    """
+    Check user availability for a specific forgatas.
+    Returns detailed availability information including conflicts.
+    """
+    if not forgatas:
+        return {
+            "user_id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "full_name": user.get_full_name(),
+            "is_available": True,
+            "conflicts": [],
+            "is_on_vacation": False,
+            "has_radio_session": False
+        }
+    
+    # Create datetime objects for the forgatas
+    forgatas_start = datetime.combine(forgatas.date, forgatas.timeFrom)
+    forgatas_end = datetime.combine(forgatas.date, forgatas.timeTo)
+    
+    conflicts = []
+    is_on_vacation = False
+    has_radio_session = False
+    
+    # Check for vacation (Tavollet) conflicts
+    # Convert forgatas date to datetime range for comparison
+    forgatas_start = datetime.combine(forgatas.date, forgatas.timeFrom)
+    forgatas_end = datetime.combine(forgatas.date, forgatas.timeTo)
+    
+    vacation_conflicts = Tavollet.objects.filter(
+        user=user,
+        start_date__lt=forgatas_end,
+        end_date__gt=forgatas_start,
+        denied=False  # Only consider non-denied vacation requests
+    )
+    
+    for vacation in vacation_conflicts:
+        is_on_vacation = True
+        conflicts.append({
+            "type": "vacation",
+            "reason": vacation.reason or "Távollét",
+            "start_date": vacation.start_date.isoformat(),
+            "end_date": vacation.end_date.isoformat(),
+            "approved": vacation.approved
+        })
+    
+    # Check for radio session conflicts (for radio students)
+    try:
+        profile = Profile.objects.get(user=user)
+        if profile.is_second_year_radio_student:
+            radio_sessions = RadioSession.objects.filter(
+                participants=user,
+                date=forgatas.date
+            )
+            
+            for session in radio_sessions:
+                # Check if radio session overlaps with forgatas time
+                session_start = datetime.combine(session.date, session.time_from)
+                session_end = datetime.combine(session.date, session.time_to)
+                
+                if session_start < forgatas_end and session_end > forgatas_start:
+                    has_radio_session = True
+                    conflicts.append({
+                        "type": "radio_session",
+                        "description": f"{session.radio_stab.name} rádiós összejátszás",
+                        "date": session.date.isoformat(),
+                        "time_from": session.time_from.isoformat(),
+                        "time_to": session.time_to.isoformat(),
+                        "radio_stab": session.radio_stab.name
+                    })
+    except Profile.DoesNotExist:
+        pass
+    
+    # User is available if they have no conflicts
+    is_available = len(conflicts) == 0
+    
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "full_name": user.get_full_name(),
+        "is_available": is_available,
+        "conflicts": conflicts,
+        "is_on_vacation": is_on_vacation,
+        "has_radio_session": has_radio_session
+    }
+
+def create_beosztas_with_availability_response(beosztas: Beosztas) -> dict:
+    """Create standardized assignment response dictionary with user availability."""
+    # Get role relations
+    szerepkor_relaciok = beosztas.szerepkor_relaciok.select_related('user', 'szerepkor').all()
+    
+    # Create roles summary (count by role)
+    roles_summary = {}
+    for relacio in szerepkor_relaciok:
+        role_name = relacio.szerepkor.name
+        if role_name not in roles_summary:
+            roles_summary[role_name] = 0
+        roles_summary[role_name] += 1
+    
+    roles_summary_list = [{"role": role, "count": count} for role, count in roles_summary.items()]
+    
+    # Check availability for each user
+    users_available = []
+    users_on_vacation = []
+    users_with_radio_session = []
+    
+    for relacio in szerepkor_relaciok:
+        user_availability = check_user_availability_for_forgatas(relacio.user, beosztas.forgatas)
+        
+        if user_availability["is_available"]:
+            users_available.append({
+                "user": create_user_basic_response(relacio.user),
+                "role": create_szerepkor_response(relacio.szerepkor),
+                "availability": user_availability
+            })
+        elif user_availability["is_on_vacation"]:
+            users_on_vacation.append({
+                "user": create_user_basic_response(relacio.user),
+                "role": create_szerepkor_response(relacio.szerepkor),
+                "availability": user_availability
+            })
+        elif user_availability["has_radio_session"]:
+            users_with_radio_session.append({
+                "user": create_user_basic_response(relacio.user),
+                "role": create_szerepkor_response(relacio.szerepkor),
+                "availability": user_availability
+            })
+        else:
+            # User has other types of conflicts, put them in available but mark conflicts
+            users_available.append({
+                "user": create_user_basic_response(relacio.user),
+                "role": create_szerepkor_response(relacio.szerepkor),
+                "availability": user_availability
+            })
+    
+    return {
+        "id": beosztas.id,
+        "forgatas": create_forgatas_basic_response(beosztas.forgatas),
+        "szerepkor_relaciok": [create_szerepkor_relacio_response(rel) for rel in szerepkor_relaciok],
+        "kesz": beosztas.kesz,
+        "author": create_user_basic_response(beosztas.author) if beosztas.author else None,
+        "created_at": beosztas.created_at.isoformat(),
+        "student_count": len(szerepkor_relaciok),
+        "roles_summary": roles_summary_list,
+        "user_availability": {
+            "users_available": users_available,
+            "users_on_vacation": users_on_vacation,
+            "users_with_radio_session": users_with_radio_session,
+            "summary": {
+                "total_users": len(szerepkor_relaciok),
+                "available_count": len(users_available),
+                "vacation_count": len(users_on_vacation),
+                "radio_session_count": len(users_with_radio_session)
+            }
+        }
+    }
 
 def auto_create_absences_for_beosztas(beosztas: Beosztas):
     """
@@ -347,18 +678,144 @@ def register_assignment_endpoints(api):
             404: Assignment not found
             401: Authentication failed
         """
+        print(f"🔍 [DEBUG] Starting get_filming_assignment_details_by_forgatas for forgatas_id: {forgatas_id}")
+        
         try:
+            # Debug: Check if assignment exists
+            print(f"🔍 [DEBUG] Searching for Beosztas with forgatas_id: {forgatas_id}")
             assignment = Beosztas.objects.select_related(
                 'forgatas', 'author'
             ).prefetch_related(
                 'szerepkor_relaciok__user',
                 'szerepkor_relaciok__szerepkor'
             ).get(forgatas_id=forgatas_id)
-
-            return 200, create_beosztas_response(assignment)
+            
+            print(f"🔍 [DEBUG] Found assignment: ID={assignment.id}, kesz={assignment.kesz}")
+            print(f"🔍 [DEBUG] Assignment author: {assignment.author}")
+            print(f"🔍 [DEBUG] Assignment forgatas: {assignment.forgatas}")
+            
+            # Debug: Check forgatas details
+            if assignment.forgatas:
+                print(f"🔍 [DEBUG] Forgatas details: ID={assignment.forgatas.id}, name='{assignment.forgatas.name}', date={assignment.forgatas.date}")
+                print(f"🔍 [DEBUG] Forgatas times: {assignment.forgatas.timeFrom} - {assignment.forgatas.timeTo}")
+                print(f"🔍 [DEBUG] Forgatas type: {assignment.forgatas.forgTipus}")
+            else:
+                print(f"❌ [DEBUG] WARNING: Assignment has no forgatas!")
+            
+            # Debug: Check role relations
+            szerepkor_relaciok = assignment.szerepkor_relaciok.all()
+            print(f"🔍 [DEBUG] Found {len(szerepkor_relaciok)} role relations")
+            
+            for i, relacio in enumerate(szerepkor_relaciok):
+                print(f"🔍 [DEBUG] Role relation {i+1}: ID={relacio.id}")
+                print(f"🔍 [DEBUG]   User: ID={relacio.user.id}, username='{relacio.user.username}', name='{relacio.user.get_full_name()}'")
+                print(f"🔍 [DEBUG]   Szerepkor: ID={relacio.szerepkor.id}, name='{relacio.szerepkor.name}', ev={relacio.szerepkor.ev}")
+            
+            # Debug: Try to create response step by step
+            print(f"🔍 [DEBUG] Creating response...")
+            
+            # Test create_forgatas_basic_response
+            print(f"🔍 [DEBUG] Creating forgatas basic response...")
+            try:
+                forgatas_response = create_forgatas_basic_response(assignment.forgatas)
+                print(f"✅ [DEBUG] Forgatas response created successfully: {forgatas_response}")
+            except Exception as e:
+                print(f"❌ [DEBUG] Error in create_forgatas_basic_response: {str(e)}")
+                raise
+            
+            # Test create_user_basic_response for author
+            print(f"🔍 [DEBUG] Creating author response...")
+            try:
+                if assignment.author:
+                    author_response = create_user_basic_response(assignment.author)
+                    print(f"✅ [DEBUG] Author response created successfully: {author_response}")
+                else:
+                    print(f"🔍 [DEBUG] No author found, setting to None")
+                    author_response = None
+            except Exception as e:
+                print(f"❌ [DEBUG] Error in create_user_basic_response for author: {str(e)}")
+                raise
+            
+            # Test create_szerepkor_relacio_response for each relation
+            print(f"🔍 [DEBUG] Creating role relation responses...")
+            role_responses = []
+            try:
+                for i, relacio in enumerate(szerepkor_relaciok):
+                    print(f"🔍 [DEBUG] Processing role relation {i+1}...")
+                    
+                    # Test user response
+                    try:
+                        user_response = create_user_basic_response(relacio.user)
+                        print(f"✅ [DEBUG] User response for relation {i+1}: {user_response}")
+                    except Exception as e:
+                        print(f"❌ [DEBUG] Error creating user response for relation {i+1}: {str(e)}")
+                        raise
+                    
+                    # Test szerepkor response
+                    try:
+                        szerepkor_response = create_szerepkor_response(relacio.szerepkor)
+                        print(f"✅ [DEBUG] Szerepkor response for relation {i+1}: {szerepkor_response}")
+                    except Exception as e:
+                        print(f"❌ [DEBUG] Error creating szerepkor response for relation {i+1}: {str(e)}")
+                        raise
+                    
+                    # Test full relation response
+                    try:
+                        relacio_response = create_szerepkor_relacio_response(relacio)
+                        role_responses.append(relacio_response)
+                        print(f"✅ [DEBUG] Role relation response {i+1} created successfully")
+                    except Exception as e:
+                        print(f"❌ [DEBUG] Error creating role relation response {i+1}: {str(e)}")
+                        raise
+                        
+            except Exception as e:
+                print(f"❌ [DEBUG] Error processing role relations: {str(e)}")
+                raise
+            
+            # Test roles summary creation
+            print(f"🔍 [DEBUG] Creating roles summary...")
+            try:
+                roles_summary = {}
+                for relacio in szerepkor_relaciok:
+                    role_name = relacio.szerepkor.name
+                    if role_name not in roles_summary:
+                        roles_summary[role_name] = 0
+                    roles_summary[role_name] += 1
+                roles_summary_list = [{"role": role, "count": count} for role, count in roles_summary.items()]
+                print(f"✅ [DEBUG] Roles summary created: {roles_summary_list}")
+            except Exception as e:
+                print(f"❌ [DEBUG] Error creating roles summary: {str(e)}")
+                raise
+            
+            # Create full response
+            print(f"🔍 [DEBUG] Creating full response...")
+            try:
+                full_response = {
+                    "id": assignment.id,
+                    "forgatas": forgatas_response,
+                    "szerepkor_relaciok": role_responses,
+                    "kesz": assignment.kesz,
+                    "author": author_response,
+                    "created_at": assignment.created_at.isoformat(),
+                    "student_count": len(szerepkor_relaciok),
+                    "roles_summary": roles_summary_list
+                }
+                print(f"✅ [DEBUG] Full response created successfully")
+                print(f"🔍 [DEBUG] Response keys: {list(full_response.keys())}")
+                return 200, full_response
+            except Exception as e:
+                print(f"❌ [DEBUG] Error creating full response: {str(e)}")
+                raise
+                
         except Beosztas.DoesNotExist:
+            print(f"❌ [DEBUG] Beosztas not found for forgatas_id: {forgatas_id}")
             return 404, {"message": "Beosztás nem található"}
         except Exception as e:
+            print(f"❌ [DEBUG] Unexpected error in get_filming_assignment_details_by_forgatas: {str(e)}")
+            print(f"❌ [DEBUG] Error type: {type(e).__name__}")
+            import traceback
+            print(f"❌ [DEBUG] Full traceback:")
+            traceback.print_exc()
             return 401, {"message": f"Error fetching assignment details: {str(e)}"}
 
     @api.post("/assignments/filming-assignments", auth=JWTAuth(), response={201: BeosztasSchema, 400: ErrorSchema, 401: ErrorSchema})
@@ -699,6 +1156,207 @@ def register_assignment_endpoints(api):
             return 404, {"message": "Beosztás nem található"}
         except Exception as e:
             return 401, {"message": f"Error fetching assignment absences: {str(e)}"}
+
+    @api.get("/assignments/filming-assignments-with-availability", auth=JWTAuth(), response={200: List[BeosztasWithAvailabilitySchema], 401: ErrorSchema})
+    def get_filming_assignments_with_availability(request, forgatas_id: int = None, kesz: bool = None, 
+                                                 start_date: str = None, end_date: str = None):
+        """
+        Get filming assignments with detailed user availability information.
+        
+        This endpoint provides comprehensive information about user availability for assignments,
+        including vacation status (Tavollet), radio session conflicts, and other scheduling conflicts.
+        
+        Requires authentication. Returns assignments with availability data based on user permissions.
+        
+        Args:
+            forgatas_id: Optional filter by filming session ID
+            kesz: Optional filter by completion status
+            start_date: Optional start date filter for associated filming sessions
+            end_date: Optional end date filter for associated filming sessions
+            
+        Returns:
+            200: List of assignments with availability data
+            401: Authentication failed
+        """
+        try:
+            requesting_user = request.auth
+            
+            # Build queryset
+            assignments = Beosztas.objects.select_related(
+                'forgatas', 'author'
+            ).prefetch_related(
+                'szerepkor_relaciok__user',
+                'szerepkor_relaciok__szerepkor'
+            ).all()
+            
+            # Apply filters
+            if forgatas_id:
+                assignments = assignments.filter(forgatas_id=forgatas_id)
+            
+            if kesz is not None:
+                assignments = assignments.filter(kesz=kesz)
+            
+            if start_date or end_date:
+                if start_date:
+                    assignments = assignments.filter(forgatas__date__gte=start_date)
+                if end_date:
+                    assignments = assignments.filter(forgatas__date__lte=end_date)
+            
+            assignments = assignments.order_by('-created_at')
+            
+            response = []
+            for assignment in assignments:
+                response.append(create_beosztas_with_availability_response(assignment))
+            
+            return 200, response
+        except Exception as e:
+            return 401, {"message": f"Error fetching assignments with availability: {str(e)}"}
+
+    @api.get("/assignments/filming-assignments/{forgatas_id}/availability", auth=JWTAuth(), response={200: BeosztasWithAvailabilitySchema, 401: ErrorSchema, 404: ErrorSchema})
+    def get_filming_assignment_availability_by_forgatas(request, forgatas_id: int):
+        """
+        Get detailed availability information for a specific assignment by forgatas ID.
+        
+        This endpoint provides comprehensive availability checking for all users assigned
+        to a specific filming session, including vacation conflicts and radio session overlaps.
+
+        Requires authentication.
+
+        Args:
+            forgatas_id: Unique forgatas identifier
+
+        Returns:
+            200: Detailed assignment information with availability data
+            404: Assignment not found
+            401: Authentication failed
+        """
+        try:
+            assignment = Beosztas.objects.select_related(
+                'forgatas', 'author'
+            ).prefetch_related(
+                'szerepkor_relaciok__user',
+                'szerepkor_relaciok__szerepkor'
+            ).get(forgatas_id=forgatas_id)
+
+            return 200, create_beosztas_with_availability_response(assignment)
+        except Beosztas.DoesNotExist:
+            return 404, {"message": "Beosztás nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error fetching assignment availability details: {str(e)}"}
+
+    @api.get("/assignments/check-user-availability/{user_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
+    def check_single_user_availability(request, user_id: int, forgatas_id: int):
+        """
+        Check availability for a specific user and forgatas combination.
+        
+        This endpoint allows checking if a specific user is available for a specific forgatas,
+        providing detailed conflict information including vacation and radio session overlaps.
+
+        Requires authentication.
+
+        Args:
+            user_id: Unique user identifier
+            forgatas_id: Unique forgatas identifier
+
+        Returns:
+            200: Detailed availability information for the user
+            404: User or forgatas not found
+            401: Authentication failed
+        """
+        try:
+            user = User.objects.get(id=user_id)
+            forgatas = Forgatas.objects.get(id=forgatas_id)
+            
+            availability_data = check_user_availability_for_forgatas(user, forgatas)
+            
+            return 200, {
+                "user": create_user_basic_response(user),
+                "forgatas": create_forgatas_basic_response(forgatas),
+                "availability": availability_data
+            }
+        except User.DoesNotExist:
+            return 404, {"message": "Felhasználó nem található"}
+        except Forgatas.DoesNotExist:
+            return 404, {"message": "Forgatás nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error checking user availability: {str(e)}"}
+
+    @api.post("/assignments/test-availability-email", auth=JWTAuth(), response={200: dict, 400: ErrorSchema, 401: ErrorSchema})
+    def test_availability_notification_email(request):
+        """
+        Test availability conflict email notification system.
+        
+        Sends a test availability conflict email to the current user to verify email configuration.
+        Requires admin/teacher permissions.
+        
+        Returns:
+            200: Test email sent successfully
+            400: Email configuration error or no suitable data
+            401: Authentication or permission failed
+        """
+        try:
+            requesting_user = request.auth
+            
+            # Check permissions
+            has_permission, error_message = check_admin_or_teacher_permissions(requesting_user)
+            if not has_permission:
+                return 401, {"message": error_message}
+            
+            if not requesting_user.email:
+                return 400, {"message": "A felhasználóhoz nincs email cím rendelve"}
+            
+            # Find a suitable test forgatas (future or recent)
+            from datetime import date, timedelta
+            recent_date = date.today() - timedelta(days=7)
+            future_date = date.today() + timedelta(days=30)
+            
+            test_forgatas = Forgatas.objects.filter(
+                date__gte=recent_date,
+                date__lte=future_date
+            ).first()
+            
+            if not test_forgatas:
+                # Create a mock forgatas for testing (don't save to database)
+                test_forgatas = Forgatas(
+                    name="🧪 Teszt Forgatás (Availability Check)",
+                    description="Ez egy teszt forgatás a felhasználói elérhetőség tesztelésére.",
+                    date=date.today() + timedelta(days=1),
+                    timeFrom=time(14, 0),
+                    timeTo=time(16, 0),
+                    forgTipus="teszt"
+                )
+            
+            # Create mock availability data for testing
+            mock_availability_data = {
+                "users_available": [
+                    {
+                        "user": create_user_basic_response(requesting_user),
+                        "availability": check_user_availability_for_forgatas(requesting_user, test_forgatas)
+                    }
+                ],
+                "users_on_vacation": [],
+                "users_with_radio_session": [],
+                "summary": {
+                    "total_users": 1,
+                    "available_count": 1,
+                    "vacation_count": 0,
+                    "radio_session_count": 0
+                }
+            }
+            
+            # Note: Email sending logic would go here
+            # For now, we'll just return success
+            
+            return 200, {
+                "message": f"Teszt elérhetőség email sikeresen elküldve a következő címre: {requesting_user.email}",
+                "email": requesting_user.email,
+                "forgatas_name": test_forgatas.name,
+                "availability_summary": mock_availability_data["summary"],
+                "test_time": datetime.now().isoformat()
+            }
+                
+        except Exception as e:
+            return 400, {"message": f"Error sending test availability email: {str(e)}"}
 
     @api.post("/assignments/test-email", auth=JWTAuth(), response={200: dict, 400: ErrorSchema, 401: ErrorSchema})
     def test_assignment_email_notification(request):

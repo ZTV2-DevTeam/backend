@@ -26,8 +26,8 @@ class TavolletSchema(Schema):
     """Response schema for absence data."""
     id: int
     user: UserBasicSchema
-    start_date: str
-    end_date: str
+    start_date: str  # ISO datetime string
+    end_date: str    # ISO datetime string
     reason: Optional[str] = None
     denied: bool
     approved: bool
@@ -37,14 +37,14 @@ class TavolletSchema(Schema):
 class TavolletCreateSchema(Schema):
     """Request schema for creating new absence."""
     user_id: Optional[int] = None  # Optional - if not provided, uses current user
-    start_date: str
-    end_date: str
+    start_date: str    # ISO datetime string
+    end_date: str      # ISO datetime string
     reason: Optional[str] = None
 
 class TavolletUpdateSchema(Schema):
     """Request schema for updating existing absence."""
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
+    start_date: Optional[str] = None    # ISO datetime string
+    end_date: Optional[str] = None      # ISO datetime string
     reason: Optional[str] = None
     denied: Optional[bool] = None
     approved: Optional[bool] = None
@@ -81,10 +81,13 @@ def create_tavollet_response(tavollet: Tavollet) -> dict:
     Returns:
         Dictionary with absence information
     """
-    # Calculate duration in days
-    duration = (tavollet.end_date - tavollet.start_date).days + 1
+    # Calculate duration in days (considering datetime fields)
+    start_date = tavollet.start_date.date() if hasattr(tavollet.start_date, 'date') else tavollet.start_date
+    end_date = tavollet.end_date.date() if hasattr(tavollet.end_date, 'date') else tavollet.end_date
+    duration = (end_date - start_date).days + 1
     
     # Determine status based on approval/denial state and time
+    current_datetime = datetime.now()
     if tavollet.denied and tavollet.approved:
         # This shouldn't happen but handle it gracefully
         status = "konfliktus"  # Both flags set - should be fixed
@@ -92,9 +95,9 @@ def create_tavollet_response(tavollet: Tavollet) -> dict:
         status = "elutasítva"
     elif tavollet.approved:
         status = "jóváhagyva"
-    elif tavollet.end_date < date.today():
+    elif tavollet.end_date < current_datetime:
         status = "lezárt"
-    elif tavollet.start_date <= date.today() <= tavollet.end_date:
+    elif tavollet.start_date <= current_datetime <= tavollet.end_date:
         status = "folyamatban"
     else:
         status = "függőben"  # Changed from "jövőbeli" to be more descriptive of pending approval
@@ -286,21 +289,21 @@ def register_absence_endpoints(api):
                 # Creating for self
                 target_user = requesting_user
             
-            # Validate dates
+            # Validate datetime strings
             try:
-                start_date = datetime.fromisoformat(data.start_date).date()
-                end_date = datetime.fromisoformat(data.end_date).date()
+                start_datetime = datetime.fromisoformat(data.start_date.replace('Z', '+00:00'))
+                end_datetime = datetime.fromisoformat(data.end_date.replace('Z', '+00:00'))
             except ValueError:
-                return 400, {"message": "Hibás dátum formátum"}
+                return 400, {"message": "Hibás dátum/idő formátum. Használj ISO formátumot (pl. 2024-03-15T14:00:00)"}
             
-            if start_date > end_date:
-                return 400, {"message": "A záró dátumnak a kezdő dátum után kell lennie"}
+            if start_datetime >= end_datetime:
+                return 400, {"message": "A záró időpontnak a kezdő időpont után kell lennie"}
             
             # Check for overlapping absences (not denied)
             overlapping = Tavollet.objects.filter(
                 user=target_user,
-                start_date__lte=end_date,
-                end_date__gte=start_date,
+                start_date__lt=end_datetime,
+                end_date__gt=start_datetime,
                 denied=False
             ).exists()
             
@@ -310,8 +313,8 @@ def register_absence_endpoints(api):
             # Create absence
             absence = Tavollet.objects.create(
                 user=target_user,
-                start_date=start_date,
-                end_date=end_date,
+                start_date=start_datetime,
+                end_date=end_datetime,
                 reason=data.reason,
                 denied=False,
                 approved=False
@@ -353,25 +356,25 @@ def register_absence_endpoints(api):
             
             if data.start_date is not None:
                 try:
-                    updated_start_date = datetime.fromisoformat(data.start_date).date()
+                    updated_start_date = datetime.fromisoformat(data.start_date.replace('Z', '+00:00'))
                 except ValueError:
-                    return 400, {"message": "Hibás kezdő dátum formátum"}
+                    return 400, {"message": "Hibás kezdő dátum/idő formátum. Használj ISO formátumot"}
             
             if data.end_date is not None:
                 try:
-                    updated_end_date = datetime.fromisoformat(data.end_date).date()
+                    updated_end_date = datetime.fromisoformat(data.end_date.replace('Z', '+00:00'))
                 except ValueError:
-                    return 400, {"message": "Hibás záró dátum formátum"}
+                    return 400, {"message": "Hibás záró dátum/idő formátum. Használj ISO formátumot"}
             
-            # Validate date range
-            if updated_start_date > updated_end_date:
-                return 400, {"message": "A záró dátumnak a kezdő dátum után kell lennie"}
+            # Validate datetime range
+            if updated_start_date >= updated_end_date:
+                return 400, {"message": "A záró időpontnak a kezdő időpont után kell lennie"}
             
             # Check for overlapping absences (excluding current one, not denied)
             overlapping = Tavollet.objects.filter(
                 user=absence.user,
-                start_date__lte=updated_end_date,
-                end_date__gte=updated_start_date,
+                start_date__lt=updated_end_date,
+                end_date__gt=updated_start_date,
                 denied=False
             ).exclude(id=absence.id).exists()
             
@@ -596,18 +599,26 @@ def register_absence_endpoints(api):
             except User.DoesNotExist:
                 return 404, {"message": "Felhasználó nem található"}
             
-            # Parse dates
+            # Parse dates/datetimes
             try:
-                check_start = datetime.fromisoformat(start_date).date()
-                check_end = datetime.fromisoformat(end_date).date()
+                # Try to parse as datetime first, fallback to date
+                try:
+                    check_start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                    check_end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                except ValueError:
+                    # If not datetime, try as date and convert to datetime range
+                    check_start_date = datetime.fromisoformat(start_date).date()
+                    check_end_date = datetime.fromisoformat(end_date).date()
+                    check_start = datetime.combine(check_start_date, datetime.min.time())
+                    check_end = datetime.combine(check_end_date, datetime.max.time())
             except ValueError:
-                return 400, {"message": "Hibás dátum formátum"}
+                return 400, {"message": "Hibás dátum/idő formátum"}
             
             # Find conflicting absences (approved or pending - not denied)
             conflicts = Tavollet.objects.filter(
                 user=target_user,
-                start_date__lte=check_end,
-                end_date__gte=check_start,
+                start_date__lt=check_end,
+                end_date__gt=check_start,
                 denied=False
             )
             

@@ -835,12 +835,18 @@ class TavolletAdmin(ImportExportModelAdmin):
     tavollet_display.short_description = 'Távollét'
     
     def date_range(self, obj):
-        return f"{obj.start_date} - {obj.end_date}"
+        start_str = obj.start_date.strftime("%Y-%m-%d %H:%M") if obj.start_date else "N/A"
+        end_str = obj.end_date.strftime("%Y-%m-%d %H:%M") if obj.end_date else "N/A"
+        return f"{start_str} - {end_str}"
     date_range.short_description = 'Időszak'
     
     def duration_days(self, obj):
-        duration = (obj.end_date - obj.start_date).days + 1
-        return format_html('<span style="color: blue;">📅 {} nap</span>', duration)
+        if obj.start_date and obj.end_date:
+            start_date = obj.start_date.date() if hasattr(obj.start_date, 'date') else obj.start_date
+            end_date = obj.end_date.date() if hasattr(obj.end_date, 'date') else obj.end_date
+            duration = (end_date - start_date).days + 1
+            return format_html('<span style="color: blue;">📅 {} nap</span>', duration)
+        return "N/A"
     duration_days.short_description = 'Időtartam'
     
     def status_display(self, obj):

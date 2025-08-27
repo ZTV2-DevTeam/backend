@@ -4,7 +4,7 @@ Comprehensive import/export functionality for the FTV system.
 """
 
 from import_export import resources, fields, widgets
-from import_export.widgets import ForeignKeyWidget, ManyToManyWidget, DateWidget, TimeWidget, BooleanWidget
+from import_export.widgets import ForeignKeyWidget, ManyToManyWidget, DateWidget, DateTimeWidget, TimeWidget, BooleanWidget
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
 from django.utils.crypto import get_random_string
@@ -628,12 +628,12 @@ class TavolletResource(resources.ModelResource):
     start_date = fields.Field(
         column_name='start_date',
         attribute='start_date',
-        widget=DateWidget(format='%Y-%m-%d')
+        widget=DateTimeWidget(format='%Y-%m-%d %H:%M:%S')
     )
     end_date = fields.Field(
         column_name='end_date',
         attribute='end_date',
-        widget=DateWidget(format='%Y-%m-%d')
+        widget=DateTimeWidget(format='%Y-%m-%d %H:%M:%S')
     )
     duration_days = fields.Field(
         column_name='duration_days',
@@ -657,7 +657,9 @@ class TavolletResource(resources.ModelResource):
         
     def dehydrate_duration_days(self, tavollet):
         """Export duration in days"""
-        return (tavollet.end_date - tavollet.start_date).days + 1
+        start_date = tavollet.start_date.date() if hasattr(tavollet.start_date, 'date') else tavollet.start_date
+        end_date = tavollet.end_date.date() if hasattr(tavollet.end_date, 'date') else tavollet.end_date
+        return (end_date - start_date).days + 1
 
 
 # ============================================================================

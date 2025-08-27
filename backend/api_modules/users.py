@@ -370,8 +370,8 @@ def register_user_endpoints(api):
             from api.models import Tavollet, RadioSession
             absences = Tavollet.objects.filter(
                 user=user_profile.user,
-                start_date__lte=end_dt.date(),
-                end_date__gte=start_dt.date(),
+                start_date__lt=end_dt,
+                end_date__gt=start_dt,
                 denied=False
             )
             for absence in absences:
