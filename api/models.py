@@ -5,6 +5,37 @@ from django.db.models.signals import m2m_changed, pre_save, post_save
 from django.dispatch import receiver
 from django.contrib.auth.hashers import make_password
 
+# ============================================================================
+# Utility Functions for Timezone Handling
+# ============================================================================
+
+def convert_to_local_naive_datetime(dt):
+    """
+    Convert a timezone-aware datetime to Europe/Budapest local time and make it naive.
+    This is needed because USE_TZ=False and SQLite doesn't support timezone-aware datetimes.
+    
+    Args:
+        dt: datetime object (timezone-aware or naive)
+        
+    Returns:
+        naive datetime in Europe/Budapest timezone
+    """
+    if dt is None:
+        return None
+    
+    if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+        # Convert timezone-aware datetime to Europe/Budapest, then make naive
+        from zoneinfo import ZoneInfo
+        budapest_tz = ZoneInfo('Europe/Budapest')
+        return dt.astimezone(budapest_tz).replace(tzinfo=None)
+    
+    # Already naive - assume it's in local time
+    return dt
+
+# ============================================================================
+# USER MODEL CUSTOMIZATION
+# ============================================================================
+
 # Monkey patch Django's User model to change get_full_name format
 def get_full_name_flipped(self):
     """
@@ -279,11 +310,9 @@ class Profile(models.Model):
         if isinstance(end_datetime, date) and not isinstance(end_datetime, datetime):
             end_datetime = datetime.combine(end_datetime, datetime.max.time())
         
-        # Since USE_TZ=False, ensure we're working with naive datetimes for SQLite compatibility
-        if hasattr(start_datetime, 'tzinfo') and start_datetime.tzinfo is not None:
-            start_datetime = start_datetime.replace(tzinfo=None)
-        if hasattr(end_datetime, 'tzinfo') and end_datetime.tzinfo is not None:
-            end_datetime = end_datetime.replace(tzinfo=None)
+        # Convert to local naive datetimes for SQLite compatibility
+        start_datetime = convert_to_local_naive_datetime(start_datetime)
+        end_datetime = convert_to_local_naive_datetime(end_datetime)
         
         # Check if user has marked absence during this period
         # Now using datetime comparison for more precise overlaps
@@ -875,11 +904,9 @@ class RadioSession(models.Model):
         session_start = datetime.combine(self.date, self.time_from)
         session_end = datetime.combine(self.date, self.time_to)
         
-        # Since USE_TZ=False, ensure we're working with naive datetimes for SQLite compatibility
-        if hasattr(start_datetime, 'tzinfo') and start_datetime.tzinfo is not None:
-            start_datetime = start_datetime.replace(tzinfo=None)
-        if hasattr(end_datetime, 'tzinfo') and end_datetime.tzinfo is not None:
-            end_datetime = end_datetime.replace(tzinfo=None)
+        # Convert to local naive datetimes for SQLite compatibility
+        start_datetime = convert_to_local_naive_datetime(start_datetime)
+        end_datetime = convert_to_local_naive_datetime(end_datetime)
         
         return session_start < end_datetime and session_end > start_datetime
     

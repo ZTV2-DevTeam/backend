@@ -11,6 +11,33 @@ from datetime import datetime, date
 from typing import Optional
 
 # ============================================================================
+# Utility Functions for Timezone Handling
+# ============================================================================
+
+def convert_to_local_naive_datetime(dt):
+    """
+    Convert a timezone-aware datetime to Europe/Budapest local time and make it naive.
+    This is needed because USE_TZ=False and SQLite doesn't support timezone-aware datetimes.
+    
+    Args:
+        dt: datetime object (timezone-aware or naive)
+        
+    Returns:
+        naive datetime in Europe/Budapest timezone
+    """
+    if dt is None:
+        return None
+    
+    if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+        # Convert timezone-aware datetime to Europe/Budapest, then make naive
+        from zoneinfo import ZoneInfo
+        budapest_tz = ZoneInfo('Europe/Budapest')
+        return dt.astimezone(budapest_tz).replace(tzinfo=None)
+    
+    # Already naive - assume it's in local time
+    return dt
+
+# ============================================================================
 # Schemas
 # ============================================================================
 
@@ -88,15 +115,9 @@ def create_tavollet_response(tavollet: Tavollet) -> dict:
     
     # Determine status based on approval/denial state and time
     current_datetime = datetime.now()
-    # Ensure comparison compatibility (both naive or both aware)
-    tavollet_end = tavollet.end_date
-    tavollet_start = tavollet.start_date
-    
-    # Since USE_TZ=False, ensure we're working with naive datetimes
-    if hasattr(tavollet_end, 'tzinfo') and tavollet_end.tzinfo is not None:
-        tavollet_end = tavollet_end.replace(tzinfo=None)
-    if hasattr(tavollet_start, 'tzinfo') and tavollet_start.tzinfo is not None:
-        tavollet_start = tavollet_start.replace(tzinfo=None)
+    # Ensure comparison compatibility by converting to local naive datetimes
+    tavollet_end = convert_to_local_naive_datetime(tavollet.end_date)
+    tavollet_start = convert_to_local_naive_datetime(tavollet.start_date)
     
     if tavollet.denied and tavollet.approved:
         # This shouldn't happen but handle it gracefully
@@ -304,12 +325,9 @@ def register_absence_endpoints(api):
                 start_datetime = datetime.fromisoformat(data.start_date.replace('Z', '+00:00'))
                 end_datetime = datetime.fromisoformat(data.end_date.replace('Z', '+00:00'))
                 
-                # Since USE_TZ=False, we need to remove timezone info for SQLite compatibility
-                # Convert to naive datetime (assumes Europe/Budapest timezone as per settings)
-                if start_datetime.tzinfo is not None:
-                    start_datetime = start_datetime.replace(tzinfo=None)
-                if end_datetime.tzinfo is not None:
-                    end_datetime = end_datetime.replace(tzinfo=None)
+                # Convert to local naive datetimes for SQLite compatibility
+                start_datetime = convert_to_local_naive_datetime(start_datetime)
+                end_datetime = convert_to_local_naive_datetime(end_datetime)
                     
             except ValueError:
                 return 400, {"message": "Hibás dátum/idő formátum. Használj ISO formátumot (pl. 2024-03-15T14:00:00)"}
@@ -375,18 +393,14 @@ def register_absence_endpoints(api):
             if data.start_date is not None:
                 try:
                     updated_start_date = datetime.fromisoformat(data.start_date.replace('Z', '+00:00'))
-                    # Remove timezone info for SQLite compatibility since USE_TZ=False
-                    if updated_start_date.tzinfo is not None:
-                        updated_start_date = updated_start_date.replace(tzinfo=None)
+                    updated_start_date = convert_to_local_naive_datetime(updated_start_date)
                 except ValueError:
                     return 400, {"message": "Hibás kezdő dátum/idő formátum. Használj ISO formátumot"}
             
             if data.end_date is not None:
                 try:
                     updated_end_date = datetime.fromisoformat(data.end_date.replace('Z', '+00:00'))
-                    # Remove timezone info for SQLite compatibility since USE_TZ=False
-                    if updated_end_date.tzinfo is not None:
-                        updated_end_date = updated_end_date.replace(tzinfo=None)
+                    updated_end_date = convert_to_local_naive_datetime(updated_end_date)
                 except ValueError:
                     return 400, {"message": "Hibás záró dátum/idő formátum. Használj ISO formátumot"}
             
@@ -630,11 +644,9 @@ def register_absence_endpoints(api):
                     check_start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
                     check_end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
                     
-                    # Remove timezone info for SQLite compatibility since USE_TZ=False
-                    if check_start.tzinfo is not None:
-                        check_start = check_start.replace(tzinfo=None)
-                    if check_end.tzinfo is not None:
-                        check_end = check_end.replace(tzinfo=None)
+                    # Convert to local naive datetimes for SQLite compatibility
+                    check_start = convert_to_local_naive_datetime(check_start)
+                    check_end = convert_to_local_naive_datetime(check_end)
                         
                 except ValueError:
                     # If not datetime, try as date and convert to datetime range
