@@ -350,10 +350,10 @@ class Osztaly(models.Model):
         if self.szekcio.upper() == 'F':
             if self.startYear == current_year and datetime.now().month < 9:
                 return 'NYF'
-            
+            # Decrease by one year as requested
             year_diff = current_year - self.startYear 
             year_diff += 9 if elso_felev else 8
-
+            year_diff -= 1
             return f'{year_diff}F'
         return f'{self.startYear[:-2]}{self.szekcio.upper()}'
     
@@ -364,9 +364,9 @@ class Osztaly(models.Model):
         
         if not reference_tanev:
             return str(self)  # Fallback to original logic
-            
+        
         if self.szekcio.upper() == 'F':
-            year_diff = reference_tanev.start_year - self.startYear + 8
+            year_diff = reference_tanev.start_year - self.startYear + 7
             if year_diff < 8:
                 return 'Bejövő NYF'
             return f'{year_diff}F'
