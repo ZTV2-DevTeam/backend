@@ -346,16 +346,14 @@ class Osztaly(models.Model):
 
     def __str__(self):
         current_year = datetime.now().year
-        elso_felev = datetime.now().month >= 9
-        if self.szekcio.upper() == 'F':
-            if self.startYear == current_year and datetime.now().month < 9:
+        month = datetime.now().month
+        szekcio = self.szekcio.upper()
+        if szekcio == 'F':
+            if self.startYear == current_year and month < 9:
                 return 'NYF'
-            # Decrease by one year as requested
-            year_diff = current_year - self.startYear 
-            year_diff += 9 if elso_felev else 8
-            year_diff -= 1
-            return f'{year_diff}F'
-        return f'{self.startYear[:-2]}{self.szekcio.upper()}'
+            year_diff = current_year - self.startYear + (9 if month >= 9 else 8) - 1
+            return 'NYF' if year_diff <= 8 else f'{year_diff}F'
+        return f'{str(self.startYear)[:-2]}{szekcio}'
     
     def get_current_year_name(self, reference_tanev=None):
         """Get the class name for a specific school year"""
