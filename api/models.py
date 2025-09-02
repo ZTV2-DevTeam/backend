@@ -351,7 +351,7 @@ class Osztaly(models.Model):
         if szekcio == 'F':
             if self.startYear == current_year and month < 9:
                 return 'NYF'
-            year_diff = current_year - self.startYear + (9 if month >= 9 else 8) - 1
+            year_diff = current_year - self.startYear + (9 wif month >= 9 else 8) - 1
             return 'NYF' if year_diff <= 8 else f'{year_diff}F'
         return f'{str(self.startYear)[:-2]}{szekcio}'
     
