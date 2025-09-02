@@ -279,6 +279,12 @@ class Profile(models.Model):
         if isinstance(end_datetime, date) and not isinstance(end_datetime, datetime):
             end_datetime = datetime.combine(end_datetime, datetime.max.time())
         
+        # Since USE_TZ=False, ensure we're working with naive datetimes for SQLite compatibility
+        if hasattr(start_datetime, 'tzinfo') and start_datetime.tzinfo is not None:
+            start_datetime = start_datetime.replace(tzinfo=None)
+        if hasattr(end_datetime, 'tzinfo') and end_datetime.tzinfo is not None:
+            end_datetime = end_datetime.replace(tzinfo=None)
+        
         # Check if user has marked absence during this period
         # Now using datetime comparison for more precise overlaps
         absence_overlap = Tavollet.objects.filter(
@@ -293,6 +299,10 @@ class Profile(models.Model):
         
         # If this is a second year radio student, check for radio sessions
         if self.is_second_year_radio_student:
+            # Extract date components for radio session filtering
+            start_date = start_datetime.date() if hasattr(start_datetime, 'date') else start_datetime
+            end_date = end_datetime.date() if hasattr(end_datetime, 'date') else end_datetime
+            
             radio_session_overlap = RadioSession.objects.filter(
                 participants=self.user
             ).filter(
@@ -864,6 +874,12 @@ class RadioSession(models.Model):
         
         session_start = datetime.combine(self.date, self.time_from)
         session_end = datetime.combine(self.date, self.time_to)
+        
+        # Since USE_TZ=False, ensure we're working with naive datetimes for SQLite compatibility
+        if hasattr(start_datetime, 'tzinfo') and start_datetime.tzinfo is not None:
+            start_datetime = start_datetime.replace(tzinfo=None)
+        if hasattr(end_datetime, 'tzinfo') and end_datetime.tzinfo is not None:
+            end_datetime = end_datetime.replace(tzinfo=None)
         
         return session_start < end_datetime and session_end > start_datetime
     
