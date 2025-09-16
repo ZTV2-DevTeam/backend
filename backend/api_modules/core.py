@@ -363,6 +363,10 @@ def register_core_endpoints(api):
                     permissions["can_participate_in_radio"] = True
                     permissions["can_view_radio_schedule"] = True
                 
+                # Check if user can create forgatas based on profile conditions
+                # (10F class, production leader, or szerkeszto field)
+                permissions["can_create_forgatas"] = profile.can_create_forgatas
+                
                 # Set permissions based on admin type
                 if permissions["is_developer_admin"]:
                     # Developer admin has all permissions
@@ -433,6 +437,10 @@ def register_core_endpoints(api):
                     "navigation_items": ["dashboard", "forgatas", "profile"],
                     "quick_actions": ["view_announcements", "check_schedule"]
                 })
+                
+                # Add create forgatas action for users who can create them
+                if profile and permissions.get("can_create_forgatas", False):
+                    display_properties["quick_actions"].append("create_forgatas")
                 
                 # Add radio menu for radio students
                 if profile and (permissions["can_participate_in_radio"] or role_info["is_second_year_radio"]):

@@ -249,10 +249,10 @@ class OsztalyAdmin(ImportExportModelAdmin):
 @admin.register(Profile)
 class ProfileAdmin(ImportExportModelAdmin):
     resource_classes = [ProfileResource]  # Use only ProfileResource which handles both osztaly_name and osztaly_display
-    list_display = ['user_full_name', 'user_status', 'telefonszam', 'medias', 'display_osztaly', 'display_stab', 'admin_level', 'special_role_display']
+    list_display = ['user_full_name', 'user_status', 'telefonszam', 'medias', 'display_osztaly', 'display_stab', 'admin_level', 'special_role_display', 'szerkeszto_status']
     list_filter = [
         'medias', 'osztaly', 'stab', 'radio_stab', 'admin_type', 
-        'special_role'
+        'special_role', 'szerkeszto'
     ]
     search_fields = ['user__first_name', 'user__last_name', 'user__username', 'telefonszam']
     autocomplete_fields = ['user', 'osztaly', 'stab', 'radio_stab']
@@ -271,7 +271,7 @@ class ProfileAdmin(ImportExportModelAdmin):
             'description': 'Osztály és stáb besorolások'
         }),
         ('⚡ Jogosultságok és szerepek', {
-            'fields': ('admin_type', 'special_role'),
+            'fields': ('admin_type', 'special_role', 'szerkeszto'),
             'description': 'Adminisztrátor jogosultságok és különleges szerepek'
         }),
         ('📊 Számított jogosultságok', {
@@ -328,6 +328,12 @@ class ProfileAdmin(ImportExportModelAdmin):
         return '-'
     special_role_display.short_description = 'Különleges szerep'
     
+    def szerkeszto_status(self, obj):
+        if obj.szerkeszto:
+            return format_html('<span style="color: green; font-weight: bold;">✏️ Igen</span>')
+        return format_html('<span style="color: gray;">❌ Nem</span>')
+    szerkeszto_status.short_description = 'Szerkesztő'
+    
     def display_permissions(self, obj):
         perms = []
         if obj.is_admin:
@@ -336,6 +342,8 @@ class ProfileAdmin(ImportExportModelAdmin):
             perms.append('👨‍🏫 Osztályfőnök')
         if obj.is_production_leader:
             perms.append('🎬 Gyártásvezető')
+        if obj.szerkeszto:
+            perms.append('✏️ Szerkesztő')
         return format_html('<br>'.join(perms)) if perms else 'Nincs különleges jogosultság'
     display_permissions.short_description = 'Összes jogosultság'
 

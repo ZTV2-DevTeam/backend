@@ -263,6 +263,10 @@ class Profile(models.Model):
         if self.szerkeszto:
             return True
         
+        # Check if user has any admin permissions
+        if self.is_admin:
+            return True
+        
         return False
     
     def is_current_10f_student(self):
