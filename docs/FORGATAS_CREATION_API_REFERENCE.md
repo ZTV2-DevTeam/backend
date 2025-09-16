@@ -203,10 +203,10 @@ The forgatás creation form requires the following data:
 }
 ```
 
-**Note:** To assign a reporter, update the forgatás after creation or add riporter_id to the creation schema.
+**Note:** To assign an editor, update the forgatás after creation or add szerkeszto_id to the creation schema.
 
 ### **🔴 NEEDS ENHANCEMENT** - Update Forgatás Creation Schema
-The current `ForgatCreateSchema` should be enhanced to include reporter assignment:
+The current `ForgatCreateSchema` should be enhanced to include editor assignment:
 
 ```python
 class ForgatCreateSchema(Schema):
@@ -217,7 +217,7 @@ class ForgatCreateSchema(Schema):
     time_to: str
     location_id: Optional[int] = None
     contact_person_id: Optional[int] = None
-    riporter_id: Optional[int] = None  # Add this field
+    szerkeszto_id: Optional[int] = None  # Add this field
     notes: Optional[str] = None
     type: str
     related_kacsa_id: Optional[int] = None
@@ -300,9 +300,9 @@ def get_available_kacsa_sessions(request):
 
 **File:** `backend/api_modules/production.py` (enhance existing)
 
-- Update `ForgatCreateSchema` to include `riporter_id`
-- Update creation logic to assign reporter
-- Add validation for reporter eligibility
+- Update `ForgatCreateSchema` to include `szerkeszto_id`
+- Update creation logic to assign editor
+- Add validation for editor eligibility
 
 ---
 
@@ -351,7 +351,7 @@ def get_available_kacsa_sessions(request):
        },
        body: JSON.stringify({
          ...formData,
-         riporter_id: selectedReporter?.id,
+         szerkeszto_id: selectedReporter?.id,
          related_kacsa_id: selectedKacsa?.id,
          equipment_ids: selectedEquipment.map(eq => eq.id)
        })
@@ -391,12 +391,12 @@ def get_available_kacsa_sessions(request):
 - 🔴 **Enhanced Forgatás Creation:** Include reporter assignment in creation
 
 ### Enhancement Needed
-- 🔧 **Forgatás Schema:** Add riporter_id field to creation schema
-- 🔧 **Validation Logic:** Reporter eligibility validation
-- 🔧 **Response Schemas:** Standardized student and reporter response formats
+- 🔧 **Forgatás Schema:** Add szerkeszto_id field to creation schema
+- 🔧 **Validation Logic:** Editor eligibility validation
+- 🔧 **Response Schemas:** Standardized student and editor response formats
 
 The implementation priority should be:
-1. Student/Reporter endpoints (highest priority)
-2. Enhanced Forgatás creation with reporter assignment
+1. Student/Editor endpoints (highest priority)
+2. Enhanced Forgatás creation with editor assignment
 3. KaCsa availability endpoint
 4. Date-based school year lookup (lowest priority - can use active school year initially)

@@ -517,9 +517,9 @@ class ForgatásResource(resources.ModelResource):
         attribute='location',
         widget=ForeignKeyWidget(Partner, 'name')
     )
-    riporter_username = fields.Field(
-        column_name='riporter_username',
-        attribute='riporter',
+    szerkeszto_username = fields.Field(
+        column_name='szerkeszto_username',
+        attribute='szerkeszto',
         widget=ForeignKeyWidget(User, 'username')
     )
     contact_person_name = fields.Field(
@@ -542,12 +542,12 @@ class ForgatásResource(resources.ModelResource):
         model = Forgatas
         fields = (
             'id', 'name', 'description', 'date', 'timeFrom', 'timeTo',
-            'location_name', 'riporter_username', 'contact_person_name',
+            'location_name', 'szerkeszto_username', 'contact_person_name',
             'notes', 'forgTipus', 'tanev_display', 'equipment_names'
         )
         export_order = (
             'id', 'name', 'description', 'date', 'timeFrom', 'timeTo',
-            'location_name', 'riporter_username', 'contact_person_name',
+            'location_name', 'szerkeszto_username', 'contact_person_name',
             'notes', 'forgTipus', 'tanev_display', 'equipment_names'
         )
 

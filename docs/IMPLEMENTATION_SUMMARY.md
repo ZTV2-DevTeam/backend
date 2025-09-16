@@ -1,4 +1,9 @@
-# Forgatás Creation API - Implementation Summary
+# Forgatás Creation API - I- **GET `/api/students/reporters/experienced`** - List experienced editors
+  - Returns: Editors with 3+ filming sessions
+
+- **GET `/api/students/reporters/available`** - List available editors
+  - Parameters: `date`, `time_from`, `time_to` (optional)  
+  - Returns: Editors without scheduling conflictsntation Summary
 
 ## ✅ Implementation Status
 
@@ -8,15 +13,15 @@ All required endpoints for the forgatás creation form have been successfully im
 
 ## 🚀 New Endpoints Created
 
-### 1. Student/Reporter Endpoints (NEW)
+### 1. Student/Editor Endpoints (NEW)
 **Module:** `backend/api_modules/students.py`
 
 - **GET `/api/students`** - List students with comprehensive filtering
   - Filters: `section`, `grade`, `can_be_reporter`, `search`
-  - Returns: Full student profiles with class and reporter eligibility info
+  - Returns: Full student profiles with class and editor eligibility info
 
-- **GET `/api/students/reporters`** - List students eligible as reporters
-  - Returns: Reporter-specific data with experience stats
+- **GET `/api/students/reporters`** - List students eligible as editors
+  - Returns: Editor-specific data with experience stats
 
 - **GET `/api/students/media`** - List media students (F section)
   - Returns: Media students with radio student identification
@@ -39,12 +44,12 @@ All required endpoints for the forgatás creation form have been successfully im
   - Returns: KaCsa sessions with linking status information
 
 - **POST `/api/production/filming-sessions`** - Enhanced forgatás creation
-  - **NEW FIELD:** `riporter_id` for reporter assignment
-  - **VALIDATION:** Reporter eligibility and conflict checking
+  - **NEW FIELD:** `szerkeszto_id` for editor assignment
+  - **VALIDATION:** Editor eligibility and conflict checking
 
 - **PUT `/api/production/filming-sessions/{id}`** - Enhanced forgatás update
-  - **NEW FIELD:** `riporter_id` for reporter assignment/change
-  - **VALIDATION:** Reporter conflicts on updates
+  - **NEW FIELD:** `szerkeszto_id` for editor assignment/change
+  - **VALIDATION:** Editor conflicts on updates
 
 ### 3. Enhanced Academic Endpoints (UPDATED)
 **Module:** `backend/api_modules/academic.py`
@@ -58,6 +63,8 @@ All required endpoints for the forgatás creation form have been successfully im
 
 ### Student Reporters
 ```javascript
+### Student Editors
+
 // GET /api/students/reporters
 [
   {
@@ -101,7 +108,7 @@ All required endpoints for the forgatás creation form have been successfully im
   "time_to": "16:00",
   "location_id": 1,
   "contact_person_id": 1,
-  "riporter_id": 123,        // NEW: Reporter assignment
+  "szerkeszto_id": 123,        // NEW: Editor assignment
   "notes": "Formal attire required",
   "type": "rendezveny",
   "related_kacsa_id": 15,    // Link to KaCsa session
@@ -113,10 +120,10 @@ All required endpoints for the forgatás creation form have been successfully im
 
 ## 🔧 Key Features Implemented
 
-### 1. Reporter Management
-- **Eligibility Validation:** Only media students (F section) can be reporters
-- **Conflict Detection:** Prevents double-booking reporters
-- **Experience Tracking:** Tracks reporter experience levels
+### 1. Editor Management
+- **Eligibility Validation:** Only media students (F section) can be editors
+- **Conflict Detection:** Prevents double-booking editors
+- **Experience Tracking:** Tracks editor experience levels
 - **Availability Checking:** Real-time conflict detection
 
 ### 2. KaCsa Integration
@@ -130,7 +137,7 @@ All required endpoints for the forgatás creation form have been successfully im
 - **Consistency Checks:** Ensures date and school year alignment
 
 ### 4. Enhanced Validation
-- **Reporter Conflicts:** Checks for scheduling conflicts during creation/update
+- **Editor Conflicts:** Checks for scheduling conflicts during creation/update
 - **Equipment Conflicts:** Existing equipment conflict detection
 - **Date Validation:** Comprehensive date and time validation
 - **Permission Checks:** Role-based access control maintained
@@ -196,7 +203,7 @@ const submitForgatás = async (formData) => {
     time_to: formData.time_to,
     location_id: formData.location_id,
     contact_person_id: formData.contact_person_id,
-    riporter_id: formData.selected_reporter_id,
+    szerkeszto_id: formData.selected_reporter_id,
     related_kacsa_id: formData.selected_kacsa_id,
     type: formData.type,
     equipment_ids: formData.selected_equipment_ids,
@@ -274,7 +281,7 @@ curl -X POST \
     "time_from": "14:00",
     "time_to": "16:00",
     "type": "rendes",
-    "riporter_id": 123
+    "szerkeszto_id": 123
   }' \
   http://localhost:8000/api/production/filming-sessions
 ```
@@ -312,9 +319,9 @@ The backend is production-ready for the forgatás creation feature!
 
 ### Fixed Issues
 
-#### Django FieldError - `forgatas_riporter` field
-**Error:** `Cannot resolve keyword 'forgatas_riporter' into field`  
-**Fix:** Changed `Count('forgatas_riporter')` to `Count('forgatas')` in students.py annotations  
+#### Django FieldError - `forgatas_szerkeszto` field
+**Error:** `Cannot resolve keyword 'forgatas_szerkeszto' into field`  
+**Fix:** Changed `Count('forgatas_szerkeszto')` to `Count('forgatas')` in students.py annotations  
 **Affected endpoints:** `/api/students/reporters`, `/api/students/reporters/experienced`
 
 #### Route Conflict - KaCsa Available Endpoint

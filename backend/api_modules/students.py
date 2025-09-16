@@ -140,6 +140,7 @@ class ReporterSchema(Schema):
     is_experienced: bool
     reporter_sessions_count: int = 0
     last_reporter_date: Optional[str] = None
+    reason: str
 
 class MediaStudentSchema(Schema):
     """Media student information schema."""
@@ -219,7 +220,7 @@ def create_student_response(user: User, include_reporter_stats: bool = False) ->
     # Get reporter statistics if requested
     reporter_stats = {}
     if include_reporter_stats:
-        reporter_sessions = Forgatas.objects.filter(riporter=user)
+        reporter_sessions = Forgatas.objects.filter(szerkeszto=user)
         reporter_stats = {
             "reporter_sessions_count": reporter_sessions.count(),
             "last_reporter_date": reporter_sessions.order_by('-date').first().date.isoformat() if reporter_sessions.exists() else None,
@@ -342,23 +343,28 @@ def register_student_endpoints(api):
         """
         List students eligible to be reporters.
         
-        Returns only current 10F students who can be assigned as reporters for filming sessions,
-        with additional reporter-specific information and statistics.
+        Returns three groups:
+        1. 10F students (reason: "Harmadév")
+        2. Production leaders (reason: "GYV") 
+        3. Users with editor permission (reason: "Lehetséges Szerkesztő")
         
         Returns:
-            200: List of eligible reporters (only 10F students)
+            200: List of eligible reporters from all three groups
             401: Authentication failed
             400: No active school year found
         """
         # Calculate the start year for current 10F students
         current_tanev = Tanev.get_active()
         if not current_tanev:
-            return 401, {"message": "No active school year found."}
+            return 400, {"message": "No active school year found."}
         
+        reporters = []
+        
+        # Group 1: 10F students (Harmadév)
         # 10F students started when current_tanev.start_year - 10 + 8 = current_tanev.start_year - 2
         target_start_year_10f = current_tanev.start_year - 2
         
-        queryset = get_students_base_queryset().filter(
+        tenf_queryset = get_students_base_queryset().filter(
             profile__medias=True,
             profile__osztaly__isnull=False,
             profile__osztaly__szekcio__iexact='F',
@@ -367,20 +373,18 @@ def register_student_endpoints(api):
             reporter_count=Count('forgatas')
         )
         
-        reporters = []
-        for user in queryset:
+        for user in tenf_queryset:
             profile = user.profile
             osztaly_display = str(profile.osztaly) if profile.osztaly else "Nincs osztály"
             
             # Calculate grade level for F section students
             grade_level = None
             if profile.osztaly and profile.osztaly.szekcio.upper() == 'F':
-                current_tanev = Tanev.get_active()
                 if current_tanev:
                     grade_level = current_tanev.start_year - profile.osztaly.startYear + 8
             
             # Get reporter statistics
-            last_session = Forgatas.objects.filter(riporter=user).order_by('-date').first()
+            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-date').first()
             
             reporters.append({
                 "id": user.id,
@@ -390,10 +394,83 @@ def register_student_endpoints(api):
                 "grade_level": grade_level,
                 "is_experienced": user.reporter_count >= 3,
                 "reporter_sessions_count": user.reporter_count,
-                "last_reporter_date": last_session.date.isoformat() if last_session else None
+                "last_reporter_date": last_session.date.isoformat() if last_session else None,
+                "reason": "Harmadév"
             })
         
-        return 200, reporters
+        # Group 2: Production leaders (GYV)
+        production_leaders_queryset = get_students_base_queryset().filter(
+            profile__special_role='production_leader'
+        ).annotate(
+            reporter_count=Count('forgatas')
+        )
+        
+        for user in production_leaders_queryset:
+            profile = user.profile
+            osztaly_display = str(profile.osztaly) if profile.osztaly else "Nincs osztály"
+            
+            # Calculate grade level if they have a class
+            grade_level = None
+            if profile.osztaly and profile.osztaly.szekcio.upper() == 'F':
+                if current_tanev:
+                    grade_level = current_tanev.start_year - profile.osztaly.startYear + 8
+            
+            # Get reporter statistics
+            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-date').first()
+            
+            reporters.append({
+                "id": user.id,
+                "username": user.username,
+                "full_name": user.get_full_name(),
+                "osztaly_display": osztaly_display,
+                "grade_level": grade_level,
+                "is_experienced": user.reporter_count >= 3,
+                "reporter_sessions_count": user.reporter_count,
+                "last_reporter_date": last_session.date.isoformat() if last_session else None,
+                "reason": "GYV"
+            })
+        
+        # Group 3: Users with editor permission (Lehetséges Szerkesztő)
+        editor_permission_queryset = get_students_base_queryset().filter(
+            profile__szerkeszto=True
+        ).annotate(
+            reporter_count=Count('forgatas')
+        )
+        
+        for user in editor_permission_queryset:
+            profile = user.profile
+            osztaly_display = str(profile.osztaly) if profile.osztaly else "Nincs osztály"
+            
+            # Calculate grade level if they have a class
+            grade_level = None
+            if profile.osztaly and profile.osztaly.szekcio.upper() == 'F':
+                if current_tanev:
+                    grade_level = current_tanev.start_year - profile.osztaly.startYear + 8
+            
+            # Get reporter statistics
+            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-date').first()
+            
+            reporters.append({
+                "id": user.id,
+                "username": user.username,
+                "full_name": user.get_full_name(),
+                "osztaly_display": osztaly_display,
+                "grade_level": grade_level,
+                "is_experienced": user.reporter_count >= 3,
+                "reporter_sessions_count": user.reporter_count,
+                "last_reporter_date": last_session.date.isoformat() if last_session else None,
+                "reason": "Lehetséges Szerkesztő"
+            })
+        
+        # Remove duplicates based on user ID (if someone appears in multiple groups)
+        seen_ids = set()
+        unique_reporters = []
+        for reporter in reporters:
+            if reporter["id"] not in seen_ids:
+                unique_reporters.append(reporter)
+                seen_ids.add(reporter["id"])
+        
+        return 200, unique_reporters
     
     @api.get("/students/media", auth=JWTAuth(), response={200: list[MediaStudentSchema], 401: ErrorSchema})
     def list_media_students(request):
@@ -514,7 +591,7 @@ def register_student_endpoints(api):
                     grade_level = current_tanev.start_year - profile.osztaly.startYear + 8
             
             # Get reporter statistics
-            last_session = Forgatas.objects.filter(riporter=user).order_by('-date').first()
+            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-date').first()
             
             experienced_reporters.append({
                 "id": user.id,
@@ -571,10 +648,10 @@ def register_student_endpoints(api):
                 # Find reporters with conflicting sessions
                 conflicting_reporters = Forgatas.objects.filter(
                     date=check_date,
-                    riporter__isnull=False
+                    szerkeszto__isnull=False
                 ).filter(
                     Q(timeFrom__lt=check_time_to) & Q(timeTo__gt=check_time_from)
-                ).values_list('riporter_id', flat=True)
+                ).values_list('szerkeszto_id', flat=True)
                 
                 # Exclude conflicting reporters
                 queryset = queryset.exclude(id__in=conflicting_reporters)
@@ -595,8 +672,8 @@ def register_student_endpoints(api):
                     grade_level = current_tanev.start_year - profile.osztaly.startYear + 8
             
             # Get reporter statistics
-            reporter_count = Forgatas.objects.filter(riporter=user).count()
-            last_session = Forgatas.objects.filter(riporter=user).order_by('-date').first()
+            reporter_count = Forgatas.objects.filter(szerkeszto=user).count()
+            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-date').first()
             
             reporters.append({
                 "id": user.id,

@@ -6,12 +6,12 @@ This document provides a comprehensive reference for all endpoints needed for fo
 
 ## 📋 Complete Endpoint List
 
-### 🎯 Student/Reporter Selection (NEW)
+### 🎯 Student/Editor Selection (NEW)
 
 #### GET `/api/students/reporters`
-**Purpose:** Get list of students eligible to be reporters  
+**Purpose:** Get list of students eligible to be editors  
 **Authentication:** Required  
-**Response:** List of reporters with experience data
+**Response:** List of editors with experience data
 
 ```json
 [
@@ -29,10 +29,10 @@ This document provides a comprehensive reference for all endpoints needed for fo
 ```
 
 #### GET `/api/students/reporters/available`
-**Purpose:** Get reporters available for specific date/time  
+**Purpose:** Get editors available for specific date/time  
 **Authentication:** Required  
 **Parameters:** `date`, `time_from`, `time_to` (all optional)  
-**Response:** List of available reporters (no conflicts)
+**Response:** List of available editors (no conflicts)
 
 #### GET `/api/students?section=F&grade=10`
 **Purpose:** Get 10F students specifically  
@@ -174,7 +174,7 @@ This document provides a comprehensive reference for all endpoints needed for fo
 ### 🎥 Forgatás Creation and Management
 
 #### POST `/api/production/filming-sessions` (ENHANCED)
-**Purpose:** Create new filming session with reporter assignment  
+**Purpose:** Create new filming session with editor assignment  
 **Authentication:** Required (admin/teacher)  
 **Request Body:**
 
@@ -187,7 +187,7 @@ This document provides a comprehensive reference for all endpoints needed for fo
   "time_to": "16:00",
   "location_id": 1,
   "contact_person_id": 1,
-  "riporter_id": 123,
+  "szerkeszto_id": 123,
   "notes": "Formal attire required",
   "type": "rendezveny",
   "related_kacsa_id": 15,
@@ -412,7 +412,7 @@ class ForgatásCreationForm {
         time_to: formData.timeTo,
         location_id: formData.locationId || null,
         contact_person_id: formData.contactPersonId || null,
-        riporter_id: formData.reporterId || null,
+        szerkeszto_id: formData.reporterId || null,
         notes: formData.notes || null,
         type: formData.type,
         related_kacsa_id: formData.relatedKacsaId || null,

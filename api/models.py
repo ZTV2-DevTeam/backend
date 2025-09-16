@@ -189,6 +189,8 @@ class Profile(models.Model):
                                  help_text='A felhasználó adminisztrátori jogosultságainak típusa')
     special_role = models.CharField(max_length=20, choices=SPECIAL_ROLES, default='none', verbose_name='Különleges szerep',
                                    help_text='A felhasználó különleges szerepe a rendszerben')
+    szerkeszto = models.BooleanField(default=False, verbose_name='Szerkesztő', 
+                                   help_text='Jelöli, hogy a felhasználó kiírhat-e forgatásokat')
 
     class Meta:
         verbose_name = 'Profil'
@@ -245,6 +247,35 @@ class Profile(models.Model):
     def is_production_leader(self):
         """Check if user is a production leader (Gyártásvezető)"""
         return self.special_role == 'production_leader'
+    
+    @property
+    def can_create_forgatas(self):
+        """Check if user can create new forgatások (filming sessions)"""
+        # Check if user is in current 10F class
+        if self.is_current_10f_student():
+            return True
+        
+        # Check if user is production leader
+        if self.is_production_leader:
+            return True
+        
+        # Check if user has editor permission
+        if self.szerkeszto:
+            return True
+        
+        return False
+    
+    def is_current_10f_student(self):
+        """Check if user is currently in 10F class"""
+        if not self.osztaly or self.osztaly.szekcio.upper() != 'F':
+            return False
+        
+        current_year = datetime.now().year
+        elso_felev = datetime.now().month >= 9
+        
+        year_diff = current_year - self.osztaly.startYear 
+        year_diff += 8 if elso_felev else 7
+        return year_diff == 10  # 10F class
     
     @property
     def is_osztaly_fonok(self):
@@ -565,7 +596,7 @@ class Forgatas(models.Model):
                              help_text='A forgatás befejezésének időpontja')
     location = models.ForeignKey('Partner', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Helyszín', 
                                 help_text='A forgatás helyszíne (partnerintézmény)')
-    riporter = models.ForeignKey('auth.User', null=True, blank=True, verbose_name='Riporter', help_text='A forgatás riportere', on_delete=models.PROTECT)
+    szerkeszto = models.ForeignKey('auth.User', null=True, blank=True, verbose_name='Szerkesztő', help_text='A forgatás szerkesztője', on_delete=models.PROTECT)
     contactPerson = models.ForeignKey('ContactPerson', on_delete=models.PROTECT, blank=True, null=True, 
                                      verbose_name='Kapcsolattartó', help_text='A forgatáshoz tartozó kapcsolattartó személy')
     notes = models.TextField(max_length=500, blank=True, null=True, verbose_name='Megjegyzések', 

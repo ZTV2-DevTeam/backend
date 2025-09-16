@@ -123,6 +123,8 @@ class UserProfileSchema(Schema):
     radio_stab_name: Optional[str] = None
     osztaly_name: Optional[str] = None
     is_second_year_radio: bool = False
+    szerkeszto: bool = False
+    can_create_forgatas: bool = False
 
 class ActiveUserSchema(Schema):
     """Response schema for active user data."""
@@ -166,7 +168,9 @@ def create_user_profile_response(profile: Profile) -> dict:
         "stab_name": profile.stab.name if profile.stab else None,
         "radio_stab_name": f"{profile.radio_stab.name} ({profile.radio_stab.team_code})" if profile.radio_stab else None,
         "osztaly_name": str(profile.osztaly) if profile.osztaly else None,
-        "is_second_year_radio": profile.is_second_year_radio_student
+        "is_second_year_radio": profile.is_second_year_radio_student,
+        "szerkeszto": profile.szerkeszto,
+        "can_create_forgatas": profile.can_create_forgatas
     }
 
 def get_or_create_user_profile_response(user) -> dict:
@@ -186,7 +190,8 @@ def get_or_create_user_profile_response(user) -> dict:
         profile = Profile.objects.create(
             user=user,
             medias=True,
-            admin_type='none'
+            admin_type='none',
+            szerkeszto=False  # Default to no editor permission
         )
     
     return create_user_profile_response(profile)

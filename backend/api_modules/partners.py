@@ -15,6 +15,7 @@ Base URL: /api/partners/
 Public Endpoints (No Authentication Required):
 - GET  /partners                 - List all partners
 - GET  /partners/{id}           - Get specific partner details
+- GET  /partners/types          - List all partner types (for dropdowns)
 
 Protected Endpoints (JWT Token Required):
 - POST /partners                - Create new partner
@@ -45,6 +46,9 @@ Example Usage:
 
 Get all partners:
 curl /api/partners
+
+Get all partner types (for dropdowns):
+curl /api/partners/types
 
 Create new partner:
 curl -X POST /api/partners \
@@ -84,6 +88,11 @@ from typing import Optional
 # ============================================================================
 # Schemas
 # ============================================================================
+
+class PartnerTipusSchema(Schema):
+    """Response schema for partner type data."""
+    id: int
+    name: str
 
 class PartnerSchema(Schema):
     """Response schema for partner data."""
@@ -154,6 +163,32 @@ def handle_institution_assignment(institution_name: str = None) -> PartnerTipus:
 
 def register_partner_endpoints(api):
     """Register all partner-related endpoints with the API router."""
+    
+    @api.get("/partners/types", response={200: list[PartnerTipusSchema], 401: ErrorSchema})
+    def get_partner_types(request):
+        """
+        Get all partner types.
+        
+        Public endpoint that returns all partner types for dropdown usage.
+        Used by frontend to populate partner type selection dropdowns.
+        
+        Returns:
+            200: List of all partner types
+            401: Error occurred
+        """
+        try:
+            partner_types = PartnerTipus.objects.all().order_by('name')
+            
+            response = []
+            for partner_type in partner_types:
+                response.append({
+                    "id": partner_type.id,
+                    "name": partner_type.name
+                })
+            
+            return 200, response
+        except Exception as e:
+            return 401, {"message": f"Error fetching partner types: {str(e)}"}
     
     @api.get("/partners", response={200: list[PartnerSchema], 401: ErrorSchema})
     def get_partners(request):

@@ -18,7 +18,7 @@ Protected Endpoints (JWT Token Required):
 
 Contact Persons:
 - GET  /contact-persons         - List all contact persons
-- POST /contact-persons         - Create new contact person (admin only)
+- POST /contact-persons         - Create new contact person (admin, 10F students, production leaders, or editors)
 
 Filming Sessions:
 - GET  /filming-sessions        - List filming sessions with filters
@@ -125,7 +125,7 @@ Create new contact person (admin):
 curl -X POST /api/production/contact-persons \
   -H "Authorization: Bearer {token}" \
   -H "Content-Type: application/json" \
-  -d '{"name":"John Smith","email":"john@partner.com","phone":"+36301234567"}'
+  -d '{"name":"John Smith","email":"john@partner.com","phone":"+36301234567","context":"Museum Director"}'
 
 Get filming sessions with filters:
 curl -H "Authorization: Bearer {token}" \
@@ -189,7 +189,7 @@ Permission Requirements:
 =======================
 
 - Viewing: Authentication required
-- Contact Management: Admin permissions
+- Contact Management: Admin permissions OR filming session creation permissions (10F students, production leaders, editors)
 - Session Creation: Admin permissions (teacher or system admin)
 - Session Updates: Admin permissions
 - Session Deletion: Admin permissions with safety checks
@@ -281,7 +281,7 @@ class ForgatCreateSchema(Schema):
     time_to: str
     location_id: Optional[int] = None
     contact_person_id: Optional[int] = None
-    riporter_id: Optional[int] = None
+    szerkeszto_id: Optional[int] = None
     notes: Optional[str] = None
     type: str
     related_kacsa_id: Optional[int] = None
@@ -296,7 +296,7 @@ class ForgatUpdateSchema(Schema):
     time_to: Optional[str] = None
     location_id: Optional[int] = None
     contact_person_id: Optional[int] = None
-    riporter_id: Optional[int] = None
+    szerkeszto_id: Optional[int] = None
     notes: Optional[str] = None
     type: Optional[str] = None
     related_kacsa_id: Optional[int] = None
@@ -376,6 +376,11 @@ def create_forgatas_response(forgatas: Forgatas) -> dict:
             "address": forgatas.location.address
         } if forgatas.location else None,
         "contact_person": create_contact_person_response(forgatas.contactPerson) if forgatas.contactPerson else None,
+        "szerkeszto": {
+            "id": forgatas.szerkeszto.id,
+            "username": forgatas.szerkeszto.username,
+            "full_name": forgatas.szerkeszto.get_full_name()
+        } if forgatas.szerkeszto else None,
         "notes": forgatas.notes,
         "type": forgatas.forgTipus,
         "type_display": type_display,
@@ -426,8 +431,10 @@ def check_admin_permissions(user) -> tuple[bool, str]:
     try:
         from api.models import Profile
         profile = Profile.objects.get(user=user)
-        if not profile.has_admin_permission('any'):
-            return False, "Adminisztrátor jogosultság szükséges"
+        # Allow users who can create filming sessions to also manage contact persons
+        # This includes: admins, 10F students, production leaders, and editors
+        if not (profile.has_admin_permission('any') or profile.can_create_forgatas):
+            return False, "Adminisztrátor jogosultság vagy forgatás létrehozási jogosultság szükséges"
         return True, ""
     except Profile.DoesNotExist:
         return False, "Felhasználói profil nem található"
@@ -470,7 +477,8 @@ def register_production_endpoints(api):
         """
         Create new contact person.
         
-        Requires admin permissions. Creates a new contact person.
+        Requires admin permissions OR filming session creation permissions 
+        (10F students, production leaders, editors). Creates a new contact person.
         
         Args:
             data: Contact person creation data
@@ -623,7 +631,7 @@ def register_production_endpoints(api):
         """
         Create new filming session.
         
-        Requires admin/teacher permissions. Creates a new filming session.
+        Requires specific permissions: current 10F student, production leader, or editor permission.
         
         Args:
             data: Filming session creation data
@@ -634,8 +642,17 @@ def register_production_endpoints(api):
             401: Authentication or permission failed
         """
         try:
-            # Basic authentication is handled by JWTAuth decorator
-            # No additional permission check needed for filming session creation
+            # Check if user has permission to create forgatás
+            try:
+                from api.models import Profile
+                profile = Profile.objects.get(user=request.auth)
+                
+                # Check if user has permission to create forgatás using the new permission system
+                if not profile.can_create_forgatas:
+                    return 401, {"message": "Nincs jogosultságod forgatás kiírásához. Csak aktuális 10F diákok, gyártásvezetők és szerkesztők írhatnak ki forgatást."}
+                
+            except Profile.DoesNotExist:
+                return 401, {"message": "Felhasználói profil nem található."}
             
             # Check equipment assignment permissions (admin only)
             if data.equipment_ids and len(data.equipment_ids) > 0:
@@ -681,19 +698,19 @@ def register_production_endpoints(api):
                 except Forgatas.DoesNotExist:
                     return 400, {"message": "Kapcsolódó KaCsa forgatás nem található"}
             
-            riporter = None
-            if data.riporter_id:
+            szerkeszto = None
+            if data.szerkeszto_id:
                 try:
                     from django.contrib.auth.models import User
-                    riporter = User.objects.get(id=data.riporter_id)
+                    szerkeszto = User.objects.get(id=data.szerkeszto_id)
                     
-                    # Validate reporter eligibility
-                    if not hasattr(riporter, 'profile') or not riporter.profile.medias:
-                        return 400, {"message": "A kiválasztott felhasználó nem lehet riporter"}
+                    # Validate editor eligibility
+                    if not hasattr(szerkeszto, 'profile') or not szerkeszto.profile.medias:
+                        return 400, {"message": "A kiválasztott felhasználó nem lehet szerkesztő"}
                     
                     # Check for scheduling conflicts
                     conflicting_sessions = Forgatas.objects.filter(
-                        riporter=riporter,
+                        szerkeszto=szerkeszto,
                         date=session_date
                     ).filter(
                         timeFrom__lt=time_to,
@@ -703,11 +720,11 @@ def register_production_endpoints(api):
                     if conflicting_sessions.exists():
                         conflicting_session = conflicting_sessions.first()
                         return 400, {
-                            "message": f"A riporter már be van osztva egy másik forgatásra: {conflicting_session.name} ({conflicting_session.timeFrom}-{conflicting_session.timeTo})"
+                            "message": f"A szerkesztő már be van osztva egy másik forgatásra: {conflicting_session.name} ({conflicting_session.timeFrom}-{conflicting_session.timeTo})"
                         }
                         
                 except User.DoesNotExist:
-                    return 400, {"message": "Riporter nem található"}
+                    return 400, {"message": "Szerkesztő nem található"}
             
             # Create filming session
             forgatas = Forgatas.objects.create(
@@ -718,7 +735,7 @@ def register_production_endpoints(api):
                 timeTo=time_to,
                 location=location,
                 contactPerson=contact_person,
-                riporter=riporter,
+                szerkeszto=szerkeszto,
                 notes=data.notes,
                 forgTipus=data.type,
                 relatedKaCsa=related_kacsa
@@ -753,8 +770,7 @@ def register_production_endpoints(api):
         """
         Update existing filming session.
         
-        Requires admin/teacher permissions. Updates filming session with provided data.
-        Only non-None fields are updated.
+        Requires specific permissions: current 10F student, production leader, or editor permission.
         
         Args:
             forgatas_id: Unique filming session identifier
@@ -767,8 +783,17 @@ def register_production_endpoints(api):
             401: Authentication or permission failed
         """
         try:
-            # Basic authentication is handled by JWTAuth decorator
-            # No additional permission check needed for filming session updates
+            # Check if user has permission to create/edit forgatás
+            try:
+                from api.models import Profile
+                profile = Profile.objects.get(user=request.auth)
+                
+                # Check if user has permission to create/edit forgatás using the new permission system
+                if not profile.can_create_forgatas:
+                    return 401, {"message": "Nincs jogosultságod forgatás módosításához. Csak aktuális 10F diákok, gyártásvezetők és szerkesztők módosíthatnak forgatást."}
+                
+            except Profile.DoesNotExist:
+                return 401, {"message": "Felhasználói profil nem található."}
             
             # Check equipment assignment permissions (admin only)
             if data.equipment_ids is not None and len(data.equipment_ids) > 0:
@@ -847,21 +872,21 @@ def register_production_endpoints(api):
                     except Forgatas.DoesNotExist:
                         return 400, {"message": "Kapcsolódó KaCsa forgatás nem található"}
             
-            if data.riporter_id is not None:
-                if data.riporter_id == 0:
-                    forgatas.riporter = None
+            if data.szerkeszto_id is not None:
+                if data.szerkeszto_id == 0:
+                    forgatas.szerkeszto = None
                 else:
                     try:
                         from django.contrib.auth.models import User
-                        riporter = User.objects.get(id=data.riporter_id)
+                        szerkeszto = User.objects.get(id=data.szerkeszto_id)
                         
-                        # Validate reporter eligibility
-                        if not hasattr(riporter, 'profile') or not riporter.profile.medias:
-                            return 400, {"message": "A kiválasztott felhasználó nem lehet riporter"}
+                        # Validate editor eligibility
+                        if not hasattr(szerkeszto, 'profile') or not szerkeszto.profile.medias:
+                            return 400, {"message": "A kiválasztott felhasználó nem lehet szerkesztő"}
                         
                         # Check for scheduling conflicts (exclude current session)
                         conflicting_sessions = Forgatas.objects.filter(
-                            riporter=riporter,
+                            szerkeszto=szerkeszto,
                             date=forgatas.date
                         ).exclude(id=forgatas.id).filter(
                             timeFrom__lt=forgatas.timeTo,
@@ -871,12 +896,12 @@ def register_production_endpoints(api):
                         if conflicting_sessions.exists():
                             conflicting_session = conflicting_sessions.first()
                             return 400, {
-                                "message": f"A riporter már be van osztva egy másik forgatásra: {conflicting_session.name} ({conflicting_session.timeFrom}-{conflicting_session.timeTo})"
+                                "message": f"A szerkesztő már be van osztva egy másik forgatásra: {conflicting_session.name} ({conflicting_session.timeFrom}-{conflicting_session.timeTo})"
                             }
                         
-                        forgatas.riporter = riporter
+                        forgatas.szerkeszto = szerkeszto
                     except User.DoesNotExist:
-                        return 400, {"message": "Riporter nem található"}
+                        return 400, {"message": "Szerkesztő nem található"}
             
             forgatas.save()
             

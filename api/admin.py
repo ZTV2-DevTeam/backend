@@ -346,16 +346,16 @@ class ProfileAdmin(ImportExportModelAdmin):
 @admin.register(Forgatas)
 class ForgatásAdmin(ImportExportModelAdmin):
     resource_class = ForgatásResource
-    list_display = ['name_with_icon', 'date', 'time_display', 'forgTipus_display', 'location_display', 'equipment_count', 'riporter_display', 'tanev']
-    list_filter = ['forgTipus', 'date', 'tanev', 'location', 'riporter']
-    search_fields = ['name', 'description', 'notes', 'riporter__first_name', 'riporter__last_name']
-    autocomplete_fields = ['location', 'contactPerson', 'relatedKaCsa', 'tanev', 'riporter']
+    list_display = ['name_with_icon', 'date', 'time_display', 'forgTipus_display', 'location_display', 'equipment_count', 'szerkeszto_display', 'tanev']
+    list_filter = ['forgTipus', 'date', 'tanev', 'location', 'szerkeszto']
+    search_fields = ['name', 'description', 'notes', 'szerkeszto__first_name', 'szerkeszto__last_name']
+    autocomplete_fields = ['location', 'contactPerson', 'relatedKaCsa', 'tanev', 'szerkeszto']
     filter_horizontal = ['equipments']
     date_hierarchy = 'date'
     
     fieldsets = (
         ('🎬 Forgatás alapadatok', {
-            'fields': ('name', 'description', 'forgTipus', 'tanev', 'riporter'),
+            'fields': ('name', 'description', 'forgTipus', 'tanev', 'szerkeszto'),
             'description': 'A forgatás alapvető információi'
         }),
         ('⏰ Időpont', {
@@ -408,11 +408,11 @@ class ForgatásAdmin(ImportExportModelAdmin):
         return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, obj.get_forgTipus_display())
     forgTipus_display.short_description = 'Típus'
 
-    def riporter_display(self, obj):
-        if obj.riporter:
-            return format_html('<span style="color: #7209b7;">🎤 {}</span>', obj.riporter.get_full_name() or obj.riporter.username)
+    def szerkeszto_display(self, obj):
+        if obj.szerkeszto:
+            return format_html('<span style="color: #7209b7;">🎤 {}</span>', obj.szerkeszto.get_full_name() or obj.szerkeszto.username)
         return '-'
-    riporter_display.short_description = 'Riporter'
+    szerkeszto_display.short_description = 'Szerkesztő'
     
     def location_display(self, obj):
         if obj.location:
