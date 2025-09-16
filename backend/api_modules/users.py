@@ -13,7 +13,7 @@ and availability checking for scheduling purposes.
 Base URL: /api/users/
 
 Protected Endpoints (JWT Token Required):
-- GET  /users                           - List all user profiles (admin only)
+- GET  /users                           - List all user profiles (authenticated users)
 - GET  /users/{id}                     - Get specific user public profile (any authenticated user)
 - GET  /users/radio-students           - Get 9F radio students (admin only)
 - GET  /users/{id}/availability        - Check user availability
@@ -56,7 +56,7 @@ The availability checking system considers:
 Example Usage:
 =============
 
-Get all users (admin required):
+Get all users (authenticated users):
 curl -H "Authorization: Bearer {token}" /api/users
 
 Get specific user public profile (any authenticated user):
@@ -72,10 +72,11 @@ curl -H "Authorization: Bearer {token}" \
 Admin Permissions:
 =================
 
-Most endpoints require administrative permissions:
-- System administrators can access all user data and lists
+Most sensitive endpoints require administrative permissions:
+- Radio student lists (/users/radio-students) require admin permissions
 - Individual user profiles (/users/{id}) are accessible to any authenticated user
-- Regular users can access availability checking and individual profiles
+- User list (/users) is accessible to all authenticated users
+- Availability checking is accessible to any authenticated user
 - Admin type validation through user profile
 
 Error Handling:
@@ -246,25 +247,20 @@ def filter_radio_students(profiles):
 def register_user_endpoints(api):
     """Register all user management endpoints with the API router."""
     
-    @api.get("/users", auth=JWTAuth(), response={200: list[UserProfileSchema], 403: ErrorSchema, 500: ErrorSchema})
+    @api.get("/users", auth=JWTAuth(), response={200: list[UserProfileSchema], 500: ErrorSchema})
     def get_all_users(request):
         """
         Get all users with their profiles.
         
-        Requires admin permissions. Returns detailed information about all users
-        including their profiles, stab assignments, and roles.
+        Requires authentication. Returns detailed information about all users
+        including their profiles, stab assignments, and roles. Available to
+        all authenticated users for collaboration and assignment purposes.
         
         Returns:
             200: List of all user profiles
-            403: Insufficient permissions
             500: Server error
         """
         try:
-            # Check if user has admin permissions
-            has_permission, error_message = check_admin_permissions(request.auth)
-            if not has_permission:
-                return 403, {"message": error_message}
-            
             profiles = Profile.objects.select_related(
                 'user', 'stab', 'radio_stab', 'osztaly'
             ).all()
