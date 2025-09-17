@@ -696,7 +696,7 @@ def register_production_endpoints(api):
                 try:
                     related_kacsa = Forgatas.objects.get(id=data.related_kacsa_id, forgTipus='kacsa')
                 except Forgatas.DoesNotExist:
-                    return 400, {"message": "Kapcsolódó KaCsa forgatás nem található"}
+                    return 400, {"message": "Kapcsolódó KaCsa összejátszás nem található"}
             
             szerkeszto = None
             if data.szerkeszto_id:
@@ -870,7 +870,7 @@ def register_production_endpoints(api):
                         related_kacsa = Forgatas.objects.get(id=data.related_kacsa_id, forgTipus='kacsa')
                         forgatas.relatedKaCsa = related_kacsa
                     except Forgatas.DoesNotExist:
-                        return 400, {"message": "Kapcsolódó KaCsa forgatás nem található"}
+                        return 400, {"message": "Kapcsolódó KaCsa összejátszás nem található"}
             
             if data.szerkeszto_id is not None:
                 if data.szerkeszto_id == 0:

@@ -377,7 +377,7 @@ class ForgatásAdmin(ImportExportModelAdmin):
         ('🔗 Kapcsolódó forgatás', {
             'fields': ('relatedKaCsa',),
             'classes': ('collapse',),
-            'description': 'Rendes forgatások esetében, a kapcsolódó KaCsa Összejátszás'
+            'description': 'KaCsa forgatások esetében, a kapcsolódó KaCsa Összejátszás'
         }),
         ('🎯 Eszközök', {
             'fields': ('equipments',),
