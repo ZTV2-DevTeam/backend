@@ -1322,6 +1322,11 @@ def send_assignment_email(sender, instance, created, **kwargs):
         print(f"[DEBUG] No forgatas associated with assignment, skipping email")
         return
     
+    # Skip email notifications for KaCsa type forgatások
+    if instance.forgatas.forgTipus == 'kacsa':
+        print(f"[DEBUG] Skipping email notification for KaCsa type forgatas: {instance.forgatas.name}")
+        return
+    
     try:
         # Import email function
         from backend.api_modules.authentication import send_assignment_change_notification_email
@@ -1386,6 +1391,11 @@ def assignment_users_changed(sender, instance, action, pk_set, **kwargs):
     if action in ['post_add', 'post_remove'] and pk_set and instance.forgatas:
         print(f"[DEBUG] ========== ASSIGNMENT USERS CHANGED ==========")
         print(f"[DEBUG] Assignment users changed - Action: {action}, Assignment ID: {instance.id}")
+        
+        # Skip email notifications for KaCsa type forgatások
+        if instance.forgatas.forgTipus == 'kacsa':
+            print(f"[DEBUG] Skipping email notification for KaCsa type forgatas: {instance.forgatas.name}")
+            return
         
         try:
             # Import email function
