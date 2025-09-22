@@ -15,12 +15,14 @@ Base URL: /api/assignments/
 Protected Endpoints (JWT Token Required):
 
 Forgatás beosztások:
-- GET  /filming-assignments           - Lista beosztásokról
-- GET  /filming-assignments/{id}     - Konkrét beosztás részletei
-- POST /filming-assignments          - Új beosztás létrehozása (admin/tanár)
-- PUT  /filming-assignments/{id}     - Beosztás frissítése
-- DELETE /filming-assignments/{id}   - Beosztás törlése
-- POST /filming-assignments/{id}/finalize - Beosztás véglegesítése
+- GET  /filming-assignments                    - Lista beosztásokról
+- GET  /filming-assignments/by-forgatas/{id}  - Konkrét beosztás részletei forgatás ID alapján
+- POST /filming-assignments                    - Új beosztás létrehozása (admin/tanár)
+- PUT  /filming-assignments/{id}              - Beosztás frissítése
+- DELETE /filming-assignments/{id}            - Beosztás törlése
+- POST /filming-assignments/{id}/finalize     - Beosztás véglegesítése
+- POST /filming-assignments/{id}/mark-done    - Beosztás készre jelölése (admin only)
+- POST /filming-assignments/{id}/mark-draft   - Beosztás piszkozatra állítása (admin only)
 
 Beosztás rendszer áttekintés:
 ===========================
@@ -76,7 +78,8 @@ Integrációs pontok:
 from ninja import Schema
 from django.contrib.auth.models import User
 from django.db import transaction
-from api.models import Beosztas, SzerepkorRelaciok, Szerepkor, Forgatas, Absence, Profile, Tavollet, RadioSession
+from django.db.models import Count
+from api.models import Beosztas, SzerepkorRelaciok, Szerepkor, Forgatas, Absence, Profile, Tavollet, RadioSession, Stab
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime, date, time
 from typing import Optional, List
@@ -393,6 +396,18 @@ def check_admin_or_teacher_permissions(user: User) -> tuple[bool, str]:
     except Profile.DoesNotExist:
         return False, "Felhasználói profil nem található"
 
+def check_admin_only_permissions(user: User) -> tuple[bool, str]:
+    """Check if user has admin-only permissions for sensitive operations like editing Beosztás."""
+    try:
+        from api.models import Profile
+        profile = Profile.objects.get(user=user)
+        # Only allow users with admin permissions (not just teachers)
+        if not profile.has_admin_permission('system_admin'):
+            return False, "Rendszergazda jogosultság szükséges a beosztások szerkesztéséhez"
+        return True, ""
+    except Profile.DoesNotExist:
+        return False, "Felhasználói profil nem található"
+
 def can_user_manage_beosztas(user: User, beosztas: Beosztas) -> bool:
     """Check if user can manage a specific assignment."""
     # Author can manage their own assignment
@@ -671,7 +686,7 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching assignments: {str(e)}"}
 
-    @api.get("/assignments/filming-assignments/{forgatas_id}", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/assignments/filming-assignments/by-forgatas/{forgatas_id}", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema})
     def get_filming_assignment_details_by_forgatas(request, forgatas_id: int):
         """
         Get detailed information about a specific assignment by forgatas ID.
@@ -926,7 +941,7 @@ def register_assignment_endpoints(api):
         """
         Update existing filming assignment.
         
-        Requires proper permissions. Can update student-role relations, stab assignment, and completion status.
+        Requires admin permissions (not just teacher). Can update student-role relations, stab assignment, and completion status.
         Automatically sends email notifications to users who are added or removed.
         
         Args:
@@ -943,9 +958,10 @@ def register_assignment_endpoints(api):
             requesting_user = request.auth
             beosztas = Beosztas.objects.get(id=assignment_id)
             
-            # Check permissions
-            if not can_user_manage_beosztas(requesting_user, beosztas):
-                return 401, {"message": "Nincs jogosultság a beosztás szerkesztéséhez"}
+            # Check admin-only permissions for Beosztás editing
+            has_permission, error_message = check_admin_only_permissions(requesting_user)
+            if not has_permission:
+                return 401, {"message": error_message}
             
             # Cannot update finalized assignments (except for re-finalizing)
             if beosztas.kesz and data.kesz != True:
@@ -1058,12 +1074,104 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error finalizing assignment: {str(e)}"}
 
+    @api.post("/assignments/filming-assignments/{assignment_id}/mark-done", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def mark_filming_assignment_done(request, assignment_id: int):
+        """
+        Mark filming assignment as done.
+        
+        Requires admin permissions. Marks the assignment as completed (kesz=True) and automatically creates
+        Absence records for all assigned students.
+        
+        Args:
+            assignment_id: Unique assignment identifier
+            
+        Returns:
+            200: Assignment marked as done successfully
+            404: Assignment not found
+            401: Authentication or permission failed (admin only)
+        """
+        try:
+            requesting_user = request.auth
+            
+            # Check admin permissions (stricter than finalize)
+            try:
+                from api.models import Profile
+                profile = Profile.objects.get(user=requesting_user)
+                if not profile.has_admin_permission('any'):
+                    return 401, {"message": "Adminisztrátor jogosultság szükséges"}
+            except Profile.DoesNotExist:
+                return 401, {"message": "Felhasználói profil nem található"}
+            
+            beosztas = Beosztas.objects.get(id=assignment_id)
+            
+            # Get assigned users before marking as done
+            assigned_users = []
+            for relation in beosztas.szerepkor_relaciok.all():
+                assigned_users.append(relation.user)
+            
+            with transaction.atomic():
+                beosztas.kesz = True
+                beosztas.save()
+                
+                # Create absences for all assigned students
+                auto_create_absences_for_beosztas(beosztas)
+            
+            return 200, create_beosztas_response(beosztas)
+        except Beosztas.DoesNotExist:
+            return 404, {"message": "Beosztás nem található"}
+        except Exception as e:
+            return 400, {"message": f"Error marking assignment as done: {str(e)}"}
+
+    @api.post("/assignments/filming-assignments/{assignment_id}/mark-draft", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def mark_filming_assignment_draft(request, assignment_id: int):
+        """
+        Mark filming assignment as draft.
+        
+        Requires admin permissions. Marks the assignment as draft (kesz=False) and removes
+        automatically created absence records.
+        
+        Args:
+            assignment_id: Unique assignment identifier
+            
+        Returns:
+            200: Assignment marked as draft successfully
+            404: Assignment not found
+            401: Authentication or permission failed (admin only)
+        """
+        try:
+            requesting_user = request.auth
+            
+            # Check admin permissions
+            try:
+                from api.models import Profile
+                profile = Profile.objects.get(user=requesting_user)
+                if not profile.has_admin_permission('any'):
+                    return 401, {"message": "Adminisztrátor jogosultság szükséges"}
+            except Profile.DoesNotExist:
+                return 401, {"message": "Felhasználói profil nem található"}
+            
+            beosztas = Beosztas.objects.get(id=assignment_id)
+            
+            with transaction.atomic():
+                beosztas.kesz = False
+                beosztas.save()
+                
+                # Remove auto-created absences for this assignment
+                # Note: This calls the clean_absence_records method which removes auto-created absences
+                beosztas.clean_absence_records()
+            
+            return 200, create_beosztas_response(beosztas)
+        except Beosztas.DoesNotExist:
+            return 404, {"message": "Beosztás nem található"}
+        except Exception as e:
+            return 400, {"message": f"Error marking assignment as draft: {str(e)}"}
+
     @api.delete("/assignments/filming-assignments/{assignment_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
     def delete_filming_assignment(request, assignment_id: int):
         """
         Delete filming assignment.
         
-        Requires proper permissions. Also deletes associated role relations and
+        Requires admin permissions (not just teacher). Also deletes associated role relations and
         optionally the generated absences.
         
         Args:
@@ -1078,9 +1186,10 @@ def register_assignment_endpoints(api):
             requesting_user = request.auth
             beosztas = Beosztas.objects.get(id=assignment_id)
             
-            # Check permissions
-            if not can_user_manage_beosztas(requesting_user, beosztas):
-                return 401, {"message": "Nincs jogosultság a beosztás törléséhez"}
+            # Check admin-only permissions for Beosztás deletion
+            has_permission, error_message = check_admin_only_permissions(requesting_user)
+            if not has_permission:
+                return 401, {"message": error_message}
             
             with transaction.atomic():
                 # Get info for response
@@ -1116,18 +1225,28 @@ def register_assignment_endpoints(api):
             return 400, {"message": f"Error deleting assignment: {str(e)}"}
 
     @api.get("/assignments/roles", auth=JWTAuth(), response={200: List[SzerepkorSchema], 401: ErrorSchema})
-    def get_available_roles(request):
+    def get_available_roles(request, ev: int = None):
         """
         Get all available roles for assignments.
         
-        Returns all roles that can be assigned to students in filming sessions.
+        Returns all roles that can be assigned to students in filming sessions,
+        with optional filtering by year level.
+        
+        Args:
+            ev: Optional filter by year level
         
         Returns:
             200: List of available roles
             401: Authentication failed
         """
         try:
-            roles = Szerepkor.objects.all().order_by('name')
+            roles = Szerepkor.objects.all()
+            
+            # Apply year filter if provided
+            if ev is not None:
+                roles = roles.filter(ev=ev)
+            
+            roles = roles.order_by('name')
             
             response = []
             for role in roles:
@@ -1136,6 +1255,161 @@ def register_assignment_endpoints(api):
             return 200, response
         except Exception as e:
             return 401, {"message": f"Error fetching roles: {str(e)}"}
+
+    @api.get("/assignments/roles/{role_id}", auth=JWTAuth(), response={200: SzerepkorSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def get_role_details(request, role_id: int):
+        """
+        Get detailed information about a specific role.
+        
+        Args:
+            role_id: Unique role identifier
+        
+        Returns:
+            200: Role details
+            404: Role not found
+            401: Authentication failed
+        """
+        try:
+            role = Szerepkor.objects.get(id=role_id)
+            return 200, create_szerepkor_response(role)
+        except Szerepkor.DoesNotExist:
+            return 404, {"message": "Szerepkör nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error fetching role details: {str(e)}"}
+
+    @api.get("/assignments/user-role-statistics/{user_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
+    def get_user_role_statistics(request, user_id: int):
+        """
+        Get role statistics for a specific user.
+        
+        Returns comprehensive statistics about how many times a user was in each role
+        and when was the last time they had that role.
+        
+        Args:
+            user_id: Unique user identifier
+        
+        Returns:
+            200: User role statistics
+            404: User not found
+            401: Authentication failed
+        """
+        try:
+            user = User.objects.get(id=user_id)
+            
+            # Get all role relations for this user
+            role_relations = SzerepkorRelaciok.objects.filter(user=user).select_related('szerepkor')
+            
+            # Get all assignments where this user participated
+            assignments = Beosztas.objects.filter(
+                szerepkor_relaciok__user=user
+            ).select_related('forgatas').order_by('-created_at')
+            
+            # Build role statistics
+            role_stats = {}
+            
+            for relation in role_relations:
+                role_name = relation.szerepkor.name
+                role_id = relation.szerepkor.id
+                
+                if role_id not in role_stats:
+                    role_stats[role_id] = {
+                        "role": create_szerepkor_response(relation.szerepkor),
+                        "total_times": 0,
+                        "last_time": None,
+                        "last_forgatas": None,
+                        "assignments": []
+                    }
+                
+                # Count how many assignments used this role relation
+                related_assignments = assignments.filter(szerepkor_relaciok=relation)
+                role_stats[role_id]["total_times"] += related_assignments.count()
+                
+                # Find the most recent assignment
+                latest_assignment = related_assignments.first()
+                if latest_assignment and latest_assignment.forgatas:
+                    if (not role_stats[role_id]["last_time"] or 
+                        latest_assignment.forgatas.date > role_stats[role_id]["last_time"]):
+                        role_stats[role_id]["last_time"] = latest_assignment.forgatas.date.isoformat()
+                        role_stats[role_id]["last_forgatas"] = {
+                            "id": latest_assignment.forgatas.id,
+                            "name": latest_assignment.forgatas.name,
+                            "date": latest_assignment.forgatas.date.isoformat()
+                        }
+                
+                # Add assignment details for this role
+                for assignment in related_assignments:
+                    if assignment.forgatas:
+                        role_stats[role_id]["assignments"].append({
+                            "assignment_id": assignment.id,
+                            "forgatas": {
+                                "id": assignment.forgatas.id,
+                                "name": assignment.forgatas.name,
+                                "date": assignment.forgatas.date.isoformat(),
+                                "type": assignment.forgatas.forgTipus
+                            },
+                            "finalized": assignment.kesz,
+                            "created_at": assignment.created_at.isoformat()
+                        })
+            
+            # Convert to list and sort by total times (most used roles first)
+            role_statistics = list(role_stats.values())
+            role_statistics.sort(key=lambda x: x["total_times"], reverse=True)
+            
+            # Calculate summary statistics
+            total_assignments = assignments.count()
+            total_roles_used = len(role_statistics)
+            most_used_role = role_statistics[0] if role_statistics else None
+            
+            return 200, {
+                "user": create_user_basic_response(user),
+                "summary": {
+                    "total_assignments": total_assignments,
+                    "total_different_roles": total_roles_used,
+                    "most_used_role": most_used_role["role"] if most_used_role else None,
+                    "most_used_count": most_used_role["total_times"] if most_used_role else 0
+                },
+                "role_statistics": role_statistics
+            }
+            
+        except User.DoesNotExist:
+            return 404, {"message": "Felhasználó nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error fetching user role statistics: {str(e)}"}
+
+    @api.get("/assignments/roles-by-year", auth=JWTAuth(), response={200: dict, 401: ErrorSchema})
+    def get_roles_grouped_by_year(request):
+        """
+        Get all roles grouped by year level.
+        
+        Returns roles organized by year level for easier navigation in UI.
+        
+        Returns:
+            200: Roles grouped by year
+            401: Authentication failed
+        """
+        try:
+            roles = Szerepkor.objects.all().order_by('ev', 'name')
+            
+            grouped_roles = {}
+            for role in roles:
+                year_key = str(role.ev) if role.ev is not None else "any_year"
+                year_label = f"{role.ev}. évfolyam" if role.ev is not None else "Bármely évfolyam"
+                
+                if year_key not in grouped_roles:
+                    grouped_roles[year_key] = {
+                        "year": role.ev,
+                        "year_label": year_label,
+                        "roles": []
+                    }
+                
+                grouped_roles[year_key]["roles"].append(create_szerepkor_response(role))
+            
+            return 200, {
+                "grouped_roles": list(grouped_roles.values()),
+                "total_roles": roles.count()
+            }
+        except Exception as e:
+            return 401, {"message": f"Error fetching grouped roles: {str(e)}"}
 
     @api.get("/assignments/filming-assignments/{assignment_id}/absences", auth=JWTAuth(), response={200: List[dict], 401: ErrorSchema, 404: ErrorSchema})
     def get_assignment_absences(request, assignment_id: int):
@@ -1246,7 +1520,7 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching assignments with availability: {str(e)}"}
 
-    @api.get("/assignments/filming-assignments/{forgatas_id}/availability", auth=JWTAuth(), response={200: BeosztasWithAvailabilitySchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/assignments/filming-assignments/by-forgatas/{forgatas_id}/availability", auth=JWTAuth(), response={200: BeosztasWithAvailabilitySchema, 401: ErrorSchema, 404: ErrorSchema})
     def get_filming_assignment_availability_by_forgatas(request, forgatas_id: int):
         """
         Get detailed availability information for a specific assignment by forgatas ID.
@@ -1461,3 +1735,76 @@ def register_assignment_endpoints(api):
                 
         except Exception as e:
             return 400, {"message": f"Error sending test assignment email: {str(e)}"}
+
+    @api.get("/assignments/summary", auth=JWTAuth(), response={200: dict, 401: ErrorSchema})
+    def get_assignments_summary(request):
+        """
+        Get summary statistics about assignments and roles.
+        
+        Provides an overview of the assignment system including
+        total counts, role usage, and recent activity.
+        
+        Returns:
+            200: Assignment system summary
+            401: Authentication failed
+        """
+        try:
+            # Count assignments
+            total_assignments = Beosztas.objects.count()
+            finalized_assignments = Beosztas.objects.filter(kesz=True).count()
+            pending_assignments = total_assignments - finalized_assignments
+            
+            # Count roles and role relations
+            total_roles = Szerepkor.objects.count()
+            total_role_relations = SzerepkorRelaciok.objects.count()
+            
+            # Get role usage statistics
+            role_usage = {}
+            for role in Szerepkor.objects.all():
+                usage_count = SzerepkorRelaciok.objects.filter(szerepkor=role).count()
+                role_usage[role.name] = usage_count
+            
+            # Sort roles by usage
+            most_used_roles = sorted(role_usage.items(), key=lambda x: x[1], reverse=True)[:5]
+            
+            # Get recent activity
+            recent_assignments = Beosztas.objects.order_by('-created_at')[:5]
+            recent_activity = []
+            for assignment in recent_assignments:
+                recent_activity.append({
+                    "id": assignment.id,
+                    "forgatas_name": assignment.forgatas.name if assignment.forgatas else "N/A",
+                    "created_at": assignment.created_at.isoformat(),
+                    "finalized": assignment.kesz,
+                    "student_count": assignment.szerepkor_relaciok.count()
+                })
+            
+            # Count assignments by forgatas type
+            forgatas_type_stats = {}
+            for assignment in Beosztas.objects.select_related('forgatas').all():
+                if assignment.forgatas:
+                    forg_type = assignment.forgatas.forgTipus
+                    if forg_type not in forgatas_type_stats:
+                        forgatas_type_stats[forg_type] = 0
+                    forgatas_type_stats[forg_type] += 1
+            
+            return 200, {
+                "assignment_stats": {
+                    "total_assignments": total_assignments,
+                    "finalized_assignments": finalized_assignments,
+                    "pending_assignments": pending_assignments,
+                    "finalization_rate": round((finalized_assignments / total_assignments * 100) if total_assignments > 0 else 0, 1)
+                },
+                "role_stats": {
+                    "total_roles": total_roles,
+                    "total_role_relations": total_role_relations,
+                    "average_relations_per_role": round(total_role_relations / total_roles if total_roles > 0 else 0, 1),
+                    "most_used_roles": [{"role": role, "usage_count": count} for role, count in most_used_roles]
+                },
+                "forgatas_type_stats": forgatas_type_stats,
+                "recent_activity": recent_activity,
+                "generated_at": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            return 401, {"message": f"Error generating summary: {str(e)}"}

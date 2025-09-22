@@ -225,9 +225,9 @@ Integration Points:
 """
 
 from ninja import Schema
-from api.models import Forgatas, ContactPerson, Partner, Equipment, Tanev, Beosztas
+from api.models import Forgatas, ContactPerson, Partner, Equipment, Tanev, Beosztas, SzerepkorRelaciok, Szerepkor
 from .auth import JWTAuth, ErrorSchema
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from typing import Optional
 
 # ============================================================================
@@ -271,6 +271,29 @@ class ForgatSchema(Schema):
     equipment_ids: list[int] = []
     equipment_count: int = 0
     tanev: Optional[dict] = None
+
+class ForgatWithRolesSchema(Schema):
+    """Response schema for filming session data with role assignments."""
+    id: int
+    name: str
+    description: str
+    date: str
+    time_from: str
+    time_to: str
+    location: Optional[dict] = None
+    contact_person: Optional[ContactPersonSchema] = None
+    notes: Optional[str] = None
+    type: str
+    type_display: str
+    related_kacsa: Optional[dict] = None
+    equipment_ids: list[int] = []
+    equipment_count: int = 0
+    tanev: Optional[dict] = None
+    # Role assignment information
+    assignment: Optional[dict] = None  # Beosztás information if exists
+    has_assignment: bool = False
+    assigned_students: list[dict] = []
+    roles_summary: list[dict] = []
 
 class ForgatCreateSchema(Schema):
     """Request schema for creating new filming session."""
@@ -397,6 +420,81 @@ def create_forgatas_response(forgatas: Forgatas) -> dict:
             "is_active": Tanev.get_active() and Tanev.get_active().id == forgatas.tanev.id
         } if forgatas.tanev else None
     }
+
+def create_forgatas_with_roles_response(forgatas: Forgatas) -> dict:
+    """
+    Create standardized filming session response dictionary with role assignment information.
+    
+    Args:
+        forgatas: Forgatas model instance
+        
+    Returns:
+        Dictionary with filming session and role assignment information
+    """
+    # Start with basic response
+    response = create_forgatas_response(forgatas)
+    
+    # Check if there's an assignment for this forgatas
+    try:
+        assignment = Beosztas.objects.get(forgatas=forgatas)
+        
+        # Get role relations
+        szerepkor_relaciok = assignment.szerepkor_relaciok.select_related('user', 'szerepkor').all()
+        
+        # Create assigned students list
+        assigned_students = []
+        for relacio in szerepkor_relaciok:
+            assigned_students.append({
+                "user": {
+                    "id": relacio.user.id,
+                    "username": relacio.user.username,
+                    "full_name": relacio.user.get_full_name()
+                },
+                "role": {
+                    "id": relacio.szerepkor.id,
+                    "name": relacio.szerepkor.name,
+                    "ev": relacio.szerepkor.ev
+                }
+            })
+        
+        # Create roles summary (count by role)
+        roles_summary = {}
+        for relacio in szerepkor_relaciok:
+            role_name = relacio.szerepkor.name
+            if role_name not in roles_summary:
+                roles_summary[role_name] = 0
+            roles_summary[role_name] += 1
+        
+        roles_summary_list = [{"role": role, "count": count} for role, count in roles_summary.items()]
+        
+        # Add assignment information
+        response.update({
+            "assignment": {
+                "id": assignment.id,
+                "finalized": assignment.kesz,
+                "author": {
+                    "id": assignment.author.id,
+                    "username": assignment.author.username,
+                    "full_name": assignment.author.get_full_name()
+                } if assignment.author else None,
+                "created_at": assignment.created_at.isoformat(),
+                "student_count": len(szerepkor_relaciok)
+            },
+            "has_assignment": True,
+            "assigned_students": assigned_students,
+            "roles_summary": roles_summary_list
+        })
+        
+    except Beosztas.DoesNotExist:
+        # No assignment exists
+        response.update({
+            "assignment": None,
+            "has_assignment": False,
+            "assigned_students": [],
+            "roles_summary": []
+        })
+    
+    return response
 
 def check_admin_or_teacher_permissions(user) -> tuple[bool, str]:
     """
@@ -946,3 +1044,163 @@ def register_production_endpoints(api):
             return 404, {"message": "Forgatás nem található"}
         except Exception as e:
             return 400, {"message": f"Error deleting filming session: {str(e)}"}
+
+    # ========================================================================
+    # Extended Forgatas Endpoints with Role Information
+    # ========================================================================
+
+    @api.get("/production/filming-sessions-with-roles", auth=JWTAuth(), response={200: list[ForgatWithRolesSchema], 401: ErrorSchema})
+    def get_filming_sessions_with_roles(request, 
+                                       date_from: str = None, date_to: str = None, 
+                                       type: str = None, has_assignment: bool = None,
+                                       finalized_only: bool = None):
+        """
+        Get filming sessions with role assignment information.
+        
+        Provides comprehensive filming session data including assigned students
+        and their roles for better production planning and coordination.
+        
+        Args:
+            date_from: Filter sessions from this date (YYYY-MM-DD)
+            date_to: Filter sessions to this date (YYYY-MM-DD)
+            type: Filter by filming session type
+            has_assignment: Filter by whether session has role assignments
+            finalized_only: Filter to only show finalized assignments
+        
+        Returns:
+            200: List of filming sessions with role assignment information
+            401: Authentication failed
+        """
+        try:
+            forgatas_list = Forgatas.objects.all()
+            
+            # Apply date filters
+            if date_from:
+                try:
+                    date_from_obj = date.fromisoformat(date_from)
+                    forgatas_list = forgatas_list.filter(date__gte=date_from_obj)
+                except ValueError:
+                    return 401, {"message": "Hibás dátum formátum (date_from)"}
+            
+            if date_to:
+                try:
+                    date_to_obj = date.fromisoformat(date_to)
+                    forgatas_list = forgatas_list.filter(date__lte=date_to_obj)
+                except ValueError:
+                    return 401, {"message": "Hibás dátum formátum (date_to)"}
+            
+            # Apply type filter
+            if type:
+                valid_types = [t["value"] for t in FORGATAS_TYPES]
+                if type not in valid_types:
+                    return 401, {"message": "Érvénytelen típus"}
+                forgatas_list = forgatas_list.filter(forgTipus=type)
+            
+            # Apply assignment filters
+            if has_assignment is not None:
+                if has_assignment:
+                    forgatas_list = forgatas_list.filter(beosztasok__isnull=False)
+                else:
+                    forgatas_list = forgatas_list.filter(beosztasok__isnull=True)
+            
+            if finalized_only:
+                forgatas_list = forgatas_list.filter(beosztasok__kesz=True)
+            
+            forgatas_list = forgatas_list.order_by('-date', '-timeFrom').distinct()
+            
+            response = []
+            for forgatas in forgatas_list:
+                response.append(create_forgatas_with_roles_response(forgatas))
+            
+            return 200, response
+        except Exception as e:
+            return 401, {"message": f"Error fetching filming sessions with roles: {str(e)}"}
+
+    @api.get("/production/filming-sessions/{forgatas_id}/with-roles", auth=JWTAuth(), response={200: ForgatWithRolesSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def get_filming_session_with_roles(request, forgatas_id: int):
+        """
+        Get detailed filming session information with role assignments.
+        
+        Provides comprehensive information about a specific filming session
+        including all assigned students and their roles.
+        
+        Args:
+            forgatas_id: Unique filming session identifier
+        
+        Returns:
+            200: Detailed filming session with role assignment information
+            404: Filming session not found
+            401: Authentication failed
+        """
+        try:
+            forgatas = Forgatas.objects.get(id=forgatas_id)
+            return 200, create_forgatas_with_roles_response(forgatas)
+        except Forgatas.DoesNotExist:
+            return 404, {"message": "Forgatás nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error fetching filming session with roles: {str(e)}"}
+
+    @api.get("/production/filming-sessions/upcoming-with-roles", auth=JWTAuth(), response={200: list[ForgatWithRolesSchema], 401: ErrorSchema})
+    def get_upcoming_filming_sessions_with_roles(request, days_ahead: int = 30):
+        """
+        Get upcoming filming sessions with role assignment information.
+        
+        Useful for dashboard views and upcoming production planning.
+        
+        Args:
+            days_ahead: Number of days ahead to look for sessions (default: 30)
+        
+        Returns:
+            200: List of upcoming filming sessions with role information
+            401: Authentication failed
+        """
+        try:
+            from datetime import timedelta
+            today = date.today()
+            end_date = today + timedelta(days=days_ahead)
+            
+            upcoming_sessions = Forgatas.objects.filter(
+                date__gte=today,
+                date__lte=end_date
+            ).order_by('date', 'timeFrom')
+            
+            response = []
+            for forgatas in upcoming_sessions:
+                response.append(create_forgatas_with_roles_response(forgatas))
+            
+            return 200, response
+        except Exception as e:
+            return 401, {"message": f"Error fetching upcoming sessions with roles: {str(e)}"}
+
+    @api.get("/production/filming-sessions/unassigned", auth=JWTAuth(), response={200: list[ForgatSchema], 401: ErrorSchema})
+    def get_unassigned_filming_sessions(request, days_ahead: int = 60):
+        """
+        Get filming sessions that don't have role assignments yet.
+        
+        Helps identify sessions that still need student assignments.
+        
+        Args:
+            days_ahead: Number of days ahead to check (default: 60)
+        
+        Returns:
+            200: List of filming sessions without assignments
+            401: Authentication failed
+        """
+        try:
+            from datetime import timedelta
+            today = date.today()
+            end_date = today + timedelta(days=days_ahead)
+            
+            unassigned_sessions = Forgatas.objects.filter(
+                date__gte=today,
+                date__lte=end_date,
+                beosztasok__isnull=True
+            ).order_by('date', 'timeFrom')
+            
+            response = []
+            for forgatas in unassigned_sessions:
+                response.append(create_forgatas_response(forgatas))
+            
+            return 200, response
+        except Exception as e:
+            return 401, {"message": f"Error fetching unassigned sessions: {str(e)}"}
