@@ -842,3 +842,78 @@ def register_communications_endpoints(api):
                 
         except Exception as e:
             return 400, {"message": f"Error sending test email: {str(e)}"}
+
+    @api.get("/communications/system-messages", auth=JWTAuth(), response={200: list, 401: ErrorSchema})
+    def get_system_messages(request):
+        """
+        Get system messages that are currently active.
+        
+        Requires authentication. Returns system messages that should be displayed
+        to users at the current time (between showFrom and showTo dates).
+        
+        Returns:
+            200: List of active system messages
+            401: Authentication failed
+        """
+        try:
+            from api.models import SystemMessage
+            from datetime import datetime
+            
+            # Get active system messages for the current datetime
+            active_messages = SystemMessage.get_active_messages()
+            
+            response = []
+            for message in active_messages:
+                response.append({
+                    "id": message.id,
+                    "title": message.title,
+                    "message": message.message,
+                    "showFrom": message.showFrom.isoformat(),
+                    "showTo": message.showTo.isoformat(),
+                    "created_at": message.created_at.isoformat(),
+                    "updated_at": message.updated_at.isoformat()
+                })
+            
+            return 200, response
+        except Exception as e:
+            return 401, {"message": f"Error fetching system messages: {str(e)}"}
+
+    @api.get("/communications/system-messages/{message_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
+    def get_system_message_detail(request, message_id: int):
+        """
+        Get details of a specific system message.
+        
+        Requires authentication. Returns system message details if the message
+        is currently active (between showFrom and showTo dates).
+        
+        Args:
+            message_id: Unique system message identifier
+            
+        Returns:
+            200: System message details
+            404: Message not found or not currently active
+            401: Authentication failed
+        """
+        try:
+            from api.models import SystemMessage
+            
+            message = SystemMessage.objects.get(id=message_id)
+            
+            # Check if message is currently active
+            if not message.is_active():
+                return 404, {"message": "Rendszerüzenet nem található vagy jelenleg nem aktív"}
+            
+            return 200, {
+                "id": message.id,
+                "title": message.title,
+                "message": message.message,
+                "showFrom": message.showFrom.isoformat(),
+                "showTo": message.showTo.isoformat(),
+                "created_at": message.created_at.isoformat(),
+                "updated_at": message.updated_at.isoformat()
+            }
+        except SystemMessage.DoesNotExist:
+            return 404, {"message": "Rendszerüzenet nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error fetching system message: {str(e)}"}
+
