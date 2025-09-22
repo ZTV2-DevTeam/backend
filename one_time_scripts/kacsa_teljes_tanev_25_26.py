@@ -366,9 +366,9 @@ def get_kacsa_studio_location():
     Get or create the KaCsa studio location as a Partner.
     """
     partner, created = Partner.objects.get_or_create(
-        name="Műterem",
+        name="SZLG - Műterem",
         defaults={
-            'address': "SZLG - Házon belül",
+            'address': "1102 Budapest, Kőrösi Csoma Sándor út 28-34.",
             'institution': PartnerTipus.objects.get_or_create(name='Házon belül')[0],
             'imgUrl': None
         }
