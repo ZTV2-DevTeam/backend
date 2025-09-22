@@ -978,8 +978,38 @@ admin.site.index_title = 'FTV Rendszer Adminisztráció'
 
 # Register Atigazolas model
 @admin.register(Atigazolas)
-class AtigazolasAdmin(ImportExportModelAdmin):
-    resource_class = AtigazolasResource if 'AtigazolasResource' in globals() else None
+class AtigazolasAdmin(admin.ModelAdmin):
     list_display = ['profile', 'previous_stab', 'previous_radio_stab', 'new_stab', 'new_radio_stab', 'datetime']
     search_fields = ['profile__user__username', 'profile__user__first_name', 'profile__user__last_name', 'previous_stab', 'new_stab', 'previous_radio_stab', 'new_radio_stab']
     list_filter = ['previous_stab', 'new_stab', 'previous_radio_stab', 'new_radio_stab', 'datetime']
+
+# Register SystemMessage model
+@admin.register(SystemMessage)
+class SystemMessageAdmin(admin.ModelAdmin):
+    list_display = ['title', 'showFrom', 'showTo', 'is_currently_active', 'created_at', 'updated_at']
+    list_filter = ['showFrom', 'showTo', 'created_at']
+    search_fields = ['title', 'message']
+    readonly_fields = ['created_at', 'updated_at']
+    date_hierarchy = 'showFrom'
+    
+    fieldsets = (
+        ('📢 Rendszerüzenet adatok', {
+            'fields': ('title', 'message'),
+            'description': 'A rendszerüzenet címe és tartalma'
+        }),
+        ('⏰ Megjelenítési időszak', {
+            'fields': ('showFrom', 'showTo'),
+            'description': 'Az üzenet mikor legyen látható a felhasználók számára'
+        }),
+        ('📊 Metaadatok', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def is_currently_active(self, obj):
+        """Show if message is currently active"""
+        if obj.is_active():
+            return format_html('<span style="color: green; font-weight: bold;">✅ Aktív</span>')
+        return format_html('<span style="color: gray; font-weight: bold;">❌ Inaktív</span>')
+    is_currently_active.short_description = 'Jelenleg aktív'
