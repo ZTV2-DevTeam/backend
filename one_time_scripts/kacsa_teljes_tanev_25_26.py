@@ -406,7 +406,7 @@ def create_kacsa_forgatas(session_name, session_date):
     # Create new KaCsa forgatás
     forgatas = Forgatas.objects.create(
         name=f"KaCsa {session_name}",
-        description=f"KaCsa {session_name} - Kamasz Csatorna című műsor össejátszása a Padláson. Körősi szárny, Padlás (4. emelet) - Műterem",
+        description=f"KaCsa {session_name} - Kamasz Csatorna című műsor összejátszása a Padláson. Körősi szárny, Padlás (4. emelet) - Műterem",
         date=session_date,
         timeFrom=default_start_time,
         timeTo=default_end_time,
