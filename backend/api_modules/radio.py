@@ -14,10 +14,12 @@ the school's radio program with scheduling and participant management.
 Base URL: /api/
 
 Protected Endpoints (JWT Token Required):
-- GET  /radio-stabs             - List all radio stabs with member counts
-- POST /radio-stabs             - Create new radio stab (admin only)
-- GET  /radio-sessions          - Get radio sessions with optional date filters
-- POST /radio-sessions          - Create new radio session (admin only)
+- GET    /radio-stabs             - List all radio stabs with member counts
+- POST   /radio-stabs             - Create new radio stab (admin only)
+- GET    /radio-sessions          - Get radio sessions with optional date filters
+- POST   /radio-sessions          - Create new radio session (admin only)
+- PUT    /radio-sessions/{id}     - Update existing radio session (admin only)
+- DELETE /radio-sessions/{id}     - Delete existing radio session (admin only)
 
 Radio Stab System:
 =================
@@ -87,12 +89,24 @@ curl -X POST /api/radio-sessions \
   -H "Content-Type: application/json" \
   -d '{"radio_stab_id":1,"date":"2024-03-15","time_from":"14:00","time_to":"16:00","participant_ids":[1,2,3]}'
 
+Update radio session (admin):
+curl -X PUT /api/radio-sessions/1 \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"description":"Updated session description","time_to":"17:00"}'
+
+Delete radio session (admin):
+curl -X DELETE /api/radio-sessions/1 \
+  -H "Authorization: Bearer {token}"
+
 Permission Requirements:
 =======================
 
 - Public viewing: Authentication required
 - Stab creation: Admin permissions (teacher or system admin)
 - Session creation: Admin permissions
+- Session editing: Admin permissions (partial updates supported)
+- Session deletion: Admin permissions
 - Member management: Automatic through user profiles
 
 Scheduling Features:
@@ -166,6 +180,15 @@ class RadioSessionCreateSchema(Schema):
     time_to: str
     description: Optional[str] = None
     participant_ids: list[int] = []
+
+class RadioSessionUpdateSchema(Schema):
+    """Request schema for updating existing radio session."""
+    radio_stab_id: Optional[int] = None
+    date: Optional[str] = None
+    time_from: Optional[str] = None
+    time_to: Optional[str] = None
+    description: Optional[str] = None
+    participant_ids: Optional[list[int]] = None
 
 # ============================================================================
 # Utility Functions
@@ -369,3 +392,98 @@ def register_radio_endpoints(api):
             return 201, create_radio_session_response(session)
         except Exception as e:
             return 400, {"message": f"Error creating radio session: {str(e)}"}
+
+    @api.put("/radio-sessions/{session_id}", auth=JWTAuth(), response={200: RadioSessionSchema, 400: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
+    def update_radio_session(request, session_id: int, data: RadioSessionUpdateSchema):
+        """
+        Update existing radio session.
+        
+        Requires admin permissions. Updates an existing radio session with
+        provided data. Only provided fields will be updated.
+        
+        Args:
+            session_id: ID of the radio session to update
+            data: Radio session update data (partial update allowed)
+            
+        Returns:
+            200: Radio session updated successfully
+            400: Invalid data or radio stab not found
+            403: Insufficient permissions
+            404: Radio session not found
+            500: Server error
+        """
+        try:
+            # Check if user has admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 403, {"message": error_message}
+            
+            # Get the radio session
+            try:
+                session = RadioSession.objects.get(id=session_id)
+            except RadioSession.DoesNotExist:
+                return 404, {"message": "Rádiós összejátszás nem található"}
+            
+            # Update radio stab if provided
+            if data.radio_stab_id is not None:
+                try:
+                    radio_stab = RadioStab.objects.get(id=data.radio_stab_id)
+                    session.radio_stab = radio_stab
+                except RadioStab.DoesNotExist:
+                    return 400, {"message": "Rádiós stáb nem található"}
+            
+            # Update other fields if provided
+            if data.date is not None:
+                session.date = data.date
+            if data.time_from is not None:
+                session.time_from = data.time_from
+            if data.time_to is not None:
+                session.time_to = data.time_to
+            if data.description is not None:
+                session.description = data.description
+            
+            # Save the session
+            session.save()
+            
+            # Update participants if provided
+            if data.participant_ids is not None:
+                participants = User.objects.filter(id__in=data.participant_ids)
+                session.participants.set(participants)
+            
+            return 200, create_radio_session_response(session)
+        except Exception as e:
+            return 500, {"message": f"Error updating radio session: {str(e)}"}
+
+    @api.delete("/radio-sessions/{session_id}", auth=JWTAuth(), response={200: dict, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
+    def delete_radio_session(request, session_id: int):
+        """
+        Delete existing radio session.
+        
+        Requires admin permissions. Permanently deletes a radio session.
+        
+        Args:
+            session_id: ID of the radio session to delete
+            
+        Returns:
+            200: Radio session deleted successfully
+            403: Insufficient permissions
+            404: Radio session not found
+            500: Server error
+        """
+        try:
+            # Check if user has admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 403, {"message": error_message}
+            
+            # Get and delete the radio session
+            try:
+                session = RadioSession.objects.get(id=session_id)
+                session_name = str(session)
+                session.delete()
+                return 200, {"message": f"Rádiós összejátszás sikeresen törölve: {session_name}"}
+            except RadioSession.DoesNotExist:
+                return 404, {"message": "Rádiós összejátszás nem található"}
+            
+        except Exception as e:
+            return 500, {"message": f"Error deleting radio session: {str(e)}"}
