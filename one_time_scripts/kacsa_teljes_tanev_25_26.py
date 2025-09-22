@@ -140,163 +140,163 @@ KACSA_DATES = [
 ]
 
 # Role assignments for each session
-# Format: "Role": ["A1 person", "B1 person", "A2 person", "B2 person", ...]
-KACSA_ASSIGNMENTS = {
-    "Szerkesztő": [
+# Format: List of (role_name, [people_per_session])
+KACSA_ASSIGNMENTS = [
+    ("Szerkesztő", [
         "Bercea Dóri", "Aszódi Laura", "Bertalan Réka", "Boldizsár Lilla", 
         "Bozsóki Áron", "Csomós Dávid", "Földesi Amira", "Hargitai Kata", 
         "Geibinger Félix", "Kalotai Fanni", "Kocsis Ferenc", "Kassai Adél", 
         "Molnár Lili", "Kátai Kornél", "Ruby Luca", "Richtseidt Alina", 
         "Sándor Zita", "Horváth Renáta"
-    ],
-    "Műsorvezető": [
+    ]),
+    ("Műsorvezető", [
         "Sándor Zita", "Richtseidt Alina", "Kocsis Ferenc", "Aszódi Laura", 
         "Bertalan Réka", "Kátai Kornél", "Bozsóki Áron", "Csomós Dávid", 
         "Földesi Amira", "Hargitai Kata", "Geibinger Félix", "Kalotai Fanni", 
         "Kocsis Ferenc", "Kassai Adél", "Molnár Lili", "Boldizsár Lilla", 
         "Ruby Luca", "Richtseidt Alina"
-    ],
-    "Műsorvezető": [
+    ]),
+    ("Műsorvezető", [
         "Pásztor Lilien", "Németh Lola", "Marton Ádám", "Botos Csenge", 
         "Konok Flóra", "Faludy Flóra", "Molnár Lili", "Kassai Adél", 
         "Bercea Dóri", "Boldizsár Lilla", "Bertalan Réka", "Kátai Kornél", 
         "Geibinger Félix", "Aszódi Laura", "Bozsóki Áron", "Hargitai Kata", 
         "Sándor Zita", "Csomós Dávid"
-    ],
-    "Látványtervező": [
+    ]),
+    ("Látványtervező", [
         "Ruby Luca", "Richtseidt Alina", "Sándor Zita", "Kalotai Fanni", 
         "Bercea Dóri", "Aszódi Laura", "Bertalan Réka", "Boldizsár Lilla", 
         "Bozsóki Áron", "Csomós Dávid", "Földesi Amira", "Hargitai Kata", 
         "Geibinger Félix", "Horváth Renáta", "Kocsis Ferenc", "Kassai Adél", 
         "Molnár Lili", "Kátai Kornél"
-    ],
-    "Rendezőasszisztens": [
+    ]),
+    ("Rendezőasszisztens", [
         "Aszódi Laura", "Földesi Amira", "Horváth Renáta", "Geibinger Félix", 
         "Boldizsár Lilla", "Molnár Lili", "Hargitai Kata", "Ruby Luca", 
         "Kalotai Fanni", "Sándor Zita", "Kassai Adél", "Bercea Dóri", 
         "Kátai Kornél", "Bertalan Réka", "Richtseidt Alina", "Bozsóki Áron", 
         "Csomós Dávid", "Kocsis Ferenc"
-    ],
-    "Rendező": [
+    ]),
+    ("Rendező", [
         "Botos Csenge", "Hancz Johanna", "Pásztor Lilien", "Konok Flóra", 
         "Bartha Dóri", "Marton Ádám", "Boldizsár Lilla", "Molnár Lili", 
         "Hargitai Kata", "Ruby Luca", "Kalotai Fanni", "Sándor Zita", 
         "Kassai Adél", "Bercea Dóri", "Kátai Kornél", "Bertalan Réka", 
         "Richtseidt Alina", "Bozsóki Áron"
-    ],
-    "Vezető operatőr": [
+    ]),
+    ("Vezető operatőr", [
         "Hancz Johanna", "Bartha Dóri", "Faludy Flóra", "Németh Lola", 
         "Kapta Zétény", "Pásztor Lilien", "Richtseidt Alina", "Bozsóki Áron", 
         "Boldizsár Lilla", "Molnár Lili", "Hargitai Kata", "Ruby Luca", 
         "Kalotai Fanni", "Sándor Zita", "Kassai Adél", "Bercea Dóri", 
         "Kátai Kornél", "Bertalan Réka"
-    ],
-    "Képvágó": [
+    ]),
+    ("Képvágó", [
         "Kátai Kornél", "Bertalan Réka", "Aszódi Laura", "Bozsóki Áron", 
         "Csomós Dávid", "Földesi Amira", "Horváth Renáta", "Geibinger Félix", 
         "Richtseidt Alina", "Kocsis Ferenc", "Boldizsár Lilla", "Molnár Lili", 
         "Hargitai Kata", "Ruby Luca", "Kalotai Fanni", "Sándor Zita", 
         "Kassai Adél", "Bercea Dóri"
-    ],
-    "Hangmérnök": [
+    ]),
+    ("Hangmérnök", [
         "Kassai Adél", "Bercea Dóri", "Kátai Kornél", "Bertalan Réka", 
         "Aszódi Laura", "Bozsóki Áron", "Csomós Dávid", "Földesi Amira", 
         "Horváth Renáta", "Geibinger Félix", "Richtseidt Alina", "Kocsis Ferenc", 
         "Boldizsár Lilla", "Molnár Lili", "Hargitai Kata", "Ruby Luca", 
         "Kalotai Fanni", "Sándor Zita"
-    ],
-    "Bejátszó-mentor": [
+    ]),
+    ("Bejátszó-mentor", [
         "Kalotai Fanni", "Bozsóki Áron", "Kassai Adél", "Bercea Dóri", 
         "Kátai Kornél", "Bertalan Réka", "Aszódi Laura", "Sándor Zita", 
         "Csomós Dávid", "Földesi Amira", "Horváth Renáta", "Geibinger Félix", 
         "Richtseidt Alina", "Kocsis Ferenc", "Boldizsár Lilla", "Molnár Lili", 
         "Hargitai Kata", "Ruby Luca"
-    ],
-    "Feliratozó-mentor": [
+    ]),
+    ("Feliratozó-mentor", [
         "Hargitai Kata", "Ruby Luca", "Kalotai Fanni", "Sándor Zita", 
         "Kassai Adél", "Bercea Dóri", "Kátai Kornél", "Bertalan Réka", 
         "Aszódi Laura", "Bozsóki Áron", "Csomós Dávid", "Földesi Amira", 
         "Horváth Renáta", "Geibinger Félix", "Richtseidt Alina", "Kocsis Ferenc", 
         "Boldizsár Lilla", "Molnár Lili"
-    ],
-    "Technikus": [
+    ]),
+    ("Technikus", [
         "Boldizsár Lilla", "Molnár Lili", "Richtseidt Alina", "Ruby Luca", 
         "Kalotai Fanni", "Sándor Zita", "Kassai Adél", "Bercea Dóri", 
         "Kátai Kornél", "Bertalan Réka", "Aszódi Laura", "Bozsóki Áron", 
         "Csomós Dávid", "Földesi Amira", "Horváth Renáta", "Geibinger Félix", 
         "Hargitai Kata", "Kocsis Ferenc"
-    ],
-    "Technikus": [
+    ]),
+    ("Technikus", [
         "Richtseidt Alina", "Sándor Zita", "Boldizsár Lilla", "Molnár Lili", 
         "Hargitai Kata", "Ruby Luca", "Kalotai Fanni", "Kocsis Ferenc", 
         "Kassai Adél", "Bercea Dóri", "Kátai Kornél", "Bertalan Réka", 
         "Aszódi Laura", "Bozsóki Áron", "Csomós Dávid", "Földesi Amira", 
         "Horváth Renáta", "Geibinger Félix"
-    ],
-    "Bejátszó": [
+    ]),
+    ("Bejátszó", [
         "Diósi Attila", "Homa-Bálint Kornélia", "Gajzágó Anna", "Aczél Gergő", 
         "Deutsch Levente", "Kristóf Eszter", "Váradi Szilárd", "Magyar Marcell", 
         "Szabó-Kovács Kolos Gyula", "Farkas Olivér", "Hricsovszky Milán", "Káldi Nóra", 
         "Piatsek Zsófia", "Szokola Lina", "Kruspier Kristóf", "Vincze Ferenc", 
         "Barti Mira", "Mantz Lilla"
-    ],
-    "Feliratozó": [
+    ]),
+    ("Feliratozó", [
         "Farkas Olivér", "Hricsovszky Milán", "Káldi Nóra", "Barti Mira", 
         "Szokola Lina", "Kruspier Kristóf", "Vincze Ferenc", "Piatsek Zsófia", 
         "Mantz Lilla", "Gajzágó Anna", "Homa-Bálint Kornélia", "Aczél Gergő", 
         "Diósi Attila", "Deutsch Levente", "Kristóf Eszter", "Váradi Szilárd", 
         "Magyar Marcell", "Szabó-Kovács Kolos Gyula"
-    ],
-    "Operatőr 1": [
+    ]),
+    ("Operatőr", [
         "Aczél Gergő", "Káldi Nóra", "Homa-Bálint Kornélia", "Kristóf Eszter", 
         "Mantz Lilla", "Szokola Lina", "Aczél Gergő", "Káldi Nóra", 
         "Homa-Bálint Kornélia", "Kristóf Eszter", "Mantz Lilla", "Szokola Lina", 
         "Aczél Gergő", "Káldi Nóra", "Homa-Bálint Kornélia", "Kristóf Eszter", 
         "Mantz Lilla", "Szokola Lina"
-    ],
-    "Operatőr 2": [
+    ]),
+    ("Operatőr", [
         "Barti Mira", "Farkas Olivér", "Hricsovszky Milán", "Kruspier Kristóf", 
         "Piatsek Zsófia", "Váradi Szilárd", "Barti Mira", "Farkas Olivér", 
         "Hricsovszky Milán", "Kruspier Kristóf", "Piatsek Zsófia", "Váradi Szilárd", 
         "Barti Mira", "Farkas Olivér", "Hricsovszky Milán", "Kruspier Kristóf", 
         "Piatsek Zsófia", "Váradi Szilárd"
-    ],
-    "Operatőr 3": [
+    ]),
+    ("Operatőr", [
         "Deutsch Levente", "Gajzágó Anna", "Diósi Attila", "Magyar Marcell", 
         "Szabó-Kovács Kolos Gyula", "Vincze Ferenc", "Deutsch Levente", "Gajzágó Anna", 
         "Diósi Attila", "Magyar Marcell", "Szabó-Kovács Kolos Gyula", "Vincze Ferenc", 
         "Deutsch Levente", "Gajzágó Anna", "Diósi Attila", "Magyar Marcell", 
         "Szabó-Kovács Kolos Gyula", "Vincze Ferenc"
-    ],
-    "Asszisztens 1": [
+    ]),
+    ("Asszisztens", [
         "Csontos Kata", "Fejes Gréta", "Gábor Levente", "Gelencsér Martin Bence", 
         "Csontos Kata", "Fejes Gréta", "Gábor Levente", "Gelencsér Martin Bence", 
         "Csontos Kata", "Fejes Gréta", "Gábor Levente", "Gelencsér Martin Bence", 
         "Csontos Kata", "Fejes Gréta", "Gábor Levente", "Gelencsér Martin Bence", 
         "Fejes Gréta", "Csontos Kata"
-    ],
-    "Asszisztens 2": [
+    ]),
+    ("Asszisztens", [
         "Démi Zoltán István", "Gajdos Zétény Zalán", "Kis Kornélia Gabriella", "Szalma-Baksi Ábel", 
         "Démi Zoltán István", "Gajdos Zétény Zalán", "Kis Kornélia Gabriella", "Szalma-Baksi Ábel", 
         "Démi Zoltán István", "Gajdos Zétény Zalán", "Kis Kornélia Gabriella", "Szalma-Baksi Ábel", 
         "Démi Zoltán István", "Gajdos Zétény Zalán", "Kis Kornélia Gabriella", "Szalma-Baksi Ábel", 
         "Gajdos Zétény Zalán", "Démi Zoltán István"
-    ],
-    "Asszisztens 3": [
+    ]),
+    ("Asszisztens", [
         "Faludy Blanka", "Szabó-Aross Misa", "Kovács Donát Ádám", "Takács Alexandra", 
         "Faludy Blanka", "Szabó-Aross Misa", "Kovács Donát Ádám", "Takács Alexandra", 
         "Faludy Blanka", "Szabó-Aross Misa", "Kovács Donát Ádám", "Takács Alexandra", 
         "Faludy Blanka", "Szabó-Aross Misa", "Kovács Donát Ádám", "Takács Alexandra", 
         "Szabó-Aross Misa", "Faludy Blanka"
-    ],
-    "Asszisztens 4": [
+    ]),
+    ("Asszisztens", [
         "Fülöp Ádám Tamás", "Rózsa Krisztina", "Rábai Fruzsina", "Varga Dóra Eszter", 
         "Fülöp Ádám Tamás", "Rózsa Krisztina", "Rábai Fruzsina", "Varga Dóra Eszter", 
         "Fülöp Ádám Tamás", "Rózsa Krisztina", "Rábai Fruzsina", "Varga Dóra Eszter", 
         "Fülöp Ádám Tamás", "Rózsa Krisztina", "Rábai Fruzsina", "Varga Dóra Eszter", 
         "Rózsa Krisztina", "Fülöp Ádám Tamás"
-    ],
-}
+    ]),
+]
 
 # ============================================================================
 # UTILITY FUNCTIONS
@@ -406,7 +406,7 @@ def create_kacsa_forgatas(session_name, session_date):
     # Create new KaCsa forgatás
     forgatas = Forgatas.objects.create(
         name=f"KaCsa {session_name}",
-        description=f"KaCsa {session_name} - Heti híradó és magazinműsor felvétele",
+        description=f"KaCsa {session_name} - Kamasz Csatorna című műsor össejátszása a Padláson. Körősi szárny, Padlás (4. emelet) - Műterem",
         date=session_date,
         timeFrom=default_start_time,
         timeTo=default_end_time,
@@ -458,7 +458,7 @@ def create_role_assignments(beosztas, session_index):
     created_assignments = 0
     failed_assignments = 0
     
-    for role_name, assigned_people in KACSA_ASSIGNMENTS.items():
+    for role_name, assigned_people in KACSA_ASSIGNMENTS:
         if session_index >= len(assigned_people):
             print(f"⚠️  WARNING: No assignment for {role_name} in session {session_index}")
             continue
@@ -559,7 +559,7 @@ def process_kacsa_schedule(dry_run=True, auto_finalize=False, skip_confirmation=
             'failed_assignments': []
         }
         
-        for role_name, assigned_people in KACSA_ASSIGNMENTS.items():
+        for role_name, assigned_people in KACSA_ASSIGNMENTS:
             if i < len(assigned_people):
                 literal_name = assigned_people[i]
                 user = get_user_by_name(literal_name)
