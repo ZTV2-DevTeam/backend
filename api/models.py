@@ -1430,3 +1430,43 @@ def assignment_users_changed(sender, instance, action, pk_set, **kwargs):
             print(f"[ERROR] Assignment users change email signal failed: {str(e)}")
             import traceback
             print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+
+class SystemMessage(models.Model):
+    title = models.CharField(max_length=200, blank=False, null=False, verbose_name='Cím', 
+                            help_text='A rendszerüzenet címe (maximum 200 karakter)')
+    message = models.TextField(max_length=2000, blank=False, null=False, verbose_name='Üzenet', 
+                              help_text='A rendszerüzenet tartalma (maximum 2000 karakter)')
+    showFrom = models.DateTimeField(blank=False, null=False, verbose_name='Megjelenítés kezdete', 
+                                   help_text='Az üzenet megjelenítésének kezdő időpontja')
+    showTo = models.DateTimeField(blank=False, null=False, verbose_name='Megjelenítés vége', 
+                                 help_text='Az üzenet megjelenítésének záró időpontja')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Létrehozva', 
+                                     help_text='A rendszerüzenet létrehozásának időpontja')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Módosítva', 
+                                     help_text='A rendszerüzenet utolsó módosításának időpontja')
+
+    def __str__(self):
+        return self.title
+    
+    @classmethod
+    def get_active_messages(cls, check_datetime=None):
+        """Get all system messages that should be displayed at the given datetime (default: now)"""
+        if check_datetime is None:
+            check_datetime = datetime.now()
+        
+        return cls.objects.filter(
+            showFrom__lte=check_datetime,
+            showTo__gte=check_datetime
+        ).order_by('showFrom')
+    
+    def is_active(self, check_datetime=None):
+        """Check if this message should be displayed at the given datetime (default: now)"""
+        if check_datetime is None:
+            check_datetime = datetime.now()
+        
+        return self.showFrom <= check_datetime <= self.showTo
+    
+    class Meta:
+        verbose_name = "Rendszerüzenet"
+        verbose_name_plural = "Rendszerüzenetek"
+        ordering = ['-showFrom']
