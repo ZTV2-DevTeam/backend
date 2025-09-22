@@ -986,8 +986,8 @@ class AtigazolasAdmin(admin.ModelAdmin):
 # Register SystemMessage model
 @admin.register(SystemMessage)
 class SystemMessageAdmin(admin.ModelAdmin):
-    list_display = ['title', 'showFrom', 'showTo', 'is_currently_active', 'created_at', 'updated_at']
-    list_filter = ['showFrom', 'showTo', 'created_at']
+    list_display = ['title', 'get_severity_display', 'get_messageType_display', 'showFrom', 'showTo', 'is_currently_active', 'created_at', 'updated_at']
+    list_filter = ['severity', 'messageType', 'showFrom', 'showTo', 'created_at']
     search_fields = ['title', 'message']
     readonly_fields = ['created_at', 'updated_at']
     date_hierarchy = 'showFrom'
@@ -996,6 +996,10 @@ class SystemMessageAdmin(admin.ModelAdmin):
         ('📢 Rendszerüzenet adatok', {
             'fields': ('title', 'message'),
             'description': 'A rendszerüzenet címe és tartalma'
+        }),
+        ('🏷️ Kategorizálás', {
+            'fields': ('severity', 'messageType'),
+            'description': 'Az üzenet súlyossága és célközönsége'
         }),
         ('⏰ Megjelenítési időszak', {
             'fields': ('showFrom', 'showTo'),
@@ -1013,3 +1017,37 @@ class SystemMessageAdmin(admin.ModelAdmin):
             return format_html('<span style="color: green; font-weight: bold;">✅ Aktív</span>')
         return format_html('<span style="color: gray; font-weight: bold;">❌ Inaktív</span>')
     is_currently_active.short_description = 'Jelenleg aktív'
+    
+    def get_severity_display(self, obj):
+        """Display severity with color coding"""
+        severity_colors = {
+            'info': '#17a2b8',      # Blue
+            'warning': '#ffc107',   # Yellow
+            'error': '#dc3545'      # Red
+        }
+        severity_icons = {
+            'info': 'ℹ️',
+            'warning': '⚠️',
+            'error': '❌'
+        }
+        color = severity_colors.get(obj.severity, '#6c757d')
+        icon = severity_icons.get(obj.severity, '📝')
+        display_name = obj.get_severity_display()
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{} {}</span>',
+            color, icon, display_name
+        )
+    get_severity_display.short_description = 'Súlyosság'
+    
+    def get_messageType_display(self, obj):
+        """Display message type with icons"""
+        type_icons = {
+            'user': '👤',
+            'developer': '👨‍💻',
+            'operator': '⚙️',
+            'support': '🛠️'
+        }
+        icon = type_icons.get(obj.messageType, '📝')
+        display_name = obj.get_messageType_display()
+        return format_html('{} {}', icon, display_name)
+    get_messageType_display.short_description = 'Üzenet típusa'

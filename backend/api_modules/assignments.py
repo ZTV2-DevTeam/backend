@@ -473,32 +473,27 @@ def check_user_availability_for_forgatas(user: User, forgatas: Forgatas) -> dict
             "approved": vacation.approved
         })
     
-    # Check for radio session conflicts (for radio students)
-    try:
-        profile = Profile.objects.get(user=user)
-        if profile.is_second_year_radio_student:
-            radio_sessions = RadioSession.objects.filter(
-                participants=user,
-                date=forgatas.date
-            )
-            
-            for session in radio_sessions:
-                # Check if radio session overlaps with forgatas time
-                session_start = datetime.combine(session.date, session.time_from)
-                session_end = datetime.combine(session.date, session.time_to)
-                
-                if session_start < forgatas_end and session_end > forgatas_start:
-                    has_radio_session = True
-                    conflicts.append({
-                        "type": "radio_session",
-                        "description": f"{session.radio_stab.name} rádiós összejátszás",
-                        "date": session.date.isoformat(),
-                        "time_from": session.time_from.isoformat(),
-                        "time_to": session.time_to.isoformat(),
-                        "radio_stab": session.radio_stab.name
-                    })
-    except Profile.DoesNotExist:
-        pass
+    # Check for radio session conflicts (for all users)
+    radio_sessions = RadioSession.objects.filter(
+        participants=user,
+        date=forgatas.date
+    )
+    
+    for session in radio_sessions:
+        # Check if radio session overlaps with forgatas time
+        session_start = datetime.combine(session.date, session.time_from)
+        session_end = datetime.combine(session.date, session.time_to)
+        
+        if session_start < forgatas_end and session_end > forgatas_start:
+            has_radio_session = True
+            conflicts.append({
+                "type": "radio_session",
+                "description": f"{session.radio_stab.name} rádiós összejátszás",
+                "date": session.date.isoformat(),
+                "time_from": session.time_from.isoformat(),
+                "time_to": session.time_to.isoformat(),
+                "radio_stab": session.radio_stab.name
+            })
     
     # User is available if they have no conflicts
     is_available = len(conflicts) == 0
@@ -630,7 +625,7 @@ def auto_create_absences_for_beosztas(beosztas: Beosztas):
 def register_assignment_endpoints(api):
     """Register all assignment-related endpoints with the API router."""
     
-    @api.get("/assignments/filming-assignments", auth=JWTAuth(), response={200: List[BeosztasSchema], 401: ErrorSchema})
+    @api.get("/assignments/filming-assignments", auth=JWTAuth(), response={200: List[BeosztasSchema], 401: ErrorSchema, 500: ErrorSchema})
     def get_filming_assignments(request, forgatas_id: int = None, kesz: bool = None, 
                                start_date: str = None, end_date: str = None, stab_id: int = None):
         """
@@ -684,9 +679,9 @@ def register_assignment_endpoints(api):
             
             return 200, response
         except Exception as e:
-            return 401, {"message": f"Error fetching assignments: {str(e)}"}
+            return 500, {"message": f"Szerver hiba a beosztások lekérése során: {str(e)}"}
 
-    @api.get("/assignments/filming-assignments/by-forgatas/{forgatas_id}", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/assignments/filming-assignments/by-forgatas/{forgatas_id}", auth=JWTAuth(), response={200: BeosztasSchema, 401: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
     def get_filming_assignment_details_by_forgatas(request, forgatas_id: int):
         """
         Get detailed information about a specific assignment by forgatas ID.
@@ -839,7 +834,7 @@ def register_assignment_endpoints(api):
             import traceback
             print(f"❌ [DEBUG] Full traceback:")
             traceback.print_exc()
-            return 401, {"message": f"Error fetching assignment details: {str(e)}"}
+            return 500, {"message": f"Szerver hiba a beosztás részletek lekérése során: {str(e)}"}
 
     @api.post("/assignments/filming-assignments", auth=JWTAuth(), response={201: BeosztasSchema, 400: ErrorSchema, 401: ErrorSchema})
     def create_filming_assignment(request, data: BeosztasCreateSchema):
@@ -1224,7 +1219,7 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error deleting assignment: {str(e)}"}
 
-    @api.get("/assignments/roles", auth=JWTAuth(), response={200: List[SzerepkorSchema], 401: ErrorSchema})
+    @api.get("/assignments/roles", auth=JWTAuth(), response={200: List[SzerepkorSchema], 401: ErrorSchema, 500: ErrorSchema})
     def get_available_roles(request, ev: int = None):
         """
         Get all available roles for assignments.
@@ -1254,7 +1249,7 @@ def register_assignment_endpoints(api):
             
             return 200, response
         except Exception as e:
-            return 401, {"message": f"Error fetching roles: {str(e)}"}
+            return 500, {"message": f"Szerver hiba a szerepkörök lekérése során: {str(e)}"}
 
     @api.get("/assignments/roles/{role_id}", auth=JWTAuth(), response={200: SzerepkorSchema, 401: ErrorSchema, 404: ErrorSchema})
     def get_role_details(request, role_id: int):
@@ -1277,13 +1272,15 @@ def register_assignment_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching role details: {str(e)}"}
 
-    @api.get("/assignments/user-role-statistics/{user_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/assignments/user-role-statistics/{user_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
     def get_user_role_statistics(request, user_id: int):
         """
         Get role statistics for a specific user.
         
         Returns comprehensive statistics about how many times a user was in each role
         and when was the last time they had that role.
+        
+        Requires admin or teacher permissions.
         
         Args:
             user_id: Unique user identifier
@@ -1292,8 +1289,15 @@ def register_assignment_endpoints(api):
             200: User role statistics
             404: User not found
             401: Authentication failed
+            403: Insufficient permissions
+            500: Server error
         """
         try:
+            # Check admin or teacher permissions
+            has_permission, error_message = check_admin_or_teacher_permissions(request.auth)
+            if not has_permission:
+                return 403, {"message": error_message}
+            
             user = User.objects.get(id=user_id)
             
             # Get all role relations for this user
@@ -1316,6 +1320,7 @@ def register_assignment_endpoints(api):
                         "role": create_szerepkor_response(relation.szerepkor),
                         "total_times": 0,
                         "last_time": None,
+                        "last_date": None,  # Track date object for comparison
                         "last_forgatas": None,
                         "assignments": []
                     }
@@ -1327,13 +1332,17 @@ def register_assignment_endpoints(api):
                 # Find the most recent assignment
                 latest_assignment = related_assignments.first()
                 if latest_assignment and latest_assignment.forgatas:
-                    if (not role_stats[role_id]["last_time"] or 
-                        latest_assignment.forgatas.date > role_stats[role_id]["last_time"]):
-                        role_stats[role_id]["last_time"] = latest_assignment.forgatas.date.isoformat()
+                    # Store the last_time as a date object for comparison, convert to string only when needed
+                    current_date = latest_assignment.forgatas.date
+                    stored_last_date = role_stats[role_id].get("last_date")  # We'll track this separately
+                    
+                    if (not stored_last_date or current_date > stored_last_date):
+                        role_stats[role_id]["last_date"] = current_date  # Store date object for comparison
+                        role_stats[role_id]["last_time"] = current_date.isoformat()  # Store string for response
                         role_stats[role_id]["last_forgatas"] = {
                             "id": latest_assignment.forgatas.id,
                             "name": latest_assignment.forgatas.name,
-                            "date": latest_assignment.forgatas.date.isoformat()
+                            "date": current_date.isoformat()
                         }
                 
                 # Add assignment details for this role
@@ -1355,6 +1364,11 @@ def register_assignment_endpoints(api):
             role_statistics = list(role_stats.values())
             role_statistics.sort(key=lambda x: x["total_times"], reverse=True)
             
+            # Clean up internal fields before sending response
+            for role_stat in role_statistics:
+                if "last_date" in role_stat:
+                    del role_stat["last_date"]  # Remove internal field used for comparison
+            
             # Calculate summary statistics
             total_assignments = assignments.count()
             total_roles_used = len(role_statistics)
@@ -1374,7 +1388,7 @@ def register_assignment_endpoints(api):
         except User.DoesNotExist:
             return 404, {"message": "Felhasználó nem található"}
         except Exception as e:
-            return 401, {"message": f"Error fetching user role statistics: {str(e)}"}
+            return 500, {"message": f"Szerver hiba a szerepkör statisztikák lekérése során: {str(e)}"}
 
     @api.get("/assignments/roles-by-year", auth=JWTAuth(), response={200: dict, 401: ErrorSchema})
     def get_roles_grouped_by_year(request):

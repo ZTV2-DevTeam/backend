@@ -357,6 +357,37 @@ class AnnouncementDetailSchema(Schema):
     recipient_count: int = 0
     is_targeted: bool = False
 
+class SystemMessageSchema(Schema):
+    """Response schema for system message data."""
+    id: int
+    title: str
+    message: str
+    severity: str  # info | warning | error
+    messageType: str  # user | developer | operator | support
+    showFrom: str
+    showTo: str
+    created_at: str
+    updated_at: str
+    is_active: bool = True
+
+class SystemMessageCreateSchema(Schema):
+    """Request schema for creating new system message."""
+    title: str
+    message: str
+    severity: str = "info"
+    messageType: str = "user"
+    showFrom: str  # ISO datetime string
+    showTo: str    # ISO datetime string
+
+class SystemMessageUpdateSchema(Schema):
+    """Request schema for updating existing system message."""
+    title: Optional[str] = None
+    message: Optional[str] = None
+    severity: Optional[str] = None
+    messageType: Optional[str] = None
+    showFrom: Optional[str] = None
+    showTo: Optional[str] = None
+
 # ============================================================================
 # Utility Functions
 # ============================================================================
@@ -843,13 +874,17 @@ def register_communications_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error sending test email: {str(e)}"}
 
-    @api.get("/communications/system-messages", auth=JWTAuth(), response={200: list, 401: ErrorSchema})
-    def get_system_messages(request):
+    @api.get("/communications/system-messages", auth=JWTAuth(), response={200: list[SystemMessageSchema], 401: ErrorSchema})
+    def get_system_messages(request, severity: str = None, messageType: str = None):
         """
         Get system messages that are currently active.
         
         Requires authentication. Returns system messages that should be displayed
         to users at the current time (between showFrom and showTo dates).
+        
+        Args:
+            severity: Optional filter by severity (info/warning/error)
+            messageType: Optional filter by message type (user/developer/operator/support)
         
         Returns:
             200: List of active system messages
@@ -862,23 +897,32 @@ def register_communications_endpoints(api):
             # Get active system messages for the current datetime
             active_messages = SystemMessage.get_active_messages()
             
+            # Apply filters if provided
+            if severity:
+                active_messages = active_messages.filter(severity=severity)
+            if messageType:
+                active_messages = active_messages.filter(messageType=messageType)
+            
             response = []
             for message in active_messages:
                 response.append({
                     "id": message.id,
                     "title": message.title,
                     "message": message.message,
+                    "severity": message.severity,
+                    "messageType": message.messageType,
                     "showFrom": message.showFrom.isoformat(),
                     "showTo": message.showTo.isoformat(),
                     "created_at": message.created_at.isoformat(),
-                    "updated_at": message.updated_at.isoformat()
+                    "updated_at": message.updated_at.isoformat(),
+                    "is_active": message.is_active()
                 })
             
             return 200, response
         except Exception as e:
             return 401, {"message": f"Error fetching system messages: {str(e)}"}
 
-    @api.get("/communications/system-messages/{message_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
+    @api.get("/communications/system-messages/{message_id}", auth=JWTAuth(), response={200: SystemMessageSchema, 401: ErrorSchema, 404: ErrorSchema})
     def get_system_message_detail(request, message_id: int):
         """
         Get details of a specific system message.
@@ -907,13 +951,293 @@ def register_communications_endpoints(api):
                 "id": message.id,
                 "title": message.title,
                 "message": message.message,
+                "severity": message.severity,
+                "messageType": message.messageType,
                 "showFrom": message.showFrom.isoformat(),
                 "showTo": message.showTo.isoformat(),
                 "created_at": message.created_at.isoformat(),
-                "updated_at": message.updated_at.isoformat()
+                "updated_at": message.updated_at.isoformat(),
+                "is_active": message.is_active()
             }
         except SystemMessage.DoesNotExist:
             return 404, {"message": "Rendszerüzenet nem található"}
         except Exception as e:
             return 401, {"message": f"Error fetching system message: {str(e)}"}
+
+    @api.post("/communications/system-messages", auth=JWTAuth(), response={201: SystemMessageSchema, 400: ErrorSchema, 401: ErrorSchema, 403: ErrorSchema})
+    def create_system_message(request, data: SystemMessageCreateSchema):
+        """
+        Create a new system message.
+        
+        Requires admin permissions. Creates a new system message with the specified
+        title, content, severity, message type, and display period.
+        
+        Args:
+            data: System message creation data
+            
+        Returns:
+            201: System message created successfully
+            400: Invalid data
+            401: Authentication failed
+            403: Insufficient permissions
+        """
+        try:
+            from api.models import SystemMessage, Profile
+            from datetime import datetime
+            
+            requesting_user = request.auth
+            
+            # Check admin permissions
+            try:
+                profile = Profile.objects.get(user=requesting_user)
+                if not profile.has_admin_permission('any'):
+                    return 403, {"message": "Adminisztrátor jogosultság szükséges a rendszerüzenetek kezeléséhez"}
+            except Profile.DoesNotExist:
+                return 403, {"message": "Felhasználói profil nem található"}
+            
+            # Validate datetime strings
+            try:
+                show_from = datetime.fromisoformat(data.showFrom.replace('Z', '+00:00'))
+                show_to = datetime.fromisoformat(data.showTo.replace('Z', '+00:00'))
+            except ValueError:
+                return 400, {"message": "Érvénytelen dátum formátum. ISO formátumot használjon (pl: 2023-12-25T10:00:00)"}
+            
+            if show_from >= show_to:
+                return 400, {"message": "A kezdő dátum nem lehet későbbi vagy egyenlő a záró dátumnál"}
+            
+            # Validate choices
+            valid_severities = ['info', 'warning', 'error']
+            valid_message_types = ['user', 'developer', 'operator', 'support']
+            
+            if data.severity not in valid_severities:
+                return 400, {"message": f"Érvénytelen súlyosság. Használja ezek egyikét: {', '.join(valid_severities)}"}
+            
+            if data.messageType not in valid_message_types:
+                return 400, {"message": f"Érvénytelen üzenet típus. Használja ezek egyikét: {', '.join(valid_message_types)}"}
+            
+            # Create the system message
+            message = SystemMessage.objects.create(
+                title=data.title,
+                message=data.message,
+                severity=data.severity,
+                messageType=data.messageType,
+                showFrom=show_from,
+                showTo=show_to
+            )
+            
+            return 201, {
+                "id": message.id,
+                "title": message.title,
+                "message": message.message,
+                "severity": message.severity,
+                "messageType": message.messageType,
+                "showFrom": message.showFrom.isoformat(),
+                "showTo": message.showTo.isoformat(),
+                "created_at": message.created_at.isoformat(),
+                "updated_at": message.updated_at.isoformat(),
+                "is_active": message.is_active()
+            }
+            
+        except Exception as e:
+            return 400, {"message": f"Hiba a rendszerüzenet létrehozása során: {str(e)}"}
+
+    @api.put("/communications/system-messages/{message_id}", auth=JWTAuth(), response={200: SystemMessageSchema, 400: ErrorSchema, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema})
+    def update_system_message(request, message_id: int, data: SystemMessageUpdateSchema):
+        """
+        Update an existing system message.
+        
+        Requires admin permissions. Updates the specified system message with
+        the provided data.
+        
+        Args:
+            message_id: Unique system message identifier
+            data: System message update data
+            
+        Returns:
+            200: System message updated successfully
+            400: Invalid data
+            401: Authentication failed
+            403: Insufficient permissions
+            404: Message not found
+        """
+        try:
+            from api.models import SystemMessage, Profile
+            from datetime import datetime
+            
+            requesting_user = request.auth
+            
+            # Check admin permissions
+            try:
+                profile = Profile.objects.get(user=requesting_user)
+                if not profile.has_admin_permission('any'):
+                    return 403, {"message": "Adminisztrátor jogosultság szükséges a rendszerüzenetek kezeléséhez"}
+            except Profile.DoesNotExist:
+                return 403, {"message": "Felhasználói profil nem található"}
+            
+            # Get the message
+            try:
+                message = SystemMessage.objects.get(id=message_id)
+            except SystemMessage.DoesNotExist:
+                return 404, {"message": "Rendszerüzenet nem található"}
+            
+            # Update fields if provided
+            if data.title is not None:
+                message.title = data.title
+            
+            if data.message is not None:
+                message.message = data.message
+            
+            if data.severity is not None:
+                valid_severities = ['info', 'warning', 'error']
+                if data.severity not in valid_severities:
+                    return 400, {"message": f"Érvénytelen súlyosság. Használja ezek egyikét: {', '.join(valid_severities)}"}
+                message.severity = data.severity
+            
+            if data.messageType is not None:
+                valid_message_types = ['user', 'developer', 'operator', 'support']
+                if data.messageType not in valid_message_types:
+                    return 400, {"message": f"Érvénytelen üzenet típus. Használja ezek egyikét: {', '.join(valid_message_types)}"}
+                message.messageType = data.messageType
+            
+            if data.showFrom is not None:
+                try:
+                    message.showFrom = datetime.fromisoformat(data.showFrom.replace('Z', '+00:00'))
+                except ValueError:
+                    return 400, {"message": "Érvénytelen kezdő dátum formátum. ISO formátumot használjon"}
+            
+            if data.showTo is not None:
+                try:
+                    message.showTo = datetime.fromisoformat(data.showTo.replace('Z', '+00:00'))
+                except ValueError:
+                    return 400, {"message": "Érvénytelen záró dátum formátum. ISO formátumot használjon"}
+            
+            # Validate date logic
+            if message.showFrom >= message.showTo:
+                return 400, {"message": "A kezdő dátum nem lehet későbbi vagy egyenlő a záró dátumnál"}
+            
+            message.save()
+            
+            return 200, {
+                "id": message.id,
+                "title": message.title,
+                "message": message.message,
+                "severity": message.severity,
+                "messageType": message.messageType,
+                "showFrom": message.showFrom.isoformat(),
+                "showTo": message.showTo.isoformat(),
+                "created_at": message.created_at.isoformat(),
+                "updated_at": message.updated_at.isoformat(),
+                "is_active": message.is_active()
+            }
+            
+        except Exception as e:
+            return 400, {"message": f"Hiba a rendszerüzenet frissítése során: {str(e)}"}
+
+    @api.delete("/communications/system-messages/{message_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema})
+    def delete_system_message(request, message_id: int):
+        """
+        Delete a system message.
+        
+        Requires admin permissions. Permanently deletes the specified system message.
+        
+        Args:
+            message_id: Unique system message identifier
+            
+        Returns:
+            200: System message deleted successfully
+            401: Authentication failed
+            403: Insufficient permissions
+            404: Message not found
+        """
+        try:
+            from api.models import SystemMessage, Profile
+            
+            requesting_user = request.auth
+            
+            # Check admin permissions
+            try:
+                profile = Profile.objects.get(user=requesting_user)
+                if not profile.has_admin_permission('any'):
+                    return 403, {"message": "Adminisztrátor jogosultság szükséges a rendszerüzenetek kezeléséhez"}
+            except Profile.DoesNotExist:
+                return 403, {"message": "Felhasználói profil nem található"}
+            
+            # Get and delete the message
+            try:
+                message = SystemMessage.objects.get(id=message_id)
+                title = message.title  # Store for response
+                message.delete()
+                
+                return 200, {
+                    "message": f"Rendszerüzenet sikeresen törölve: {title}",
+                    "deleted_id": message_id
+                }
+            except SystemMessage.DoesNotExist:
+                return 404, {"message": "Rendszerüzenet nem található"}
+            
+        except Exception as e:
+            return 401, {"message": f"Hiba a rendszerüzenet törlése során: {str(e)}"}
+
+    @api.get("/communications/system-messages/all", auth=JWTAuth(), response={200: list[SystemMessageSchema], 401: ErrorSchema, 403: ErrorSchema})
+    def get_all_system_messages(request, severity: str = None, messageType: str = None, active_only: bool = False):
+        """
+        Get all system messages (including inactive ones).
+        
+        Requires admin permissions. Returns all system messages in the system,
+        not just the currently active ones.
+        
+        Args:
+            severity: Optional filter by severity (info/warning/error)
+            messageType: Optional filter by message type (user/developer/operator/support)
+            active_only: If true, only return currently active messages
+        
+        Returns:
+            200: List of all system messages
+            401: Authentication failed
+            403: Insufficient permissions
+        """
+        try:
+            from api.models import SystemMessage, Profile
+            
+            requesting_user = request.auth
+            
+            # Check admin permissions
+            try:
+                profile = Profile.objects.get(user=requesting_user)
+                if not profile.has_admin_permission('any'):
+                    return 403, {"message": "Adminisztrátor jogosultság szükséges az összes rendszerüzenet megtekintéséhez"}
+            except Profile.DoesNotExist:
+                return 403, {"message": "Felhasználói profil nem található"}
+            
+            # Get messages
+            if active_only:
+                messages = SystemMessage.get_active_messages()
+            else:
+                messages = SystemMessage.objects.all().order_by('-created_at')
+            
+            # Apply filters if provided
+            if severity:
+                messages = messages.filter(severity=severity)
+            if messageType:
+                messages = messages.filter(messageType=messageType)
+            
+            response = []
+            for message in messages:
+                response.append({
+                    "id": message.id,
+                    "title": message.title,
+                    "message": message.message,
+                    "severity": message.severity,
+                    "messageType": message.messageType,
+                    "showFrom": message.showFrom.isoformat(),
+                    "showTo": message.showTo.isoformat(),
+                    "created_at": message.created_at.isoformat(),
+                    "updated_at": message.updated_at.isoformat(),
+                    "is_active": message.is_active()
+                })
+            
+            return 200, response
+            
+        except Exception as e:
+            return 401, {"message": f"Hiba a rendszerüzenetek lekérése során: {str(e)}"}
 

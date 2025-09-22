@@ -383,23 +383,22 @@ def register_user_endpoints(api):
                     "end": absence.end_date.isoformat()
                 })
             
-            # Check radio sessions if applicable
-            if user_profile.is_second_year_radio_student:
-                radio_sessions = RadioSession.objects.filter(
-                    participants=user_profile.user,
-                    date__gte=start_dt.date(),
-                    date__lte=end_dt.date()
-                ).select_related('radio_stab')
-                
-                for session in radio_sessions:
-                    if session.overlaps_with_datetime(start_dt, end_dt):
-                        conflicts.append({
-                            "type": "radio_session",
-                            "description": f"{session.radio_stab.name} rádiós összejátszás",
-                            "date": session.date.isoformat(),
-                            "time_from": session.time_from.isoformat(),
-                            "time_to": session.time_to.isoformat()
-                        })
+            # Check radio sessions for all users (not just radio students)
+            radio_sessions = RadioSession.objects.filter(
+                participants=user_profile.user,
+                date__gte=start_dt.date(),
+                date__lte=end_dt.date()
+            ).select_related('radio_stab')
+            
+            for session in radio_sessions:
+                if session.overlaps_with_datetime(start_dt, end_dt):
+                    conflicts.append({
+                        "type": "radio_session",
+                        "description": f"{session.radio_stab.name} rádiós összejátszás",
+                        "date": session.date.isoformat(),
+                        "time_from": session.time_from.isoformat(),
+                        "time_to": session.time_to.isoformat()
+                    })
             
             return 200, {
                 "available": is_available,

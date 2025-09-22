@@ -1432,10 +1432,40 @@ def assignment_users_changed(sender, instance, action, pk_set, **kwargs):
             print(f"[ERROR] Full traceback: {traceback.format_exc()}")
 
 class SystemMessage(models.Model):
+    # Severity choices
+    SEVERITY_INFO = 'info'
+    SEVERITY_WARNING = 'warning'
+    SEVERITY_ERROR = 'error'
+    
+    SEVERITY_CHOICES = [
+        (SEVERITY_INFO, 'Információ'),
+        (SEVERITY_WARNING, 'Figyelmeztetés'),
+        (SEVERITY_ERROR, 'Hiba'),
+    ]
+    
+    # Message type choices
+    MESSAGE_TYPE_USER = 'user'
+    MESSAGE_TYPE_DEVELOPER = 'developer'
+    MESSAGE_TYPE_OPERATOR = 'operator'
+    MESSAGE_TYPE_SUPPORT = 'support'
+    
+    MESSAGE_TYPE_CHOICES = [
+        (MESSAGE_TYPE_USER, 'Felhasználó'),
+        (MESSAGE_TYPE_DEVELOPER, 'Fejlesztő'),
+        (MESSAGE_TYPE_OPERATOR, 'Operátor'),
+        (MESSAGE_TYPE_SUPPORT, 'Támogatás'),
+    ]
+    
     title = models.CharField(max_length=200, blank=False, null=False, verbose_name='Cím', 
                             help_text='A rendszerüzenet címe (maximum 200 karakter)')
     message = models.TextField(max_length=2000, blank=False, null=False, verbose_name='Üzenet', 
                               help_text='A rendszerüzenet tartalma (maximum 2000 karakter)')
+    severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default=SEVERITY_INFO, 
+                               verbose_name='Súlyosság', 
+                               help_text='Az üzenet súlyossága (info/warning/error)')
+    messageType = models.CharField(max_length=20, choices=MESSAGE_TYPE_CHOICES, default=MESSAGE_TYPE_USER,
+                                  verbose_name='Üzenet típusa',
+                                  help_text='Az üzenet célközönsége (user/developer/operator/support)')
     showFrom = models.DateTimeField(blank=False, null=False, verbose_name='Megjelenítés kezdete', 
                                    help_text='Az üzenet megjelenítésének kezdő időpontja')
     showTo = models.DateTimeField(blank=False, null=False, verbose_name='Megjelenítés vége', 
