@@ -132,7 +132,7 @@ def send_login_info_email(user, password):
                     <h1>🎬 FTV Bejelentkezési Adatok</h1>
                 </div>
                 <div class="content">
-                    <p><strong>Kedves {user.first_name or user.username}!</strong></p>
+                    <p><strong>Kedves {user.last_name or user.username}!</strong></p>
                     
                     <p>Új jelszót generáltunk az Ön FTV rendszerbeli fiókjához. Az alábbi adatokkal tud bejelentkezni:</p>
                     
@@ -266,10 +266,11 @@ def generate_password_and_notify(modeladmin, request, queryset):
     
     print("=" * 80)
     
-    # Show initial info message in Django admin
-    messages.info(
+    # Show initial warning message in Django admin
+    messages.warning(
         request,
-        f"🔄 Jelszó generálás kezdődik {queryset.count()} felhasználó számára..."
+        f"⏳ FELDOLGOZÁS FOLYAMATBAN: {queryset.count()} felhasználó jelszó generálása és email értesítése elkezdődött. "
+        f"Kérjük várjon türelmesen, a művelet eltarthat néhány percig. Az eredmény a feldolgozás végén fog megjelenni."
     )
     
     for index, user in enumerate(queryset, 1):
@@ -282,10 +283,7 @@ def generate_password_and_notify(modeladmin, request, queryset):
             if not user.email:
                 error_count += 1
                 print(f"   ❌ Hiba: Nincs email cím megadva")
-                messages.warning(
-                    request, 
-                    f"❌ {user.username}: Nincs email cím megadva"
-                )
+                email_errors.append(f"{user.username} (nincs email)")
                 continue
             
             # Generate new password
@@ -305,25 +303,15 @@ def generate_password_and_notify(modeladmin, request, queryset):
                 success_count += 1
                 processed_users.append(f"{user.username} ({user.email})")
                 print(f"   ✅ Email sikeresen elküldve: {user.email}")
-                
-                # Real-time feedback in Django admin
-                messages.info(
-                    request,
-                    f"✅ {user.username}: Jelszó generálva és email elküldve ({user.email})"
-                )
             else:
-                email_errors.append(user.username)
+                email_errors.append(f"{user.username} (email küldése sikertelen)")
                 print(f"   ❌ Email küldése sikertelen: {user.email}")
                 
         except Exception as e:
             error_count += 1
             print(f"   ❌ HIBA történt: {str(e)}")
             print(f"   🔍 Hiba típusa: {type(e).__name__}")
-            
-            messages.error(
-                request,
-                f"❌ {user.username}: {str(e)}"
-            )
+            email_errors.append(f"{user.username} (hiba: {str(e)})")
     
     # Terminal debug: Summary
     print("\n" + "=" * 80)
@@ -340,46 +328,81 @@ def generate_password_and_notify(modeladmin, request, queryset):
             print(f"   - {username}")
     print("=" * 80)
     
-    # Show final summary messages in Django admin
-    if success_count > 0:
+    # Show comprehensive final summary messages in Django admin
+    total_processed = queryset.count()
+    
+    # Main result summary
+    if success_count == total_processed and error_count == 0 and len(email_errors) == 0:
+        messages.success(
+            request,
+            f"🏆 TELJES SIKER: Mind a {total_processed} kiválasztott felhasználónál sikeresen megtörtént a jelszó generálás és email értesítés!"
+        )
+    elif success_count > 0:
         messages.success(
             request, 
-            f"🎉 Sikeresen generáltunk új jelszót és küldtünk értesítést {success_count} felhasználónak!"
+            f"✅ RÉSZLEGES SIKER: {success_count}/{total_processed} felhasználónál sikeresen generáltunk új jelszót és küldtünk email értesítést."
         )
-        
-        # Detailed success message
-        if len(processed_users) <= 10:  # Show details if not too many users
+    else:
+        messages.error(
+            request,
+            f"❌ TELJES KUDARC: Egyetlen felhasználónál sem sikerült a jelszó generálás és értesítés! ({total_processed} megpróbálva)"
+        )
+    
+    # Detailed success information
+    if success_count > 0:
+        if len(processed_users) <= 15:  # Show details if not too many users
             user_list = ", ".join([user.split(" (")[0] for user in processed_users])
             messages.info(
                 request,
-                f"📋 Sikeres felhasználók: {user_list}"
+                f"📋 Sikeres felhasználók ({success_count}): {user_list}"
+            )
+        else:
+            messages.info(
+                request,
+                f"📋 {success_count} felhasználónál sikeres volt a művelet. A részletes lista megtalálható a terminál kimenetében."
             )
     
-    # Show email error warnings with details
+    # Show errors and problems with details
     if email_errors:
-        messages.warning(
-            request,
-            f"⚠️ Jelszó generálás sikeres, de email küldés sikertelen {len(email_errors)} felhasználónál: {', '.join(email_errors)}"
-        )
+        error_details = []
+        no_email_users = []
+        email_failed_users = []
+        other_errors = []
+        
+        for error in email_errors:
+            if "(nincs email)" in error:
+                no_email_users.append(error.split(" (")[0])
+            elif "(email küldése sikertelen)" in error:
+                email_failed_users.append(error.split(" (")[0])
+            else:
+                other_errors.append(error)
+        
+        if no_email_users:
+            messages.warning(
+                request,
+                f"⚠️ NINCS EMAIL CÍM: {len(no_email_users)} felhasználónál nincs email cím megadva: {', '.join(no_email_users)}"
+            )
+        
+        if email_failed_users:
+            messages.error(
+                request,
+                f"� EMAIL KÜLDÉSI HIBA: {len(email_failed_users)} felhasználónál sikertelen volt az email küldés: {', '.join(email_failed_users)}"
+            )
+        
+        if other_errors:
+            messages.error(
+                request,
+                f"💥 EGYÉB HIBÁK: {len(other_errors)} felhasználónál egyéb hiba történt. Részletek a terminál kimenetében."
+            )
     
-    # Show general errors
-    if error_count > 0:
-        messages.error(
-            request,
-            f"💥 {error_count} felhasználónál hiba történt a jelszó generálás során. Ellenőrizze a terminál kimenetét részletekért."
-        )
-    
-    # Final status message
-    if success_count == 0 and error_count > 0:
-        messages.error(
-            request,
-            "❌ Egyetlen felhasználónál sem sikerült a jelszó generálás és értesítés!"
-        )
-    elif success_count > 0 and error_count == 0:
-        messages.success(
-            request,
-            "🏆 Minden kiválasztott felhasználónál sikeresen megtörtént a jelszó generálás és értesítés!"
-        )
+    # Performance and timing info
+    messages.info(
+        request,
+        f"📊 ÖSSZESÍTÉS: Feldolgozva {total_processed} felhasználó | "
+        f"Sikeres: {success_count} | "
+        f"Hibás: {len(email_errors)} | "
+        f"A részletes naplók a szerver terminálján tekinthetők meg."
+    )
 
 generate_password_and_notify.short_description = "Új jelszó generálása és értesítés"
 
@@ -805,16 +828,53 @@ class ForgatásAdmin(ImportExportModelAdmin):
         return format_html('<span style="color: red;">⚠️ Nincs</span>')
     equipment_count.short_description = 'Eszközök'
 
+def sync_absence_records_for_beosztas(modeladmin, request, queryset):
+    """
+    Admin action to manually sync absence records for selected Beosztas instances.
+    Useful for fixing any inconsistencies or ensuring all auto-created absences are up to date.
+    """
+    total_processed = 0
+    total_created = 0
+    total_deleted = 0
+    
+    for beosztas in queryset:
+        if beosztas.forgatas:
+            # Force update absence records (works for both draft and finalized)
+            beosztas.update_absence_records()
+            total_processed += 1
+            
+            # Count created absences for this assignment
+            current_absences = Absence.objects.filter(
+                forgatas=beosztas.forgatas,
+                auto_generated=True
+            ).count()
+            total_created += current_absences
+    
+    if total_processed > 0:
+        messages.success(
+            request,
+            f"✅ {total_processed} beosztás hiányzás rekordjait szinkronizáltuk. "
+            f"Összesen {total_created} automatikus hiányzás rekord lett ellenőrizve/létrehozva."
+        )
+    else:
+        messages.warning(
+            request,
+            "⚠️ Egy beoszstás sem volt alkalmas a szinkronizációra (szükséges: forgatas)"
+        )
+
+sync_absence_records_for_beosztas.short_description = "Hiányzás rekordok szinkronizálása"
+
 @admin.register(Beosztas)
 class BeosztasAdmin(ImportExportModelAdmin):
     resource_class = BeosztasResource
-    list_display = ['beosztas_display', 'kesz_status', 'author', 'tanev', 'forgatas_link', 'stab_display', 'created_at', 'szerepkor_count']
+    list_display = ['beosztas_display', 'kesz_status', 'author', 'tanev', 'forgatas_link', 'stab_display', 'created_at', 'szerepkor_count', 'absence_count']
     list_filter = ['kesz', 'tanev', 'stab', 'created_at', 'author']
     search_fields = ['author__first_name', 'author__last_name', 'forgatas__name', 'stab__name']
     autocomplete_fields = ['author', 'tanev', 'forgatas', 'stab']
     filter_horizontal = ['szerepkor_relaciok']
     date_hierarchy = 'created_at'
-    readonly_fields = ['created_at']
+    readonly_fields = ['created_at', 'absence_status_info']
+    actions = [sync_absence_records_for_beosztas]
     
     fieldsets = (
         ('📋 Beosztás adatok', {
@@ -825,7 +885,12 @@ class BeosztasAdmin(ImportExportModelAdmin):
             'fields': ('szerepkor_relaciok',),
             'description': 'A beosztáshoz tartozó szerepkör-felhasználó párosítások'
         }),
-        ('📊 Metaadatok', {
+        ('� Automatikus hiányzások', {
+            'fields': ('absence_status_info',),
+            'classes': ('collapse',),
+            'description': 'Az automatikusan generált hiányzás rekordok státusza'
+        }),
+        ('�📊 Metaadatok', {
             'fields': ('created_at',),
             'classes': ('collapse',),
             'description': 'Automatikusan generált adatok'
@@ -859,6 +924,113 @@ class BeosztasAdmin(ImportExportModelAdmin):
         count = obj.szerepkor_relaciok.count()
         return format_html('<span style="color: blue;">👥 {} db</span>', count)
     szerepkor_count.short_description = 'Szerepkörök száma'
+    
+    def absence_count(self, obj):
+        """Display count of auto-generated absence records for this assignment"""
+        if obj.forgatas:
+            count = Absence.objects.filter(
+                forgatas=obj.forgatas,
+                auto_generated=True
+            ).count()
+            if count > 0:
+                return format_html('<span style="color: green;">📚 {} hiányzás</span>', count)
+            else:
+                return format_html('<span style="color: gray;">📚 Nincs hiányzás</span>')
+        return '-'
+    absence_count.short_description = 'Auto hiányzások'
+    
+    def absence_status_info(self, obj):
+        """Detailed information about auto-generated absence records"""
+        if not obj.forgatas:
+            return format_html(
+                '<div style="background: #ffeaa7; padding: 10px; border-radius: 5px;">'
+                '<strong>⚠️ Nincs forgatás</strong><br>'
+                '<small>Hiányzás rekordok csak forgatással rendelkező beosztásokhoz generálódnak</small>'
+                '</div>'
+            )
+        
+        # Show draft status info but don't prevent processing
+        draft_warning = ""
+        if not obj.kesz:
+            draft_warning = '<div style="background: #fff3cd; padding: 5px; border-radius: 3px; margin-bottom: 5px;"><small>📝 <strong>Piszkozat:</strong> Ez a beosztás még nincs véglegesítve, de hiányzások automatikusan kezelve vannak.</small></div>'
+        
+        # Count absence records
+        auto_absences = Absence.objects.filter(
+            forgatas=obj.forgatas,
+            auto_generated=True
+        )
+        manual_absences = Absence.objects.filter(
+            forgatas=obj.forgatas,
+            auto_generated=False
+        )
+        
+        assigned_users = [relacio.user for relacio in obj.szerepkor_relaciok.all()]
+        
+        # Check if all assigned users have absence records
+        users_with_absences = set()
+        for absence in auto_absences:
+            users_with_absences.add(absence.diak)
+        
+        missing_absences = set(assigned_users) - users_with_absences
+        
+        if len(missing_absences) == 0:
+            status_color = "#d4edda"
+            status_icon = "✅"
+            status_text = "Minden beosztott felhasználónak van automatikus hiányzás rekordja"
+        else:
+            status_color = "#f8d7da" 
+            status_icon = "⚠️"
+            status_text = f"{len(missing_absences)} felhasználónak hiányzik a hiányzás rekord"
+        
+        return format_html(
+            '{}'
+            '<div style="background: {}; padding: 10px; border-radius: 5px;">'
+            '<strong>{} {}</strong><br>'
+            '<small>Automatikus hiányzások: {} | Kézi hiányzások: {} | Beosztott felhasználók: {}</small>'
+            '{}'
+            '</div>',
+            draft_warning,
+            status_color, status_icon, status_text,
+            auto_absences.count(), manual_absences.count(), len(assigned_users),
+            '<br><small style="color: red;">Hiányzó hiányzások: {}</small>'.format(
+                ', '.join([user.get_full_name() for user in missing_absences])
+            ) if missing_absences else ''
+        )
+    absence_status_info.short_description = 'Hiányzás státusz részletek'
+    
+    def save_model(self, request, obj, form, change):
+        """Override save_model to provide feedback about absence creation"""
+        super().save_model(request, obj, form, change)
+        
+        if obj.forgatas:
+            # Count created absences (works for both draft and finalized)
+            absence_count = Absence.objects.filter(
+                forgatas=obj.forgatas,
+                auto_generated=True
+            ).count()
+            
+            assigned_count = obj.szerepkor_relaciok.count()
+            
+            status_text = "kész" if obj.kesz else "piszkozat"
+            
+            if absence_count > 0:
+                messages.success(
+                    request,
+                    f"✅ Beosztás mentve ({status_text})! {absence_count} automatikus hiányzás rekord lett "
+                    f"létrehozva/frissítve a {assigned_count} beosztott felhasználó számára."
+                )
+            else:
+                if assigned_count > 0:
+                    messages.warning(
+                        request,
+                        f"⚠️ Beosztás mentve ({status_text}), de nem lett hiányzás rekord létrehozva. "
+                        f"Ellenőrizd a beosztott felhasználókat és a forgatás adatait."
+                    )
+                else:
+                    messages.info(
+                        request,
+                        f"ℹ️ Beosztás mentve ({status_text}), de nincs még beosztott felhasználó."
+                    )
 
 # ============================================================================
 # 📻 RÁDIÓS RENDSZER (RADIO SYSTEM)
@@ -1124,6 +1296,42 @@ class AnnouncementAdmin(ImportExportModelAdmin):
 # 📚 HIÁNYZÁSOK ÉS TÁVOLLÉTEK (ABSENCES)
 # ============================================================================
 
+def validate_auto_generated_absences(modeladmin, request, queryset):
+    """
+    Admin action to validate that auto-generated absences are consistent with their assignments
+    """
+    inconsistencies = []
+    validated_count = 0
+    
+    for absence in queryset.filter(auto_generated=True):
+        # Check if there's still an assignment for this user and forgatas
+        assignments = Beosztas.objects.filter(
+            forgatas=absence.forgatas,
+            kesz=True,
+            szerepkor_relaciok__user=absence.diak
+        )
+        
+        if not assignments.exists():
+            inconsistencies.append(f"{absence.diak.get_full_name()} - {absence.forgatas.name}")
+        else:
+            validated_count += 1
+    
+    if inconsistencies:
+        messages.warning(
+            request,
+            f"⚠️ {len(inconsistencies)} automatikus hiányzás esetében nincs megfelelő beosztás: "
+            f"{', '.join(inconsistencies[:5])}"
+            f"{'...' if len(inconsistencies) > 5 else ''}"
+        )
+    
+    if validated_count > 0:
+        messages.success(
+            request,
+            f"✅ {validated_count} automatikus hiányzás helyesen kapcsolódik beosztáshoz."
+        )
+
+validate_auto_generated_absences.short_description = "Automatikus hiányzások validálása"
+
 @admin.register(Absence)
 class AbsenceAdmin(ImportExportModelAdmin):
     resource_class = AbsenceResource
@@ -1132,6 +1340,7 @@ class AbsenceAdmin(ImportExportModelAdmin):
     search_fields = ['diak__first_name', 'diak__last_name', 'forgatas__name']
     autocomplete_fields = ['diak', 'forgatas']
     date_hierarchy = 'date'
+    actions = [validate_auto_generated_absences]
     
     readonly_fields = ['get_affected_classes_display']
     
