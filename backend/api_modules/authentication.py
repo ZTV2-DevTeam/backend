@@ -66,7 +66,7 @@ All endpoints return consistent error responses:
 For detailed examples and schemas, see the API documentation.
 """
 
-from ninja import Schema, Form
+from ninja import Schema, Form, Field
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password, get_password_validators
 from django.core.exceptions import ValidationError
@@ -74,6 +74,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 import jwt
+import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from .auth import ErrorSchema
@@ -101,7 +102,7 @@ class FirstLoginSetPasswordRequest(Schema):
     """Request schema for setting password during first login."""
     token: str
     password: str
-    confirm_password: str
+    confirm_password: str = Field(alias="confirmPassword")
 
 class FirstLoginSetPasswordResponse(Schema):
     """Response schema for first login password setting."""
@@ -120,7 +121,7 @@ class ResetPasswordRequest(Schema):
     """Request schema for password reset completion."""
     token: str
     password: str
-    confirm_password: str
+    confirm_password: str = Field(alias="confirmPassword")
 
 class ResetPasswordResponse(Schema):
     """Response schema for password reset completion."""
@@ -149,6 +150,16 @@ class PasswordValidationCheckResponse(Schema):
     """Response schema for password validation check."""
     valid: bool
     errors: List[str]
+
+class ChangePasswordRequest(Schema):
+    """Request schema for changing password."""
+    old_password: str
+    new_password: str
+    confirm_new_password: str = Field(alias="confirmNewPassword")
+
+class ChangePasswordResponse(Schema):
+    """Response schema for password change."""
+    message: str
 
 # ============================================================================
 # Token Generation and Verification Utilities
@@ -1371,7 +1382,61 @@ def register_authentication_endpoints(api):
             400: Error occurred
         """
         try:
+            print(f"[DEBUG] ========== VERIFY RESET TOKEN DEBUG ==========")
+            print(f"[DEBUG] Received token verification request")
+            print(f"[DEBUG] Token (first 50 chars): {token[:50]}...")
+            print(f"[DEBUG] Token length: {len(token)}")
+            print(f"[DEBUG] Request method: {request.method}")
+            print(f"[DEBUG] Request path: {request.get_full_path()}")
+            
+            # Decode token without verification to see payload
+            import jwt
+            try:
+                unverified_payload = jwt.decode(token, options={"verify_signature": False})
+                print(f"[DEBUG] Token payload (unverified): {unverified_payload}")
+                
+                # Check token structure
+                if 'user_id' in unverified_payload:
+                    print(f"[DEBUG] - User ID: {unverified_payload['user_id']}")
+                if 'purpose' in unverified_payload:
+                    print(f"[DEBUG] - Purpose: {unverified_payload['purpose']}")
+                if 'exp' in unverified_payload:
+                    exp_time = datetime.utcfromtimestamp(unverified_payload['exp'])
+                    current_time = datetime.utcnow()
+                    print(f"[DEBUG] - Expires at: {exp_time}")
+                    print(f"[DEBUG] - Current time: {current_time}")
+                    if current_time > exp_time:
+                        print(f"[DEBUG] - ❌ TOKEN IS EXPIRED by {current_time - exp_time}")
+                    else:
+                        print(f"[DEBUG] - ✅ Token valid for {exp_time - current_time} more")
+                if 'iat' in unverified_payload:
+                    iat_time = datetime.utcfromtimestamp(unverified_payload['iat'])
+                    print(f"[DEBUG] - Issued at: {iat_time}")
+                    
+            except Exception as decode_error:
+                print(f"[DEBUG] Failed to decode token payload: {decode_error}")
+            
+            # Check current settings
+            print(f"[DEBUG] Current SECRET_KEY (first 20 chars): {settings.SECRET_KEY[:20]}...")
+            print(f"[DEBUG] SECRET_KEY length: {len(settings.SECRET_KEY)}")
+            print(f"[DEBUG] PASSWORD_RESET_TIMEOUT: {settings.PASSWORD_RESET_TIMEOUT} seconds")
+            
+            # Try manual JWT verification to get detailed error
+            try:
+                manual_payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+                print(f"[DEBUG] ✅ Manual JWT verification successful: {manual_payload}")
+            except jwt.ExpiredSignatureError:
+                print(f"[DEBUG] ❌ Manual JWT verification: Token expired")
+            except jwt.InvalidSignatureError:
+                print(f"[DEBUG] ❌ Manual JWT verification: Signature mismatch (wrong SECRET_KEY)")
+            except jwt.InvalidTokenError as jwt_error:
+                print(f"[DEBUG] ❌ Manual JWT verification: Invalid token - {jwt_error}")
+            except Exception as jwt_exception:
+                print(f"[DEBUG] ❌ Manual JWT verification error: {jwt_exception}")
+            
+            print(f"[DEBUG] Calling verify_password_reset_token function...")
             verification_result = verify_password_reset_token(token)
+            print(f"[DEBUG] Verification result: {verification_result}")
             
             response_data = {
                 "valid": verification_result['valid']
@@ -1379,11 +1444,25 @@ def register_authentication_endpoints(api):
             
             if not verification_result['valid']:
                 response_data["error"] = verification_result.get('error')
+                print(f"[DEBUG] ❌ Token verification failed: {response_data['error']}")
+            else:
+                print(f"[DEBUG] ✅ Token verification successful")
+                if 'user' in verification_result:
+                    user = verification_result['user']
+                    print(f"[DEBUG] - Verified user: {user.username} (ID: {user.id})")
+                    print(f"[DEBUG] - User email: {user.email}")
+                    print(f"[DEBUG] - User is_active: {user.is_active}")
             
+            print(f"[DEBUG] Returning response: {response_data}")
+            print(f"[DEBUG] ========== VERIFY RESET TOKEN DEBUG END ==========")
             return 200, response_data
                 
         except Exception as e:
-            print(f"Error in verify_reset_token: {str(e)}")
+            print(f"[ERROR] Error in verify_reset_token: {str(e)}")
+            print(f"[ERROR] Exception type: {type(e).__name__}")
+            import traceback
+            print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+            print(f"[DEBUG] ========== VERIFY RESET TOKEN DEBUG END (ERROR) ==========")
             return 400, {"message": "Hiba történt a token ellenőrzése során."}
 
     @api.post("/reset-password", response={200: ResetPasswordResponse, 400: ErrorSchema})
