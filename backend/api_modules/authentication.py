@@ -77,7 +77,7 @@ import jwt
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
-from .auth import ErrorSchema
+from .auth import JWTAuth, ErrorSchema
 from api.models import Profile
 
 # ============================================================================
@@ -1152,6 +1152,69 @@ def validate_password_strength(password: str, user_data: dict = None) -> dict:
     except ValidationError as e:
         return {"valid": False, "errors": list(e.messages)}
 
+def change_user_password(user: User, old_password: str, new_password: str) -> dict:
+    """
+    Change user password after validating the old password.
+    
+    Args:
+        user: User instance
+        old_password: Current password to verify
+        new_password: New password to set
+        
+    Returns:
+        Dictionary with success status and message/error
+    """
+    try:
+        print(f"[DEBUG] ========== CHANGE PASSWORD DEBUG ==========")
+        print(f"[DEBUG] Attempting password change for user: {user.username} (ID: {user.id})")
+        print(f"[DEBUG] User email: {user.email}")
+        print(f"[DEBUG] User is_active: {user.is_active}")
+        print(f"[DEBUG] User last_login: {user.last_login}")
+        
+        # Check if user is active
+        if not user.is_active:
+            print(f"[DEBUG] ❌ User {user.username} is not active")
+            return {"success": False, "error": "A felhasználói fiók inaktív."}
+        
+        # Verify old password
+        print(f"[DEBUG] Verifying old password for user {user.username}...")
+        if not user.check_password(old_password):
+            print(f"[DEBUG] ❌ Old password verification failed for user {user.username}")
+            return {"success": False, "error": "A jelenlegi jelszó helytelen."}
+        
+        print(f"[DEBUG] ✅ Old password verified successfully for user {user.username}")
+        
+        # Validate new password strength
+        print(f"[DEBUG] Validating new password strength...")
+        try:
+            validate_password(new_password, user)
+            print(f"[DEBUG] ✅ New password meets strength requirements")
+        except ValidationError as e:
+            print(f"[DEBUG] ❌ New password validation failed: {e.messages}")
+            return {"success": False, "error": " ".join(e.messages)}
+        
+        # Check if new password is different from old password
+        if user.check_password(new_password):
+            print(f"[DEBUG] ❌ New password is the same as old password")
+            return {"success": False, "error": "Az új jelszónak különböznie kell a jelenlegi jelszótól."}
+        
+        # Set new password
+        print(f"[DEBUG] Setting new password for user {user.username}...")
+        user.set_password(new_password)
+        user.save()
+        
+        print(f"[SUCCESS] Password changed successfully for user: {user.username}")
+        print(f"[DEBUG] ========== CHANGE PASSWORD DEBUG END ==========")
+        
+        return {"success": True, "message": "A jelszó sikeresen módosításra került."}
+        
+    except Exception as e:
+        print(f"[ERROR] Error in change_user_password: {str(e)}")
+        import traceback
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        print(f"[DEBUG] ========== CHANGE PASSWORD DEBUG END (ERROR) ==========")
+        return {"success": False, "error": "Hiba történt a jelszó módosítása során."}
+
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -1570,6 +1633,82 @@ def register_authentication_endpoints(api):
                 "valid": False,
                 "errors": ["Hiba történt a jelszó ellenőrzése során."]
             }
+    
+    # ========================================================================
+    # Authenticated Password Management Endpoints
+    # ========================================================================
+    
+    @api.post("/change-password", auth=JWTAuth(), response={200: ChangePasswordResponse, 400: ErrorSchema, 401: ErrorSchema})
+    def change_password(request, data: ChangePasswordRequest):
+        """
+        Change user password (requires authentication).
+        
+        Allows authenticated users to change their password by providing:
+        - Current password for verification
+        - New password meeting strength requirements
+        - Confirmation of new password
+        
+        Args:
+            data: Request with old password, new password, and confirmation
+            
+        Returns:
+            200: Password changed successfully
+            400: Validation error or invalid current password
+            401: Authentication required
+        """
+        try:
+            print(f"[DEBUG] ========== CHANGE PASSWORD ENDPOINT DEBUG ==========")
+            print(f"[DEBUG] Change password request received")
+            print(f"[DEBUG] Request method: {request.method}")
+            print(f"[DEBUG] Request path: {request.get_full_path()}")
+            
+            # Get authenticated user
+            user = request.auth
+            if not user:
+                print(f"[DEBUG] ❌ No authenticated user found")
+                return 401, {"message": "Bejelentkezés szükséges."}
+            
+            print(f"[DEBUG] Authenticated user: {user.username} (ID: {user.id})")
+            print(f"[DEBUG] User email: {user.email}")
+            
+            # Validate password confirmation
+            if data.new_password != data.confirm_new_password:
+                print(f"[DEBUG] ❌ New password confirmation mismatch")
+                return 400, {"message": "Az új jelszavak nem egyeznek."}
+            
+            print(f"[DEBUG] ✅ Password confirmation validated")
+            
+            # Check if old password is provided
+            if not data.old_password:
+                print(f"[DEBUG] ❌ Old password not provided")
+                return 400, {"message": "A jelenlegi jelszó megadása kötelező."}
+            
+            # Check if new password is provided
+            if not data.new_password:
+                print(f"[DEBUG] ❌ New password not provided")
+                return 400, {"message": "Az új jelszó megadása kötelező."}
+            
+            print(f"[DEBUG] Calling change_user_password function...")
+            
+            # Attempt to change password
+            result = change_user_password(user, data.old_password, data.new_password)
+            
+            if result["success"]:
+                print(f"[SUCCESS] Password changed successfully for user: {user.username}")
+                print(f"[DEBUG] ========== CHANGE PASSWORD ENDPOINT DEBUG END ==========")
+                return 200, {"message": result["message"]}
+            else:
+                print(f"[DEBUG] ❌ Password change failed: {result['error']}")
+                print(f"[DEBUG] ========== CHANGE PASSWORD ENDPOINT DEBUG END ==========")
+                return 400, {"message": result["error"]}
+                
+        except Exception as e:
+            print(f"[ERROR] Error in change_password endpoint: {str(e)}")
+            print(f"[ERROR] Exception type: {type(e).__name__}")
+            import traceback
+            print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+            print(f"[DEBUG] ========== CHANGE PASSWORD ENDPOINT DEBUG END (ERROR) ==========")
+            return 400, {"message": "Hiba történt a jelszó módosítása során."}
 
 # ============================================================================
 # Documentation
@@ -1618,6 +1757,19 @@ PASSWORD RESET FLOW:
      "confirm_password": "newpassword123"
    }
 
+AUTHENTICATED PASSWORD CHANGE:
+=============================
+
+Change password (requires authentication):
+POST /api/change-password
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+Body: {
+  "old_password": "currentpassword",
+  "new_password": "newpassword123",
+  "confirmNewPassword": "newpassword123"
+}
+
 PASSWORD VALIDATION:
 ===================
 
@@ -1655,6 +1807,24 @@ const setFirstPassword = async (token, password, confirmPassword) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, password, confirm_password: confirmPassword })
+  });
+  const result = await response.json();
+  console.log(result.message);
+};
+
+// Change password (authenticated)
+const changePassword = async (jwtToken, oldPassword, newPassword, confirmNewPassword) => {
+  const response = await fetch('/api/change-password', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${jwtToken}`
+    },
+    body: JSON.stringify({ 
+      old_password: oldPassword, 
+      new_password: newPassword, 
+      confirmNewPassword: confirmNewPassword 
+    })
   });
   const result = await response.json();
   console.log(result.message);
