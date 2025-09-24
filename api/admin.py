@@ -13,9 +13,378 @@ from django import forms
 from import_export.admin import ImportExportModelAdmin, ExportActionMixin
 from .models import *
 from .resources import *
+import secrets
+import string
+from django.core.mail import send_mail
+from django.conf import settings
+from django.contrib import messages
 
 # ============================================================================
-# � USER MANAGEMENT WITH IMPORT/EXPORT
+# 🔐 PASSWORD GENERATION AND EMAIL UTILITIES
+# ============================================================================
+
+def generate_secure_short_password(length=8):
+    """
+    Generate a secure but short password with letters and numbers
+    
+    Args:
+        length (int): Password length (default: 8)
+        
+    Returns:
+        str: Generated password
+    """
+    # Use both uppercase, lowercase letters and digits
+    alphabet = string.ascii_letters + string.digits
+    # Ensure at least one digit and one letter
+    password = secrets.choice(string.ascii_lowercase) + secrets.choice(string.digits)
+    # Fill the rest randomly
+    password += ''.join(secrets.choice(alphabet) for _ in range(length - 2))
+    
+    # Shuffle the password to avoid predictable patterns
+    password_list = list(password)
+    secrets.SystemRandom().shuffle(password_list)
+    return ''.join(password_list)
+
+def send_login_info_email(user, password):
+    """
+    Send login information email to user with HTML formatting
+    
+    Args:
+        user (User): User instance
+        password (str): Generated password
+        
+    Returns:
+        bool: Success status
+    """
+    subject = "FTV - Új bejelentkezési adatok"
+    
+    # Create HTML email content
+    html_message = f"""
+    <html>
+        <head>
+            <style>
+                body {{ font-family: Roboto, Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; }}
+                .header {{ 
+                    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); 
+                    color: white; 
+                    padding: 30px 20px; 
+                    text-align: center; 
+                    border-radius: 10px 10px 0 0;
+                }}
+                .header h1 {{ margin: 0; font-size: 28px; }}
+                .content {{ 
+                    background: white; 
+                    padding: 30px; 
+                    border-radius: 0 0 10px 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }}
+                .login-box {{ 
+                    background: #f8f9fa; 
+                    padding: 20px; 
+                    border-radius: 8px; 
+                    border-left: 4px solid #007bff;
+                    margin: 20px 0;
+                }}
+                .login-item {{ margin: 10px 0; }}
+                .login-item strong {{ color: #007bff; }}
+                .password-box {{ 
+                    background: #e9ecef; 
+                    padding: 15px; 
+                    border-radius: 5px; 
+                    font-family: 'Courier New', monospace; 
+                    font-size: 18px; 
+                    font-weight: bold; 
+                    text-align: center; 
+                    letter-spacing: 2px;
+                    border: 2px dashed #007bff;
+                }}
+                .warning-box {{ 
+                    background: #fff3cd; 
+                    border: 1px solid #ffeaa7; 
+                    color: #856404; 
+                    padding: 15px; 
+                    border-radius: 5px; 
+                    margin: 20px 0;
+                }}
+                .footer {{ 
+                    text-align: center; 
+                    padding: 20px; 
+                    font-size: 12px; 
+                    color: #666;
+                }}
+                .login-url {{ 
+                    display: inline-block; 
+                    background: #007bff; 
+                    color: white !important; 
+                    text-decoration: none; 
+                    padding: 12px 24px; 
+                    border-radius: 5px; 
+                    margin: 15px 0;
+                    font-weight: bold;
+                }}
+                .login-url:hover {{ background: #0056b3; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🎬 FTV Bejelentkezési Adatok</h1>
+                </div>
+                <div class="content">
+                    <p><strong>Kedves {user.first_name or user.username}!</strong></p>
+                    
+                    <p>Új jelszót generáltunk az Ön FTV rendszerbeli fiókjához. Az alábbi adatokkal tud bejelentkezni:</p>
+                    
+                    <div class="login-box">
+                        <div class="login-item">
+                            <strong>Felhasználónév:</strong> {user.username}
+                        </div>
+                        <div class="login-item">
+                            <strong>Új jelszó:</strong>
+                        </div>
+                        <div class="password-box">
+                            {password}
+                        </div>
+                    </div>
+                    
+                    <div class="warning-box">
+                        <strong>⚠️ Fontos biztonsági tudnivalók:</strong>
+                        <ul>
+                            <li>Ne ossza meg senkivel a bejelentkezési adatait</li>
+                            <li>Tartsa biztonságban ezt az emailt</li>
+                        </ul>
+                    </div>
+                    
+                    <p style="text-align: center;">
+                        <a href="https://ftv.szlg.info" class="login-url">🔐 Bejelentkezés az FTV rendszerbe</a>
+                    </p>
+                    
+                    <p>Ha kérdése van, vagy problémája adódna, kérjük vegye fel a kapcsolatot a rendszergazdával.</p>
+                </div>
+                <div class="footer">
+                    <p>Ez egy automatikus email, kérjük ne válaszoljon rá.</p>
+                    <p>© 2025 FTV. Minden jog fenntartva.</p>
+                </div>
+            </div>
+        </body>
+    </html>
+    """
+    
+    # Create plain text version
+    plain_message = f"""
+Kedves {user.first_name or user.username}!
+
+Új jelszót generáltunk az Ön FTV rendszerbeli fiókjához.
+
+Bejelentkezési adatok:
+Felhasználónév: {user.username}
+Új jelszó: {password}
+
+FONTOS BIZTONSÁGI TUDNIVALÓK:
+- Kérjük, változtassa meg a jelszót első bejelentkezéskor
+- Használjon erős, egyedi jelszót
+- Ne ossza meg senkivel a bejelentkezési adatait
+- Tartsa biztonságban ezt az emailt
+
+Bejelentkezés: https://ftv.szlg.info
+
+Ha kérdése van, vagy problémája adódna, kérjük vegye fel a kapcsolatot az adminisztrátorral.
+
+Ez egy automatikus email, kérjük ne válaszoljon rá.
+
+© 2025 FTV. Minden jog fenntartva.
+    """
+    
+    # Debug email sending details
+    print(f"       📧 Email címzett: {user.email}")
+    print(f"       📧 Email feladó: {settings.DEFAULT_FROM_EMAIL}")
+    print(f"       📧 Email tárgy: {subject}")
+    print(f"       📝 Jelszó az emailben: {password}")
+    
+    try:
+        print(f"       🚀 Email küldés megkezdése...")
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            html_message=html_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+        print(f"       ✅ Email sikeresen elküldve!")
+        return True
+    except Exception as e:
+        print(f"       ❌ Email küldés sikertelen!")
+        print(f"       🔍 Hiba típusa: {type(e).__name__}")
+        print(f"       💬 Hiba üzenet: {str(e)}")
+        
+        # Check for common email configuration issues
+        if "Connection refused" in str(e):
+            print(f"       🔧 Lehetséges ok: SMTP szerver nem elérhető")
+        elif "Authentication failed" in str(e):
+            print(f"       🔧 Lehetséges ok: Hibás email hitelesítési adatok")
+        elif "Invalid sender" in str(e):
+            print(f"       🔧 Lehetséges ok: Hibás feladó email cím")
+        
+        return False
+
+def generate_password_and_notify(modeladmin, request, queryset):
+    """
+    Bulk action to generate new passwords and send email notifications
+    
+    Args:
+        modeladmin: The admin class
+        request: The HTTP request
+        queryset: Selected User objects
+    """
+    import datetime
+    
+    # Initialize counters and lists
+    success_count = 0
+    error_count = 0
+    email_errors = []
+    processed_users = []
+    
+    # Terminal debug: Start of bulk action
+    print("=" * 80)
+    print(f"🔐 [DEBUG] JELSZÓ GENERÁLÁS ÉS ÉRTESÍTÉS KEZDŐDIK")
+    print(f"📅 Időpont: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"👤 Kezdeményező admin: {request.user.username}")
+    print(f"📊 Kiválasztott felhasználók száma: {queryset.count()}")
+    
+    # Email configuration debug
+    try:
+        print(f"⚙️  EMAIL KONFIGURÁCIÓ:")
+        print(f"   📧 EMAIL_BACKEND: {getattr(settings, 'EMAIL_BACKEND', 'Nincs beállítva')}")
+        print(f"   📧 DEFAULT_FROM_EMAIL: {getattr(settings, 'DEFAULT_FROM_EMAIL', 'Nincs beállítva')}")
+        print(f"   📧 EMAIL_HOST: {getattr(settings, 'EMAIL_HOST', 'Nincs beállítva')}")
+        print(f"   📧 EMAIL_PORT: {getattr(settings, 'EMAIL_PORT', 'Nincs beállítva')}")
+        print(f"   📧 EMAIL_USE_TLS: {getattr(settings, 'EMAIL_USE_TLS', 'Nincs beállítva')}")
+    except Exception as e:
+        print(f"   ❌ Hiba az email konfiguráció betöltésénél: {e}")
+    
+    print("=" * 80)
+    
+    # Show initial info message in Django admin
+    messages.info(
+        request,
+        f"🔄 Jelszó generálás kezdődik {queryset.count()} felhasználó számára..."
+    )
+    
+    for index, user in enumerate(queryset, 1):
+        print(f"\n📝 [{index}/{queryset.count()}] Feldolgozás: {user.username}")
+        print(f"   📧 Email: {user.email or 'NINCS EMAIL'}")
+        print(f"   👤 Név: {user.get_full_name() or 'Név nincs megadva'}")
+        
+        try:
+            # Check if user has email
+            if not user.email:
+                error_count += 1
+                print(f"   ❌ Hiba: Nincs email cím megadva")
+                messages.warning(
+                    request, 
+                    f"❌ {user.username}: Nincs email cím megadva"
+                )
+                continue
+            
+            # Generate new password
+            print(f"   🔑 Jelszó generálása...")
+            new_password = generate_secure_short_password()
+            print(f"   ✅ Jelszó generálva: {new_password}")
+            
+            # Set the new password
+            print(f"   💾 Jelszó mentése az adatbázisba...")
+            user.set_password(new_password)
+            user.save()
+            print(f"   ✅ Jelszó sikeresen mentve")
+            
+            # Send email with login information
+            print(f"   📧 Email küldése...")
+            if send_login_info_email(user, new_password):
+                success_count += 1
+                processed_users.append(f"{user.username} ({user.email})")
+                print(f"   ✅ Email sikeresen elküldve: {user.email}")
+                
+                # Real-time feedback in Django admin
+                messages.info(
+                    request,
+                    f"✅ {user.username}: Jelszó generálva és email elküldve ({user.email})"
+                )
+            else:
+                email_errors.append(user.username)
+                print(f"   ❌ Email küldése sikertelen: {user.email}")
+                
+        except Exception as e:
+            error_count += 1
+            print(f"   ❌ HIBA történt: {str(e)}")
+            print(f"   🔍 Hiba típusa: {type(e).__name__}")
+            
+            messages.error(
+                request,
+                f"❌ {user.username}: {str(e)}"
+            )
+    
+    # Terminal debug: Summary
+    print("\n" + "=" * 80)
+    print(f"📊 JELSZÓ GENERÁLÁS ÖSSZEFOGLALÓ")
+    print(f"✅ Sikeresek: {success_count}")
+    print(f"❌ Hibák: {error_count}")
+    print(f"📧 Email hibák: {len(email_errors)}")
+    print(f"📝 Feldolgozott felhasználók:")
+    for user_info in processed_users:
+        print(f"   - {user_info}")
+    if email_errors:
+        print(f"📧 Email hibák a következő felhasználóknál:")
+        for username in email_errors:
+            print(f"   - {username}")
+    print("=" * 80)
+    
+    # Show final summary messages in Django admin
+    if success_count > 0:
+        messages.success(
+            request, 
+            f"🎉 Sikeresen generáltunk új jelszót és küldtünk értesítést {success_count} felhasználónak!"
+        )
+        
+        # Detailed success message
+        if len(processed_users) <= 10:  # Show details if not too many users
+            user_list = ", ".join([user.split(" (")[0] for user in processed_users])
+            messages.info(
+                request,
+                f"📋 Sikeres felhasználók: {user_list}"
+            )
+    
+    # Show email error warnings with details
+    if email_errors:
+        messages.warning(
+            request,
+            f"⚠️ Jelszó generálás sikeres, de email küldés sikertelen {len(email_errors)} felhasználónál: {', '.join(email_errors)}"
+        )
+    
+    # Show general errors
+    if error_count > 0:
+        messages.error(
+            request,
+            f"💥 {error_count} felhasználónál hiba történt a jelszó generálás során. Ellenőrizze a terminál kimenetét részletekért."
+        )
+    
+    # Final status message
+    if success_count == 0 and error_count > 0:
+        messages.error(
+            request,
+            "❌ Egyetlen felhasználónál sem sikerült a jelszó generálás és értesítés!"
+        )
+    elif success_count > 0 and error_count == 0:
+        messages.success(
+            request,
+            "🏆 Minden kiválasztott felhasználónál sikeresen megtörtént a jelszó generálás és értesítés!"
+        )
+
+generate_password_and_notify.short_description = "Új jelszó generálása és értesítés"
+
+# ============================================================================
+# 👤 USER MANAGEMENT WITH IMPORT/EXPORT
 # ============================================================================
 
 class CustomUserChangeForm(UserChangeForm):
@@ -90,6 +459,7 @@ class UserAdmin(ImportExportModelAdmin):
     list_filter = ['is_active', 'is_staff', 'is_superuser', 'date_joined']
     search_fields = ['username', 'first_name', 'last_name', 'email']
     readonly_fields = ['date_joined', 'last_login', 'password_info']
+    actions = [generate_password_and_notify]
     
     fieldsets = (
         ('👤 Felhasználó adatok', {
