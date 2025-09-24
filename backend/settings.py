@@ -73,7 +73,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:3000', 
     'http://localhost:8000', 
     'http://127.0.0.1:8000',
-    'https://ftvapi.szlg.info'
+    'https://ftvapi.szlg.info',
+    'https://app.szlg.info',
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -145,7 +146,7 @@ USE_TZ = False # False, mert csak egy időzónát használunk
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = 'https://node.szlg.info/__szlg/static/'
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",
