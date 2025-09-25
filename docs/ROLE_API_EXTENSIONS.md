@@ -23,11 +23,11 @@ This document describes the new and extended API endpoints for role (szerepkör)
 - **GET `/production/filming-sessions/upcoming-with-roles`** - Get upcoming sessions with role information
 - **GET `/production/filming-sessions/unassigned`** - Get sessions without role assignments
 
-### 3. Admin-Only Protection for Beosztás Editing
+### 3. Consistent Admin/Teacher Permissions for Beosztás Management
 
-- Updated **PUT `/assignments/filming-assignments/{assignment_id}`** - Now requires admin permissions
-- Updated **DELETE `/assignments/filming-assignments/{assignment_id}`** - Now requires admin permissions
-- New permission function `check_admin_only_permissions()` for stricter access control
+- Updated **PUT `/assignments/filming-assignments/{assignment_id}`** - Now requires admin or teacher permissions (same as creating)
+- Updated **DELETE `/assignments/filming-assignments/{assignment_id}`** - Now requires admin or teacher permissions (same as creating)
+- Permission levels are now consistent: if you can create an assignment, you can also edit and delete it
 
 ## Detailed API Reference
 
@@ -167,13 +167,13 @@ Get filming sessions that don't have role assignments yet.
 
 ### Permission Changes
 
-#### Admin-Only Beosztás Editing
-The following endpoints now require `system_admin` permissions instead of just teacher permissions:
+#### Consistent Permission Model for Beosztás Management
+The following endpoints now use the same permission model as creation (admin or teacher permissions):
 
 - **PUT `/assignments/filming-assignments/{assignment_id}`**
 - **DELETE `/assignments/filming-assignments/{assignment_id}`**
 
-This ensures only system administrators can modify role assignments, providing better security and control.
+This ensures consistent access: if you can create an assignment, you can also edit and delete it. All admin types (developer, teacher, system_admin) can manage assignments.
 
 ## Usage Examples
 

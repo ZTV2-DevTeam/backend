@@ -936,7 +936,7 @@ def register_assignment_endpoints(api):
         """
         Update existing filming assignment.
         
-        Requires admin permissions (not just teacher). Can update student-role relations, stab assignment, and completion status.
+        Requires admin or teacher permissions (same as creating assignments). Can update student-role relations, stab assignment, and completion status.
         Automatically sends email notifications to users who are added or removed.
         
         Args:
@@ -953,8 +953,8 @@ def register_assignment_endpoints(api):
             requesting_user = request.auth
             beosztas = Beosztas.objects.get(id=assignment_id)
             
-            # Check admin-only permissions for Beosztás editing
-            has_permission, error_message = check_admin_only_permissions(requesting_user)
+            # Check admin or teacher permissions for Beosztás editing (same as creating)
+            has_permission, error_message = check_admin_or_teacher_permissions(requesting_user)
             if not has_permission:
                 return 401, {"message": error_message}
             
@@ -1166,7 +1166,7 @@ def register_assignment_endpoints(api):
         """
         Delete filming assignment.
         
-        Requires admin permissions (not just teacher). Also deletes associated role relations and
+        Requires admin or teacher permissions (same as creating assignments). Also deletes associated role relations and
         optionally the generated absences.
         
         Args:
@@ -1181,8 +1181,8 @@ def register_assignment_endpoints(api):
             requesting_user = request.auth
             beosztas = Beosztas.objects.get(id=assignment_id)
             
-            # Check admin-only permissions for Beosztás deletion
-            has_permission, error_message = check_admin_only_permissions(requesting_user)
+            # Check admin or teacher permissions for Beosztás deletion (same as creating)
+            has_permission, error_message = check_admin_or_teacher_permissions(requesting_user)
             if not has_permission:
                 return 401, {"message": error_message}
             
