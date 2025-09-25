@@ -445,13 +445,22 @@ class CustomUserChangeForm(UserChangeForm):
         password = self.cleaned_data.get('password')
         
         if password:
-            # Check if the password is already hashed
+            # Only set password if a new one was provided
             if not password.startswith(('pbkdf2_sha256$', 'bcrypt$', 'argon2$')):
-                # Only hash unhashed passwords
+                # Hash the new password
                 user.set_password(password)
             else:
                 # If it's already hashed (shouldn't happen with our form), use as is
                 user.password = password
+        else:
+            # If no password provided, preserve the existing password
+            # Get the original user from database to preserve password
+            if user.pk:
+                try:
+                    original_user = User.objects.get(pk=user.pk)
+                    user.password = original_user.password
+                except User.DoesNotExist:
+                    pass  # New user, no existing password to preserve
         
         if commit:
             user.save()
@@ -578,15 +587,8 @@ class UserAdmin(ImportExportModelAdmin):
 
     def save_model(self, request, obj, form, change):
         """Override save to ensure proper password handling"""
-        if change:  # Editing existing user
-            password = form.cleaned_data.get('password')
-            if password:
-                # Check if password is already hashed
-                if not password.startswith(('pbkdf2_sha256$', 'bcrypt$', 'argon2$')):
-                    # Hash the unhashed password
-                    obj.set_password(password)
-                # If already hashed, it was set in the form's save method
-        
+        # Password handling is now done in the form's save method
+        # No need to duplicate password processing here
         super().save_model(request, obj, form, change)
 
 
