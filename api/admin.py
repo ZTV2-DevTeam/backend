@@ -19,6 +19,8 @@ import string
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib import messages
+from datetime import timedelta
+from django.db.models import Q
 
 # ============================================================================
 # 🔐 PASSWORD GENERATION AND EMAIL UTILITIES
@@ -411,6 +413,66 @@ generate_password_and_notify.short_description = "Új jelszó generálása és �
 # 👤 USER MANAGEMENT WITH IMPORT/EXPORT
 # ============================================================================
 
+class LastLoginFilter(admin.SimpleListFilter):
+    """Custom filter for User last_login field with special handling for null values"""
+    title = 'utolsó bejelentkezés'
+    parameter_name = 'last_login'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('never', 'Sosem jelentkezett be (NULL)'),
+            ('today', 'Ma'),
+            ('week', 'Egy héten belül'),
+            ('month', '30 napon belül'),
+            ('3months', '3 hónapon belül'),
+            ('6months', '6 hónapon belül'),
+            ('year', '1 éven belül'),
+            ('older', '1 évnél régebben'),
+        )
+
+    def queryset(self, request, queryset):
+        now = timezone.now()
+        
+        if self.value() == 'never':
+            return queryset.filter(last_login__isnull=True)
+        elif self.value() == 'today':
+            return queryset.filter(
+                last_login__date=now.date(),
+                last_login__isnull=False
+            )
+        elif self.value() == 'week':
+            return queryset.filter(
+                last_login__gte=now - timedelta(days=7),
+                last_login__isnull=False
+            )
+        elif self.value() == 'month':
+            return queryset.filter(
+                last_login__gte=now - timedelta(days=30),
+                last_login__isnull=False
+            )
+        elif self.value() == '3months':
+            return queryset.filter(
+                last_login__gte=now - timedelta(days=90),
+                last_login__isnull=False
+            )
+        elif self.value() == '6months':
+            return queryset.filter(
+                last_login__gte=now - timedelta(days=180),
+                last_login__isnull=False
+            )
+        elif self.value() == 'year':
+            return queryset.filter(
+                last_login__gte=now - timedelta(days=365),
+                last_login__isnull=False
+            )
+        elif self.value() == 'older':
+            return queryset.filter(
+                last_login__lt=now - timedelta(days=365),
+                last_login__isnull=False
+            )
+        
+        return queryset
+
 class CustomUserChangeForm(UserChangeForm):
     """Custom user change form with proper password handling"""
     password = forms.CharField(
@@ -488,8 +550,8 @@ class UserAdmin(ImportExportModelAdmin):
     form = CustomUserChangeForm
     add_form = CustomUserCreationForm
     
-    list_display = ['username', 'last_name', 'first_name', 'email', 'groups_display', 'is_active', 'is_staff', 'is_superuser']
-    list_filter = ['is_active', 'is_staff', 'is_superuser', 'groups', 'date_joined']
+    list_display = ['username', 'last_name', 'first_name', 'email', 'last_login_display', 'groups_display', 'is_active', 'is_staff', 'is_superuser']
+    list_filter = ['is_active', 'is_staff', 'is_superuser', 'groups', 'date_joined', LastLoginFilter]
     search_fields = ['username', 'first_name', 'last_name', 'email']
     readonly_fields = ['date_joined', 'last_login', 'password_info']
     actions = [generate_password_and_notify]
@@ -559,6 +621,53 @@ class UserAdmin(ImportExportModelAdmin):
         return mark_safe(''.join(group_html_parts))
     groups_display.short_description = '👥 Csoportok'
 
+    def last_login_display(self, obj):
+        """Show last login with nice formatting and null handling"""
+        if not obj.last_login:
+            return format_html('<span style="color: #dc3545; font-weight: bold;">❌ Sosem</span>')
+        
+        now = timezone.now()
+        login_time = obj.last_login
+        time_diff = now - login_time
+        
+        # Format the display based on how recent the login was
+        if time_diff.days == 0:
+            if time_diff.seconds < 3600:  # Less than 1 hour
+                return format_html(
+                    '<span style="color: #28a745; font-weight: bold;">🟢 {} perc</span>',
+                    time_diff.seconds // 60
+                )
+            else:  # Same day but more than 1 hour
+                return format_html(
+                    '<span style="color: #28a745;">✅ Ma {}</span>',
+                    login_time.strftime('%H:%M')
+                )
+        elif time_diff.days == 1:
+            return format_html(
+                '<span style="color: #6f42c1;">📅 Tegnap {}</span>',
+                login_time.strftime('%H:%M')
+            )
+        elif time_diff.days <= 7:
+            return format_html(
+                '<span style="color: #0066cc;">📅 {} nap</span>',
+                time_diff.days
+            )
+        elif time_diff.days <= 30:
+            return format_html(
+                '<span style="color: #fd7e14;">📅 {} nap ({})</span>',
+                time_diff.days, login_time.strftime('%m-%d')
+            )
+        elif time_diff.days <= 365:
+            return format_html(
+                '<span style="color: #e83e8c;">📅 {} nap ({})</span>',
+                time_diff.days, login_time.strftime('%Y-%m-%d')
+            )
+        else:
+            return format_html(
+                '<span style="color: #dc3545;">⚠️ {} nap ({})</span>',
+                time_diff.days, login_time.strftime('%Y-%m-%d')
+            )
+    last_login_display.short_description = '🕒 Utolsó bejelentkezés'
 
     def password_info(self, obj):
         """Show password information in detail view (dark mode support)"""
