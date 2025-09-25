@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 from django.utils.html import format_html
@@ -10,6 +10,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
 from django import forms
+from django.forms.widgets import CheckboxSelectMultiple
 from import_export.admin import ImportExportModelAdmin, ExportActionMixin
 from .models import *
 from .resources import *
@@ -132,7 +133,7 @@ def send_login_info_email(user, password):
                     <h1>🎬 FTV Bejelentkezési Adatok</h1>
                 </div>
                 <div class="content">
-                    <p><strong>Kedves {user.last_name or user.username}!</strong></p>
+                    <p><strong>Kedves {user.first_name or user.username}!</strong></p>
                     
                     <p>Új jelszót generáltunk az Ön FTV rendszerbeli fiókjához. Az alábbi adatokkal tud bejelentkezni:</p>
                     
@@ -478,11 +479,12 @@ class UserAdmin(ImportExportModelAdmin):
     form = CustomUserChangeForm
     add_form = CustomUserCreationForm
     
-    list_display = ['username', 'last_name', 'first_name', 'email', 'password_status', 'is_active', 'is_staff', 'date_joined']
-    list_filter = ['is_active', 'is_staff', 'is_superuser', 'date_joined']
+    list_display = ['username', 'last_name', 'first_name', 'email', 'groups_display', 'is_active', 'is_staff', 'is_superuser']
+    list_filter = ['is_active', 'is_staff', 'is_superuser', 'groups', 'date_joined']
     search_fields = ['username', 'first_name', 'last_name', 'email']
     readonly_fields = ['date_joined', 'last_login', 'password_info']
     actions = [generate_password_and_notify]
+    filter_horizontal = ['groups', 'user_permissions']
     
     fieldsets = (
         ('👤 Felhasználó adatok', {
@@ -506,21 +508,48 @@ class UserAdmin(ImportExportModelAdmin):
             'fields': ('username', 'email', 'last_name', 'first_name', 'password1', 'password2'),
         }),
         ('🔐 Jogosultságok', {
-            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups'),
+            'fields': ('is_active', 'is_staff', 'is_superuser'),
+        }),
+        ('👥 Csoportok és jogosultságok', {
+            'fields': ('groups', 'user_permissions'),
+            'classes': ('collapse',),
         }),
     )
     
-    def password_status(self, obj):
-        """Show password status in list view (dark mode support)"""
-        if obj.has_usable_password():
-            return format_html(
-                '<span style="color: #4caf50; font-weight: bold; background: #222; padding: 2px 6px; border-radius: 3px;">✅ Beállítva</span>'
+    def groups_display(self, obj):
+        """Show user's groups in list view"""
+        groups = obj.groups.all()
+        if not groups:
+            return format_html('<span style="color: #666; font-style: italic;">Nincs csoport</span>')
+        
+        group_html_parts = []
+        for group in groups[:3]:  # Show first 3 groups
+            # Color code based on group name
+            if 'admin' in group.name.lower() or 'superuser' in group.name.lower():
+                color = '#dc3545'  # Red for admin
+                icon = '👑'
+            elif 'staff' in group.name.lower() or 'teacher' in group.name.lower() or 'tanár' in group.name.lower():
+                color = '#007bff'  # Blue for staff
+                icon = '👨‍💼'
+            else:
+                color = '#6c757d'  # Gray for others
+                icon = '👥'
+            
+            group_html_parts.append(
+                '<span style="background: {}; color: white; padding: 1px 4px; border-radius: 2px; font-size: 11px; margin-right: 2px; white-space: nowrap;">{} {}</span>'.format(
+                    color, icon, group.name
+                )
             )
-        else:
-            return format_html(
-                '<span style="color: #f44336; font-weight: bold; background: #222; padding: 2px 6px; border-radius: 3px;">❌ Nincs jelszó</span>'
+        
+        # Add "and X more" if there are more groups
+        if len(groups) > 3:
+            group_html_parts.append(
+                '<span style="color: #666; font-style: italic;">+{} további</span>'.format(len(groups) - 3)
             )
-    password_status.short_description = 'Jelszó státusz'
+        
+        return mark_safe(''.join(group_html_parts))
+    groups_display.short_description = '👥 Csoportok'
+
 
     def password_info(self, obj):
         """Show password information in detail view (dark mode support)"""

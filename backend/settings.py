@@ -39,7 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',  # Add CORS headers support
     'import_export',  # Django Import Export for data import/export
-    'api',  # Your API app
+    'api',
 ]
 
 MIDDLEWARE = [
