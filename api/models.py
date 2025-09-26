@@ -350,16 +350,32 @@ class Profile(models.Model):
         end_datetime = convert_to_local_naive_datetime(end_datetime)
         
         # Check if user has marked absence during this period
-        # Now using datetime comparison for more precise overlaps
-        absence_overlap = Tavollet.objects.filter(
+        # Now using datetime comparison for more precise overlaps with TavolletTipus logic
+        overlapping_absences = Tavollet.objects.filter(
             user=self.user,
             start_date__lt=end_datetime,
-            end_date__gt=start_datetime,
-            denied=False
-        ).exists()
+            end_date__gt=start_datetime
+        ).select_related('tipus')
         
-        if absence_overlap:
-            return False
+        for absence in overlapping_absences:
+            # If explicitly denied, user is available (absence doesn't count)
+            if absence.denied:
+                continue
+            
+            # If explicitly approved, user is not available
+            if absence.approved:
+                return False
+            
+            # For pending absences (neither denied nor approved), check tipus
+            if absence.tipus:
+                # Use tipus.ignored_counts_as to determine behavior
+                if absence.tipus.ignored_counts_as == 'approved':
+                    # Type defaults to approved when ignored - user not available
+                    return False
+                # If ignored_counts_as == 'denied', continue (user is available)
+            else:
+                # No tipus specified for pending absence - conservative approach (not available)
+                return False
         
         # If this is a second year radio student, check for radio sessions
         if self.is_second_year_radio_student:
@@ -912,6 +928,33 @@ class Announcement(models.Model):
         verbose_name_plural = "Közlemények"
         ordering = ['-created_at']
 
+class TavolletTipus(models.Model):
+    """
+    Távolléti típusok kezelése
+    Kategoriza a különböző távolléti típusokat és meghatározza azok elbírálását
+    """
+    
+    IGNORED_COUNT_CHOICES = [
+        ('approved', 'Jóváhagyottnak számít'),
+        ('denied', 'Elutasítottnak számít'),
+    ]
+    
+    name = models.CharField(max_length=150, unique=True, blank=False, null=False, verbose_name='Típus neve', 
+                           help_text='A távolléti típus neve (pl. betegség, iskolai elfoglaltság, stb.)')
+    explanation = models.TextField(max_length=1000, blank=True, null=True, verbose_name='Magyarázat/Példák', 
+                                  help_text='A típus részletes magyarázata és konkrét példák (maximum 1000 karakter)')
+    ignored_counts_as = models.CharField(max_length=10, choices=IGNORED_COUNT_CHOICES, default='approved', 
+                                        verbose_name='Figyelmen kívül hagyáskor számít mint',
+                                        help_text='Meghatározza, hogy ha a típus figyelmen kívül van hagyva, jóváhagyottnak vagy elutasítottnak számít-e')
+
+    def __str__(self):
+        return self.name
+    
+    class Meta:
+        verbose_name = "Távolléti Típus"
+        verbose_name_plural = "Távolléti Típusok"
+        ordering = ['name']
+
 class Tavollet(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Felhasználó', 
                             help_text='A távollétét jelző felhasználó')
@@ -925,6 +968,9 @@ class Tavollet(models.Model):
                                 help_text='Jelöli, hogy a távollét kérés el lett-e utasítva')
     approved = models.BooleanField(default=False, verbose_name='Jóváhagyva', 
                                    help_text='Jelöli, hogy a távollét kérés jóvá lett-e hagyva')
+    tipus = models.ForeignKey('TavolletTipus', on_delete=models.PROTECT, blank=True, null=True, 
+                             verbose_name='Távolléti típus', 
+                             help_text='A távollét típusa (betegség, iskolai elfoglaltság, stb.)')
 
     def __str__(self):
         return f'{self.user.get_full_name()}: {self.start_date.strftime("%Y-%m-%d %H:%M")} - {self.end_date.strftime("%Y-%m-%d %H:%M")}'

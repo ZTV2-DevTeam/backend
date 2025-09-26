@@ -1539,29 +1539,69 @@ class AbsenceAdmin(ImportExportModelAdmin):
         return ', '.join([f"{hour}. óra" for hour in obj.get_affected_classes()])
     get_affected_classes_display.short_description = 'Érintett órák'
 
+@admin.register(TavolletTipus)
+class TavolletTipusAdmin(ImportExportModelAdmin):
+    resource_class = TavolletTipusResource
+    list_display = ['tipus_display', 'ignored_counts_as_display', 'usage_count']
+    list_filter = ['ignored_counts_as']
+    search_fields = ['name', 'explanation']
+    
+    fieldsets = (
+        ('📝 Típus adatok', {
+            'fields': ('name', 'explanation'),
+            'description': 'A távolléti típus neve és részletes magyarázata'
+        }),
+        ('⚖️ Elbírálási beállítás', {
+            'fields': ('ignored_counts_as',),
+            'description': 'Meghatározza, hogy figyelmen kívül hagyáskor jóváhagyottnak vagy elutasítottnak számít-e'
+        })
+    )
+    
+    def tipus_display(self, obj):
+        return format_html('📋 <strong>{}</strong>', obj.name)
+    tipus_display.short_description = 'Típus neve'
+    
+    def ignored_counts_as_display(self, obj):
+        if obj.ignored_counts_as == 'approved':
+            return format_html('<span style="color: green; font-weight: bold;">✅ Jóváhagyott</span>')
+        else:
+            return format_html('<span style="color: red; font-weight: bold;">❌ Elutasított</span>')
+    ignored_counts_as_display.short_description = 'Figyelmen kívül hagyáskor'
+    
+    def usage_count(self, obj):
+        count = Tavollet.objects.filter(tipus=obj).count()
+        return format_html('<span style="color: blue;">🏠 {} használat</span>', count)
+    usage_count.short_description = 'Használatok száma'
+
 @admin.register(Tavollet)
 class TavolletAdmin(ImportExportModelAdmin):
     resource_class = TavolletResource
-    list_display = ['tavollet_display', 'user', 'date_range', 'duration_days', 'status_display']
-    list_filter = ['denied', 'start_date', 'end_date']
+    list_display = ['tavollet_display', 'user', 'tipus_display', 'date_range', 'duration_days', 'status_display']
+    list_filter = ['denied', 'approved', 'tipus', 'start_date', 'end_date']
     search_fields = ['user__first_name', 'user__last_name', 'reason']
-    autocomplete_fields = ['user']
+    autocomplete_fields = ['user', 'tipus']
     date_hierarchy = 'start_date'
     
     fieldsets = (
         ('👤 Távollét adatok', {
-            'fields': ('user',),
-            'description': 'A távollétben lévő felhasználó'
+            'fields': ('user', 'tipus'),
+            'description': 'A távollétben lévő felhasználó és a távollét típusa'
         }),
         ('📅 Időszak', {
             'fields': ('start_date', 'end_date'),
             'description': 'A távollét kezdete és vége'
         }),
         ('📝 Indoklás és státusz', {
-            'fields': ('reason', 'denied'),
+            'fields': ('reason', 'denied', 'approved'),
             'description': 'A távollét oka és jóváhagyási státusza'
         })
     )
+    
+    def tipus_display(self, obj):
+        if obj.tipus:
+            return format_html('<span style="color: #0066cc;">📋 {}</span>', obj.tipus.name)
+        return format_html('<span style="color: #999; font-style: italic;">Nincs megadva</span>')
+    tipus_display.short_description = 'Típus'
     
     def tavollet_display(self, obj):
         return format_html('🏠 <strong>Távollét #{}</strong>', obj.id)
@@ -1585,7 +1625,10 @@ class TavolletAdmin(ImportExportModelAdmin):
     def status_display(self, obj):
         if obj.denied:
             return format_html('<span style="color: red; font-weight: bold;">❌ Elutasítva</span>')
-        return format_html('<span style="color: green; font-weight: bold;">✅ Jóváhagyva</span>')
+        elif obj.approved:
+            return format_html('<span style="color: green; font-weight: bold;">✅ Jóváhagyva</span>')
+        else:
+            return format_html('<span style="color: orange; font-weight: bold;">⏳ Függőben</span>')
     status_display.short_description = 'Státusz'
 
 # ============================================================================

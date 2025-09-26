@@ -456,22 +456,48 @@ def check_user_availability_for_forgatas(user: User, forgatas: Forgatas) -> dict
     forgatas_start = datetime.combine(forgatas.date, forgatas.timeFrom)
     forgatas_end = datetime.combine(forgatas.date, forgatas.timeTo)
     
+    # Check for vacation (Tavollet) conflicts with TavolletTipus logic
     vacation_conflicts = Tavollet.objects.filter(
         user=user,
         start_date__lt=forgatas_end,
-        end_date__gt=forgatas_start,
-        denied=False  # Only consider non-denied vacation requests
-    )
+        end_date__gt=forgatas_start
+    ).select_related('tipus')
     
     for vacation in vacation_conflicts:
-        is_on_vacation = True
-        conflicts.append({
-            "type": "vacation",
-            "reason": vacation.reason or "Távollét",
-            "start_date": vacation.start_date.isoformat(),
-            "end_date": vacation.end_date.isoformat(),
-            "approved": vacation.approved
-        })
+        # Apply the same logic as Profile.is_available_for_datetime
+        should_count_as_unavailable = False
+        
+        if vacation.denied:
+            # Explicitly denied - user is available (skip this absence)
+            continue
+        elif vacation.approved:
+            # Explicitly approved - user is not available
+            should_count_as_unavailable = True
+        else:
+            # Pending absence - check tipus
+            if vacation.tipus:
+                if vacation.tipus.ignored_counts_as == 'approved':
+                    # Type defaults to approved when ignored - user not available
+                    should_count_as_unavailable = True
+                # If ignored_counts_as == 'denied', user is available (skip)
+            else:
+                # No tipus specified for pending absence - conservative approach (not available)
+                should_count_as_unavailable = True
+        
+        if should_count_as_unavailable:
+            is_on_vacation = True
+            conflicts.append({
+                "type": "vacation",
+                "reason": vacation.reason or "Távollét",
+                "start_date": vacation.start_date.isoformat(),
+                "end_date": vacation.end_date.isoformat(),
+                "approved": vacation.approved,
+                "tipus": {
+                    "id": vacation.tipus.id,
+                    "name": vacation.tipus.name,
+                    "ignored_counts_as": vacation.tipus.ignored_counts_as
+                } if vacation.tipus else None
+            })
     
     # Check for radio session conflicts (for all users)
     radio_sessions = RadioSession.objects.filter(

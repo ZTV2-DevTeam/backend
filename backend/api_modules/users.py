@@ -139,6 +139,15 @@ class ActiveUsersResponseSchema(Schema):
     active_now: list[ActiveUserSchema]
     active_today: list[ActiveUserSchema]
 
+class UpdatePhoneNumberRequest(Schema):
+    """Request schema for updating phone number."""
+    telefonszam: Optional[str] = None
+
+class UpdatePhoneNumberResponse(Schema):
+    """Response schema for phone number update."""
+    message: str
+    telefonszam: Optional[str] = None
+
 # ============================================================================
 # Utility Functions
 # ============================================================================
@@ -367,21 +376,48 @@ def register_user_endpoints(api):
             # Get conflicting items
             conflicts = []
             
-            # Check absences
+            # Check absences with TavolletTipus logic
             from api.models import Tavollet, RadioSession
             absences = Tavollet.objects.filter(
                 user=user_profile.user,
                 start_date__lt=end_dt,
-                end_date__gt=start_dt,
-                denied=False
-            )
+                end_date__gt=start_dt
+            ).select_related('tipus')
+            
             for absence in absences:
-                conflicts.append({
-                    "type": "absence",
-                    "reason": absence.reason,
-                    "start": absence.start_date.isoformat(),
-                    "end": absence.end_date.isoformat()
-                })
+                # Apply the same logic as Profile.is_available_for_datetime
+                should_count_as_conflict = False
+                
+                if absence.denied:
+                    # Explicitly denied - user is available (skip this absence)
+                    continue
+                elif absence.approved:
+                    # Explicitly approved - user is not available
+                    should_count_as_conflict = True
+                else:
+                    # Pending absence - check tipus
+                    if absence.tipus:
+                        if absence.tipus.ignored_counts_as == 'approved':
+                            # Type defaults to approved when ignored - user not available
+                            should_count_as_conflict = True
+                        # If ignored_counts_as == 'denied', user is available (skip)
+                    else:
+                        # No tipus specified for pending absence - conservative approach (not available)
+                        should_count_as_conflict = True
+                
+                if should_count_as_conflict:
+                    conflicts.append({
+                        "type": "absence",
+                        "reason": absence.reason,
+                        "start": absence.start_date.isoformat(),
+                        "end": absence.end_date.isoformat(),
+                        "approved": absence.approved,
+                        "tipus": {
+                            "id": absence.tipus.id,
+                            "name": absence.tipus.name,
+                            "ignored_counts_as": absence.tipus.ignored_counts_as
+                        } if absence.tipus else None
+                    })
             
             # Check radio sessions for all users (not just radio students)
             radio_sessions = RadioSession.objects.filter(
@@ -472,3 +508,62 @@ def register_user_endpoints(api):
             }
         except Exception as e:
             return 500, {"message": f"Error fetching active users: {str(e)}"}
+
+    @api.patch("/users/me/phone", auth=JWTAuth(), response={200: UpdatePhoneNumberResponse, 400: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
+    def update_own_phone_number(request, data: UpdatePhoneNumberRequest):
+        """
+        Update own phone number.
+        
+        Allows authenticated users to update their own phone number in their profile.
+        
+        Args:
+            data: Request with new phone number (can be null to clear)
+            
+        Returns:
+            200: Phone number updated successfully
+            400: Invalid phone number format
+            404: User profile not found
+            500: Server error
+        """
+        try:
+            # Get authenticated user
+            user = request.auth
+            
+            # Get user's profile
+            try:
+                profile = Profile.objects.get(user=user)
+            except Profile.DoesNotExist:
+                # Create profile if it doesn't exist
+                profile = Profile.objects.create(
+                    user=user,
+                    medias=True,
+                    admin_type='none'
+                )
+            
+            # Validate phone number format (basic validation)
+            if data.telefonszam is not None and data.telefonszam.strip():
+                phone_number = data.telefonszam.strip()
+                # Basic validation: should only contain digits, spaces, hyphens, plus sign, parentheses
+                import re
+                if not re.match(r'^[+\d\s\-\(\)]+$', phone_number):
+                    return 400, {"message": "Érvénytelen telefonszám formátum"}
+                
+                # Check length (should be reasonable)
+                if len(phone_number) > 20:
+                    return 400, {"message": "A telefonszám túl hosszú (maximum 20 karakter)"}
+                
+                profile.telefonszam = phone_number
+            else:
+                # Clear phone number if empty string or null
+                profile.telefonszam = None
+            
+            # Save the profile
+            profile.save()
+            
+            return 200, {
+                "message": "A telefonszám sikeresen frissítve",
+                "telefonszam": profile.telefonszam
+            }
+            
+        except Exception as e:
+            return 500, {"message": f"Hiba történt a telefonszám frissítése során: {str(e)}"}

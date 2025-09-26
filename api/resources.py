@@ -11,7 +11,7 @@ from django.utils.crypto import get_random_string
 from .models import (
     Profile, Tanev, Osztaly, Stab, RadioStab, Partner, PartnerTipus,
     Equipment, EquipmentTipus, ContactPerson, Forgatas, Absence,
-    Tavollet, RadioSession, Beosztas, SzerepkorRelaciok, Szerepkor,
+    Tavollet, TavolletTipus, RadioSession, Beosztas, SzerepkorRelaciok, Szerepkor,
     Announcement, Config
 )
 
@@ -613,6 +613,37 @@ class AbsenceResource(resources.ModelResource):
         return ', '.join([f"{hour}. óra" for hour in classes]) if classes else 'Nincs'
 
 
+class TavolletTipusResource(resources.ModelResource):
+    """Absence type import/export"""
+    
+    usage_count = fields.Field(
+        column_name='usage_count',
+        readonly=True
+    )
+    ignored_counts_as_display = fields.Field(
+        column_name='ignored_counts_as_display',
+        readonly=True
+    )
+    
+    class Meta:
+        model = TavolletTipus
+        fields = (
+            'id', 'name', 'explanation', 'ignored_counts_as', 
+            'ignored_counts_as_display', 'usage_count'
+        )
+        export_order = (
+            'id', 'name', 'explanation', 'ignored_counts_as', 
+            'ignored_counts_as_display', 'usage_count'
+        )
+    
+    def dehydrate_usage_count(self, tipus):
+        """Export usage count"""
+        return Tavollet.objects.filter(tipus=tipus).count()
+    
+    def dehydrate_ignored_counts_as_display(self, tipus):
+        """Export ignored_counts_as display value"""
+        return tipus.get_ignored_counts_as_display()
+
 class TavolletResource(resources.ModelResource):
     """Absence request import/export"""
     
@@ -623,6 +654,15 @@ class TavolletResource(resources.ModelResource):
     )
     user_full_name = fields.Field(
         column_name='user_full_name',
+        readonly=True
+    )
+    tipus_name = fields.Field(
+        column_name='tipus_name',
+        attribute='tipus',
+        widget=ForeignKeyWidget(TavolletTipus, 'name')
+    )
+    tipus_display = fields.Field(
+        column_name='tipus_display',
         readonly=True
     )
     start_date = fields.Field(
@@ -639,27 +679,55 @@ class TavolletResource(resources.ModelResource):
         column_name='duration_days',
         readonly=True
     )
+    status = fields.Field(
+        column_name='status',
+        readonly=True
+    )
     
     class Meta:
         model = Tavollet
         fields = (
-            'id', 'user_username', 'user_full_name', 'start_date', 'end_date',
-            'duration_days', 'reason', 'denied', 'approved'
+            'id', 'user_username', 'user_full_name', 'tipus_name', 'tipus_display',
+            'start_date', 'end_date', 'duration_days', 'reason', 
+            'denied', 'approved', 'status'
         )
         export_order = (
-            'id', 'user_username', 'user_full_name', 'start_date', 'end_date',
-            'duration_days', 'reason', 'denied', 'approved'
+            'id', 'user_username', 'user_full_name', 'tipus_name', 'tipus_display',
+            'start_date', 'end_date', 'duration_days', 'reason', 
+            'denied', 'approved', 'status'
         )
         
     def dehydrate_user_full_name(self, tavollet):
         """Export user full name"""
         return tavollet.user.get_full_name() or tavollet.user.username
+    
+    def dehydrate_tipus_display(self, tavollet):
+        """Export absence type display name"""
+        return tavollet.tipus.name if tavollet.tipus else "Nincs megadva"
         
     def dehydrate_duration_days(self, tavollet):
         """Export duration in days"""
         start_date = tavollet.start_date.date() if hasattr(tavollet.start_date, 'date') else tavollet.start_date
         end_date = tavollet.end_date.date() if hasattr(tavollet.end_date, 'date') else tavollet.end_date
         return (end_date - start_date).days + 1
+    
+    def dehydrate_status(self, tavollet):
+        """Export absence status"""
+        from datetime import datetime
+        current_datetime = datetime.now()
+        
+        if tavollet.denied and tavollet.approved:
+            return "konfliktus"
+        elif tavollet.denied:
+            return "elutasítva"
+        elif tavollet.approved:
+            return "jóváhagyva"
+        elif tavollet.end_date < current_datetime:
+            return "lezárt"
+        elif tavollet.start_date <= current_datetime <= tavollet.end_date:
+            return "folyamatban"
+        else:
+            return "függőben"
 
 
 # ============================================================================

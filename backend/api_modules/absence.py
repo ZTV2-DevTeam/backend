@@ -5,7 +5,7 @@ Handles absences (Tavollet) and availability tracking.
 
 from ninja import Schema
 from django.contrib.auth.models import User
-from api.models import Tavollet
+from api.models import Tavollet, TavolletTipus
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime, date
 from typing import Optional
@@ -49,6 +49,33 @@ class UserBasicSchema(Schema):
     last_name: str
     full_name: str
 
+class TavolletTipusSchema(Schema):
+    """Response schema for absence type data."""
+    id: int
+    name: str
+    explanation: Optional[str] = None
+    ignored_counts_as: str
+    ignored_counts_as_display: str
+    usage_count: int
+
+class TavolletTipusCreateSchema(Schema):
+    """Request schema for creating new absence type."""
+    name: str
+    explanation: Optional[str] = None
+    ignored_counts_as: str  # 'approved' or 'denied'
+
+class TavolletTipusUpdateSchema(Schema):
+    """Request schema for updating existing absence type."""
+    name: Optional[str] = None
+    explanation: Optional[str] = None
+    ignored_counts_as: Optional[str] = None
+
+class TavolletTipusBasicSchema(Schema):
+    """Basic absence type schema for inclusion in other responses."""
+    id: int
+    name: str
+    ignored_counts_as: str
+
 class TavolletSchema(Schema):
     """Response schema for absence data."""
     id: int
@@ -60,6 +87,7 @@ class TavolletSchema(Schema):
     approved: bool
     duration_days: int
     status: str
+    tipus: Optional[TavolletTipusBasicSchema] = None
 
 class TavolletCreateSchema(Schema):
     """Request schema for creating new absence."""
@@ -67,6 +95,7 @@ class TavolletCreateSchema(Schema):
     start_date: str    # ISO datetime string
     end_date: str      # ISO datetime string
     reason: Optional[str] = None
+    tipus_id: Optional[int] = None  # Optional absence type
 
 class TavolletUpdateSchema(Schema):
     """Request schema for updating existing absence."""
@@ -75,6 +104,7 @@ class TavolletUpdateSchema(Schema):
     reason: Optional[str] = None
     denied: Optional[bool] = None
     approved: Optional[bool] = None
+    tipus_id: Optional[int] = None  # Optional absence type
 
 # ============================================================================
 # Utility Functions
@@ -96,6 +126,43 @@ def create_user_basic_response(user: User) -> dict:
         "first_name": user.first_name,
         "last_name": user.last_name,
         "full_name": user.get_full_name()
+    }
+
+def create_tavollet_tipus_response(tipus: TavolletTipus) -> dict:
+    """
+    Create standardized absence type response dictionary.
+    
+    Args:
+        tipus: TavolletTipus model instance
+        
+    Returns:
+        Dictionary with absence type information
+    """
+    usage_count = Tavollet.objects.filter(tipus=tipus).count()
+    
+    return {
+        "id": tipus.id,
+        "name": tipus.name,
+        "explanation": tipus.explanation,
+        "ignored_counts_as": tipus.ignored_counts_as,
+        "ignored_counts_as_display": tipus.get_ignored_counts_as_display(),
+        "usage_count": usage_count
+    }
+
+def create_tavollet_tipus_basic_response(tipus: TavolletTipus) -> dict:
+    """
+    Create basic absence type response for inclusion in other responses.
+    
+    Args:
+        tipus: TavolletTipus model instance
+        
+    Returns:
+        Dictionary with basic absence type information
+    """
+    return {
+        "id": tipus.id,
+        "name": tipus.name,
+        "ignored_counts_as": tipus.ignored_counts_as
     }
 
 def create_tavollet_response(tavollet: Tavollet) -> dict:
@@ -133,6 +200,11 @@ def create_tavollet_response(tavollet: Tavollet) -> dict:
     else:
         status = "függőben"  # Changed from "jövőbeli" to be more descriptive of pending approval
     
+    # Include absence type information if available
+    tipus_info = None
+    if tavollet.tipus:
+        tipus_info = create_tavollet_tipus_basic_response(tavollet.tipus)
+    
     return {
         "id": tavollet.id,
         "user": create_user_basic_response(tavollet.user),
@@ -142,7 +214,8 @@ def create_tavollet_response(tavollet: Tavollet) -> dict:
         "denied": tavollet.denied,
         "approved": tavollet.approved,
         "duration_days": duration,
-        "status": status
+        "status": status,
+        "tipus": tipus_info
     }
 
 def check_admin_permissions(user) -> tuple[bool, str]:
@@ -197,6 +270,185 @@ def can_user_manage_absence(requesting_user: User, absence: Tavollet) -> bool:
 def register_absence_endpoints(api):
     """Register all absence-related endpoints with the API router."""
     
+    # ============================================================================
+    # Absence Type (TavolletTipus) Endpoints
+    # ============================================================================
+    
+    @api.get("/absence-types", auth=JWTAuth(), response={200: list[TavolletTipusSchema], 401: ErrorSchema})
+    def get_absence_types(request):
+        """
+        Get all available absence types.
+        
+        Requires authentication. Returns all absence types with their settings.
+        
+        Returns:
+            200: List of absence types
+            401: Authentication failed
+        """
+        try:
+            absence_types = TavolletTipus.objects.all().order_by('name')
+            
+            response = []
+            for tipus in absence_types:
+                response.append(create_tavollet_tipus_response(tipus))
+            
+            return 200, response
+        except Exception as e:
+            return 401, {"message": f"Error fetching absence types: {str(e)}"}
+
+    @api.get("/absence-types/{tipus_id}", auth=JWTAuth(), response={200: TavolletTipusSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def get_absence_type_details(request, tipus_id: int):
+        """
+        Get detailed information about a specific absence type.
+        
+        Requires authentication.
+        
+        Args:
+            tipus_id: Unique absence type identifier
+            
+        Returns:
+            200: Detailed absence type information
+            404: Absence type not found
+            401: Authentication failed
+        """
+        try:
+            tipus = TavolletTipus.objects.get(id=tipus_id)
+            return 200, create_tavollet_tipus_response(tipus)
+        except TavolletTipus.DoesNotExist:
+            return 404, {"message": "Távolléti típus nem található"}
+        except Exception as e:
+            return 401, {"message": f"Error fetching absence type details: {str(e)}"}
+
+    @api.post("/absence-types", auth=JWTAuth(), response={201: TavolletTipusSchema, 400: ErrorSchema, 401: ErrorSchema})
+    def create_absence_type(request, data: TavolletTipusCreateSchema):
+        """
+        Create new absence type.
+        
+        Requires admin permissions.
+        
+        Args:
+            data: Absence type creation data
+            
+        Returns:
+            201: Absence type created successfully
+            400: Invalid data
+            401: Authentication or permission failed
+        """
+        try:
+            # Check admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 401, {"message": error_message}
+            
+            # Validate ignored_counts_as field
+            if data.ignored_counts_as not in ['approved', 'denied']:
+                return 400, {"message": "ignored_counts_as mező értéke 'approved' vagy 'denied' lehet csak"}
+            
+            # Check for duplicate name
+            if TavolletTipus.objects.filter(name=data.name).exists():
+                return 400, {"message": "Ilyen nevű távolléti típus már létezik"}
+            
+            # Create absence type
+            tipus = TavolletTipus.objects.create(
+                name=data.name,
+                explanation=data.explanation,
+                ignored_counts_as=data.ignored_counts_as
+            )
+            
+            return 201, create_tavollet_tipus_response(tipus)
+        except Exception as e:
+            return 400, {"message": f"Error creating absence type: {str(e)}"}
+
+    @api.put("/absence-types/{tipus_id}", auth=JWTAuth(), response={200: TavolletTipusSchema, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def update_absence_type(request, tipus_id: int, data: TavolletTipusUpdateSchema):
+        """
+        Update existing absence type.
+        
+        Requires admin permissions. Only non-None fields are updated.
+        
+        Args:
+            tipus_id: Unique absence type identifier
+            data: Absence type update data
+            
+        Returns:
+            200: Absence type updated successfully
+            404: Absence type not found
+            400: Invalid data
+            401: Authentication or permission failed
+        """
+        try:
+            # Check admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 401, {"message": error_message}
+            
+            tipus = TavolletTipus.objects.get(id=tipus_id)
+            
+            # Update fields if provided
+            if data.name is not None:
+                # Check for duplicate name (excluding current)
+                if TavolletTipus.objects.filter(name=data.name).exclude(id=tipus.id).exists():
+                    return 400, {"message": "Ilyen nevű távolléti típus már létezik"}
+                tipus.name = data.name
+            
+            if data.explanation is not None:
+                tipus.explanation = data.explanation
+            
+            if data.ignored_counts_as is not None:
+                if data.ignored_counts_as not in ['approved', 'denied']:
+                    return 400, {"message": "ignored_counts_as mező értéke 'approved' vagy 'denied' lehet csak"}
+                tipus.ignored_counts_as = data.ignored_counts_as
+            
+            tipus.save()
+            
+            return 200, create_tavollet_tipus_response(tipus)
+        except TavolletTipus.DoesNotExist:
+            return 404, {"message": "Távolléti típus nem található"}
+        except Exception as e:
+            return 400, {"message": f"Error updating absence type: {str(e)}"}
+
+    @api.delete("/absence-types/{tipus_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema, 400: ErrorSchema})
+    def delete_absence_type(request, tipus_id: int):
+        """
+        Delete absence type.
+        
+        Requires admin permissions. Cannot delete if type is being used by absences.
+        
+        Args:
+            tipus_id: Unique absence type identifier
+            
+        Returns:
+            200: Absence type deleted successfully
+            404: Absence type not found
+            400: Absence type is being used
+            401: Authentication or permission failed
+        """
+        try:
+            # Check admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 401, {"message": error_message}
+            
+            tipus = TavolletTipus.objects.get(id=tipus_id)
+            
+            # Check if type is being used
+            usage_count = Tavollet.objects.filter(tipus=tipus).count()
+            if usage_count > 0:
+                return 400, {"message": f"Nem törölhető, mert {usage_count} távollét használja ezt a típust"}
+            
+            tipus_name = tipus.name
+            tipus.delete()
+            
+            return 200, {"message": f"Távolléti típus '{tipus_name}' sikeresen törölve"}
+        except TavolletTipus.DoesNotExist:
+            return 404, {"message": "Távolléti típus nem található"}
+        except Exception as e:
+            return 400, {"message": f"Error deleting absence type: {str(e)}"}
+
+    # ============================================================================
+    # Absence (Tavollet) Endpoints
+    # ============================================================================
+    
     @api.get("/absences", auth=JWTAuth(), response={200: list[TavolletSchema], 401: ErrorSchema})
     def get_absences(request, user_id: int = None, start_date: str = None, end_date: str = None, my_absences: bool = False):
         """
@@ -247,7 +499,7 @@ def register_absence_endpoints(api):
             if end_date:
                 absences = absences.filter(start_date__lte=end_date)
             
-            absences = absences.select_related('user').order_by('-start_date')
+            absences = absences.select_related('user', 'tipus').order_by('-start_date')
             
             response = []
             for absence in absences:
@@ -274,7 +526,7 @@ def register_absence_endpoints(api):
         """
         try:
             requesting_user = request.auth
-            absence = Tavollet.objects.select_related('user').get(id=absence_id)
+            absence = Tavollet.objects.select_related('user', 'tipus').get(id=absence_id)
             
             # Check if user can view this absence
             if not can_user_manage_absence(requesting_user, absence):
@@ -335,16 +587,39 @@ def register_absence_endpoints(api):
             if start_datetime >= end_datetime:
                 return 400, {"message": "A záró időpontnak a kezdő időpont után kell lennie"}
             
-            # Check for overlapping absences (not denied)
-            overlapping = Tavollet.objects.filter(
+            # Check for overlapping absences using TavolletTipus logic
+            overlapping_absences = Tavollet.objects.filter(
                 user=target_user,
                 start_date__lt=end_datetime,
-                end_date__gt=start_datetime,
-                denied=False
-            ).exists()
+                end_date__gt=start_datetime
+            ).select_related('tipus')
+            
+            overlapping = False
+            for absence in overlapping_absences:
+                if absence.denied:
+                    continue  # Denied absences don't count as conflicts
+                elif absence.approved:
+                    overlapping = True
+                    break
+                else:
+                    # Pending absence - check tipus
+                    if absence.tipus and absence.tipus.ignored_counts_as == 'denied':
+                        continue  # Type defaults to denied - no conflict
+                    else:
+                        # No tipus or defaults to approved - conflict
+                        overlapping = True
+                        break
             
             if overlapping:
                 return 400, {"message": "Átfedő távollét már létezik ebben az időszakban"}
+            
+            # Validate absence type if provided
+            tipus = None
+            if data.tipus_id:
+                try:
+                    tipus = TavolletTipus.objects.get(id=data.tipus_id)
+                except TavolletTipus.DoesNotExist:
+                    return 400, {"message": "Távolléti típus nem található"}
             
             # Create absence
             absence = Tavollet.objects.create(
@@ -353,7 +628,8 @@ def register_absence_endpoints(api):
                 end_date=end_datetime,
                 reason=data.reason,
                 denied=False,
-                approved=False
+                approved=False,
+                tipus=tipus
             )
             
             return 201, create_tavollet_response(absence)
@@ -408,13 +684,28 @@ def register_absence_endpoints(api):
             if updated_start_date >= updated_end_date:
                 return 400, {"message": "A záró időpontnak a kezdő időpont után kell lennie"}
             
-            # Check for overlapping absences (excluding current one, not denied)
-            overlapping = Tavollet.objects.filter(
+            # Check for overlapping absences using TavolletTipus logic (excluding current one)
+            overlapping_absences = Tavollet.objects.filter(
                 user=absence.user,
                 start_date__lt=updated_end_date,
-                end_date__gt=updated_start_date,
-                denied=False
-            ).exclude(id=absence.id).exists()
+                end_date__gt=updated_start_date
+            ).exclude(id=absence.id).select_related('tipus')
+            
+            overlapping = False
+            for other_absence in overlapping_absences:
+                if other_absence.denied:
+                    continue  # Denied absences don't count as conflicts
+                elif other_absence.approved:
+                    overlapping = True
+                    break
+                else:
+                    # Pending absence - check tipus
+                    if other_absence.tipus and other_absence.tipus.ignored_counts_as == 'denied':
+                        continue  # Type defaults to denied - no conflict
+                    else:
+                        # No tipus or defaults to approved - conflict
+                        overlapping = True
+                        break
             
             if overlapping:
                 return 400, {"message": "Átfedő távollét már létezik ebben az időszakban"}
@@ -461,6 +752,18 @@ def register_absence_endpoints(api):
                         absence.denied = False
                 elif data.approved != absence.approved:
                     return 401, {"message": "Nincs jogosultság a státusz módosításához"}
+            
+            # Update absence type if provided
+            if data.tipus_id is not None:
+                if data.tipus_id == 0:
+                    # Setting tipus_id to 0 means remove the type
+                    absence.tipus = None
+                else:
+                    try:
+                        tipus = TavolletTipus.objects.get(id=data.tipus_id)
+                        absence.tipus = tipus
+                    except TavolletTipus.DoesNotExist:
+                        return 400, {"message": "Távolléti típus nem található"}
             
             absence.save()
             
@@ -657,17 +960,33 @@ def register_absence_endpoints(api):
             except ValueError:
                 return 400, {"message": "Hibás dátum/idő formátum"}
             
-            # Find conflicting absences (approved or pending - not denied)
-            conflicts = Tavollet.objects.filter(
+            # Find conflicting absences using TavolletTipus logic
+            potential_conflicts = Tavollet.objects.filter(
                 user=target_user,
                 start_date__lt=check_end,
-                end_date__gt=check_start,
-                denied=False
-            )
+                end_date__gt=check_start
+            ).select_related('tipus')
             
             conflict_data = []
-            for conflict in conflicts:
-                conflict_data.append(create_tavollet_response(conflict))
+            for absence in potential_conflicts:
+                should_count_as_conflict = False
+                
+                if absence.denied:
+                    continue  # Denied absences don't count as conflicts
+                elif absence.approved:
+                    should_count_as_conflict = True
+                else:
+                    # Pending absence - check tipus
+                    if absence.tipus:
+                        if absence.tipus.ignored_counts_as == 'approved':
+                            should_count_as_conflict = True
+                        # If ignored_counts_as == 'denied', user is available (skip)
+                    else:
+                        # No tipus specified for pending absence - conservative approach (conflict)
+                        should_count_as_conflict = True
+                
+                if should_count_as_conflict:
+                    conflict_data.append(create_tavollet_response(absence))
             
             return 200, {
                 "user": create_user_basic_response(target_user),

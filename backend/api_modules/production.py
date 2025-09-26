@@ -1141,7 +1141,7 @@ def register_production_endpoints(api):
             return 401, {"message": f"Error fetching filming session with roles: {str(e)}"}
 
     @api.get("/production/filming-sessions/upcoming-with-roles", auth=JWTAuth(), response={200: list[ForgatWithRolesSchema], 401: ErrorSchema})
-    def get_upcoming_filming_sessions_with_roles(request, days_ahead: int = 30):
+    def get_upcoming_filming_sessions_with_roles(request, days_ahead: int = 30, type: str = None):
         """
         Get upcoming filming sessions with role assignment information.
         
@@ -1149,6 +1149,7 @@ def register_production_endpoints(api):
         
         Args:
             days_ahead: Number of days ahead to look for sessions (default: 30)
+            type: Optional type filter (kacsa, rendes, rendezveny, egyeb)
         
         Returns:
             200: List of upcoming filming sessions with role information
@@ -1162,7 +1163,16 @@ def register_production_endpoints(api):
             upcoming_sessions = Forgatas.objects.filter(
                 date__gte=today,
                 date__lte=end_date
-            ).order_by('date', 'timeFrom')
+            )
+            
+            # Apply type filter if provided
+            if type:
+                valid_types = [t["value"] for t in FORGATAS_TYPES]
+                if type not in valid_types:
+                    return 401, {"message": "Érvénytelen típus"}
+                upcoming_sessions = upcoming_sessions.filter(forgTipus=type)
+            
+            upcoming_sessions = upcoming_sessions.order_by('date', 'timeFrom')
             
             response = []
             for forgatas in upcoming_sessions:
@@ -1173,7 +1183,7 @@ def register_production_endpoints(api):
             return 401, {"message": f"Error fetching upcoming sessions with roles: {str(e)}"}
 
     @api.get("/production/filming-sessions/unassigned", auth=JWTAuth(), response={200: list[ForgatSchema], 401: ErrorSchema})
-    def get_unassigned_filming_sessions(request, days_ahead: int = 60):
+    def get_unassigned_filming_sessions(request, days_ahead: int = 60, type: str = None):
         """
         Get filming sessions that don't have role assignments yet.
         
@@ -1181,6 +1191,7 @@ def register_production_endpoints(api):
         
         Args:
             days_ahead: Number of days ahead to check (default: 60)
+            type: Optional type filter (kacsa, rendes, rendezveny, egyeb)
         
         Returns:
             200: List of filming sessions without assignments
@@ -1195,7 +1206,16 @@ def register_production_endpoints(api):
                 date__gte=today,
                 date__lte=end_date,
                 beosztasok__isnull=True
-            ).order_by('date', 'timeFrom')
+            )
+            
+            # Apply type filter if provided
+            if type:
+                valid_types = [t["value"] for t in FORGATAS_TYPES]
+                if type not in valid_types:
+                    return 401, {"message": "Érvénytelen típus"}
+                unassigned_sessions = unassigned_sessions.filter(forgTipus=type)
+            
+            unassigned_sessions = unassigned_sessions.order_by('date', 'timeFrom')
             
             response = []
             for forgatas in unassigned_sessions:
