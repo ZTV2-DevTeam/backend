@@ -25,4 +25,7 @@ urlpatterns = [
     path('', home, name='home'),
     path('admin/', admin.site.urls),
     path('api/', api.urls),
+    # Serve static and media files in production
+    # path('static/<path:path>', 'django.views.static.serve', {'document_root': 'static'}),
+    # path('media/<path:path>', 'django.views.static.serve', {'document_root': 'media'}),
 ]

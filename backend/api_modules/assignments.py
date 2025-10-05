@@ -117,6 +117,8 @@ class ForgatSchema(Schema):
     time_from: str
     time_to: str
     type: str
+    szerkeszto: Optional[UserBasicSchema] = None
+    notes: Optional[str] = None
 
 class BeosztasSchema(Schema):
     """Response schema for assignment data."""
@@ -347,6 +349,30 @@ def create_forgatas_basic_response(forgatas: Forgatas) -> dict:
         # Type
         response["type"] = forgatas.forgTipus
         print(f"✅ [DEBUG] Added type: '{response['type']}'")
+        
+        # Szerkesztő
+        try:
+            if forgatas.szerkeszto:
+                response["szerkeszto"] = {
+                    "id": forgatas.szerkeszto.id,
+                    "username": forgatas.szerkeszto.username,
+                    "full_name": forgatas.szerkeszto.get_full_name()
+                }
+                print(f"✅ [DEBUG] Added szerkeszto: '{response['szerkeszto']}'")
+            else:
+                response["szerkeszto"] = None
+                print(f"✅ [DEBUG] Added szerkeszto: null")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error with szerkeszto field: {str(e)}")
+            raise
+        
+        # Notes
+        try:
+            response["notes"] = forgatas.notes
+            print(f"✅ [DEBUG] Added notes: '{response['notes']}'")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error with notes field: {str(e)}")
+            raise
         
         print(f"✅ [DEBUG] create_forgatas_basic_response completed successfully: {response}")
         return response
@@ -675,7 +701,7 @@ def register_assignment_endpoints(api):
             
             # Build queryset
             assignments = Beosztas.objects.select_related(
-                'forgatas', 'author', 'stab'
+                'forgatas', 'forgatas__szerkeszto', 'author', 'stab'
             ).prefetch_related(
                 'szerepkor_relaciok__user',
                 'szerepkor_relaciok__szerepkor'
@@ -728,7 +754,7 @@ def register_assignment_endpoints(api):
             # Debug: Check if assignment exists
             print(f"🔍 [DEBUG] Searching for Beosztas with forgatas_id: {forgatas_id}")
             assignment = Beosztas.objects.select_related(
-                'forgatas', 'author', 'stab'
+                'forgatas', 'forgatas__szerkeszto', 'author', 'stab'
             ).prefetch_related(
                 'szerepkor_relaciok__user',
                 'szerepkor_relaciok__szerepkor'
@@ -1528,7 +1554,7 @@ def register_assignment_endpoints(api):
             
             # Build queryset
             assignments = Beosztas.objects.select_related(
-                'forgatas', 'author', 'stab'
+                'forgatas', 'forgatas__szerkeszto', 'author', 'stab'
             ).prefetch_related(
                 'szerepkor_relaciok__user',
                 'szerepkor_relaciok__szerepkor'
@@ -1580,7 +1606,7 @@ def register_assignment_endpoints(api):
         """
         try:
             assignment = Beosztas.objects.select_related(
-                'forgatas', 'author', 'stab'
+                'forgatas', 'forgatas__szerkeszto', 'author', 'stab'
             ).prefetch_related(
                 'szerepkor_relaciok__user',
                 'szerepkor_relaciok__szerepkor'

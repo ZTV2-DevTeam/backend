@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Email - FTV Design</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            margin: 0;
+            padding: 20px 0;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        
+        .email-header {
+            background: linear-gradient(135deg, #0f1419 0%, #1a202c 50%, #2d3748 100%);
+            color: #ffffff;
+            padding: 50px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .email-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 30% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+                       radial-gradient(circle at 70% 80%, rgba(37, 99, 235, 0.08) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        
+        .logo-section {
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .logo-text {
+            font-size: 48px;
+            font-weight: 900;
+            color: #ffffff;
+            text-decoration: none;
+            letter-spacing: 3px;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo-text::before {
+            content: '📺';
+            font-size: 40px;
+            color: #3b82f6;
+            filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.3));
+        }
+        
+        .platform-subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-top: 8px;
+            font-weight: 500;
+            letter-spacing: 1px;
+        }
+        
+        .email-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-top: 30px;
+            color: #ffffff;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .email-content {
+            padding: 50px 40px;
+            background-color: #ffffff;
+            position: relative;
+        }
+        
+        .content-section h2 {
+            color: #1e293b;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 3px solid #3b82f6;
+            position: relative;
+        }
+        
+        .content-section h2::after {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 0;
+            width: 40px;
+            height: 3px;
+            background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+            border-radius: 2px;
+        }
+        
+        .content-section p {
+            margin-bottom: 16px;
+            color: #475569;
+            line-height: 1.7;
+            font-size: 16px;
+        }
+        
+        .highlight-box {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border: 1px solid #93c5fd;
+            padding: 24px;
+            margin: 24px 0;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+        }
+        
+        .highlight-box h3 {
+            color: #1e40af;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        
+        .button-container {
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        .email-button {
+            display: inline-block;
+            padding: 16px 32px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white !important;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 16px;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            transition: all 0.2s ease;
+            letter-spacing: 0.5px;
+        }
+        
+        .email-footer {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #94a3b8;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        
+        .footer-content {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="email-header">
+            <div class="logo-section">
+                <div class="logo-text">FTV</div>
+                <div class="platform-subtitle">Hiányzás Áttekintő Platform</div>
+            </div>
+            <div class="email-title">🎬 Új forgatási beosztás</div>
+        </div>
+        
+        <!-- Content -->
+        <div class="email-content">
+            <div class="content-section">
+                <h2>Kedves Kollégák!</h2>
+                <p>Önt beosztották a következő forgatáshoz. Kérjük, készüljön fel a megadott időpontra!</p>
+            </div>
+            
+            <div class="highlight-box">
+                <h3>Hétvégi forgatás - Dráma jelenet</h3>
+                <p><strong>Kérjük, időben érkezzen és hozza magával a szükséges felszerelést!</strong></p>
+            </div>
+            
+            <div class="content-section">
+                <p><strong>Dátum:</strong> 2025. október 15.</p>
+                <p><strong>Időpont:</strong> 10:00 - 16:00</p>
+                <p><strong>Helyszín:</strong> Studio A</p>
+                <p><strong>Kapcsolattartó:</strong> Kovács János</p>
+            </div>
+            
+            <div class="button-container">
+                <a href="#" class="email-button">Bejelentkezés a rendszerbe</a>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="email-footer">
+            <div class="footer-content">
+                <p>Ez egy automatikus email, kérjük ne válaszoljon rá.</p>
+                <p style="margin-top: 24px; font-size: 12px; color: #64748b; border-top: 1px solid #334155; padding-top: 20px;">
+                    © 2025 FTV - Hiányzás Áttekintő Platform
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

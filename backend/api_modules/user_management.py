@@ -301,8 +301,29 @@ def send_first_login_email(user: User, token: str) -> bool:
         base_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
         login_url = f"{base_url}/first-login?token={token}"
         
+        # Import email templates
+        from backend.email_templates import (
+            get_base_email_template, 
+            get_first_login_email_content
+        )
+        
+        # Get user name
+        user_name = user.get_full_name() if user.get_full_name() else user.username
+        
+        # Generate email content using the new template system
+        content = get_first_login_email_content(user_name, login_url)
+        
+        # Create complete HTML email
+        html_message = get_base_email_template(
+            title="Üdvözöljük az FTV rendszerben!",
+            content=content,
+            button_text="Jelszó beállítása",
+            button_url=login_url
+        )
+        
+        # Create plain text message
         message = f"""
-Kedves {user.get_full_name()},
+Kedves {user_name},
 
 Üdvözöljük a FTV rendszerben!
 
@@ -320,6 +341,7 @@ FTV Rendszer
             message,
             settings.DEFAULT_FROM_EMAIL,
             [user.email],
+            html_message=html_message,
             fail_silently=False,
         )
         return True

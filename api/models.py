@@ -1432,6 +1432,36 @@ def handle_beosztas_szerepkor_change(sender, instance, action, pk_set, **kwargs)
 from django.db.models.signals import post_save, m2m_changed
 from django.dispatch import receiver
 
+# Temporary storage for users being removed from assignments
+_assignment_removal_users = {}
+
+
+@receiver(m2m_changed, sender=Beosztas.szerepkor_relaciok.through)
+def capture_users_before_assignment_removal(sender, instance, action, pk_set, **kwargs):
+    """
+    Capture user information before assignment removal to enable email notifications.
+    """
+    if action == 'pre_remove' and pk_set and instance.forgatas:
+        print(f"[DEBUG] Capturing users before removal from assignment {instance.id}")
+        
+        # Skip email notifications for KaCsa type forgatások
+        if instance.forgatas.forgTipus == 'kacsa':
+            print(f"[DEBUG] Skipping email capture for KaCsa type forgatas: {instance.forgatas.name}")
+            return
+        
+        try:
+            # Get the users that will be removed
+            removed_relations = SzerepkorRelaciok.objects.filter(id__in=pk_set)
+            removed_users = [rel.user for rel in removed_relations]
+            
+            # Store in temporary storage
+            _assignment_removal_users[instance.id] = removed_users
+            print(f"[DEBUG] Captured {len(removed_users)} users for removal from assignment {instance.id}")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to capture users before assignment removal: {str(e)}")
+
+
 @receiver(post_save, sender=Announcement)
 def send_announcement_email(sender, instance, created, **kwargs):
     """
@@ -1618,9 +1648,27 @@ def assignment_users_changed(sender, instance, action, pk_set, **kwargs):
                         
             elif action == 'post_remove':
                 # Users removed from assignment
-                # Note: We can't get the relation objects after removal, so we'll skip removal emails for now
-                # This is a limitation of the current approach - we'd need to store the old state before removal
-                print(f"[DEBUG] Users removed from assignment - removal emails not implemented in signals yet")
+                # Get the captured users from pre_remove signal
+                removed_users = _assignment_removal_users.get(instance.id, [])
+                
+                if removed_users:
+                    print(f"[DEBUG] Users removed from assignment: {len(removed_users)}")
+                    
+                    email_sent = send_assignment_change_notification_email(
+                        instance.forgatas,
+                        [],  # no added users
+                        removed_users  # removed users
+                    )
+                    
+                    if email_sent:
+                        print(f"[SUCCESS] Assignment removal email sent: {instance.forgatas.name}")
+                    else:
+                        print(f"[WARNING] Failed to send assignment removal email: {instance.forgatas.name}")
+                    
+                    # Clean up temporary storage
+                    del _assignment_removal_users[instance.id]
+                else:
+                    print(f"[DEBUG] No users captured for removal from assignment {instance.id}")
                 
         except Exception as e:
             print(f"[ERROR] Assignment users change email signal failed: {str(e)}")

@@ -323,69 +323,29 @@ def send_first_login_email(user: User, token: str) -> bool:
         print(f"[DEBUG] Email recipient: {user.email}")
         print(f"[DEBUG] DEFAULT_FROM_EMAIL: {getattr(settings, 'DEFAULT_FROM_EMAIL', 'NOT SET')}")
         
-        # Create HTML email content
-        html_message = f"""
-        <html>
-            <head>
-                <style>
-                    body {{ font-family: Roboto, sans-serif; line-height: 1.6; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background-color: #f4f4f4; padding: 20px; text-align: center; }}
-                    .content {{ padding: 20px; }}
-                    .button {{ 
-                        display: inline-block; 
-                        padding: 10px 20px; 
-                        background-color: #28a745; 
-                        color: white !important; 
-                        text-decoration: none; 
-                        border-radius: 5px; 
-                        margin: 20px 0;
-                    }}
-                    .footer {{ 
-                        background-color: #f4f4f4; 
-                        padding: 20px; 
-                        text-align: center; 
-                        font-size: 12px; 
-                        color: #666;
-                    }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>FTV - Első bejelentkezés</h1>
-                    </div>
-                    <div class="content">
-                        <p>Kedves {user.first_name or user.username}!</p>
-                        
-                        <p>Üdvözöljük a FTV rendszerben! Fiókja létrehozásra került, és most beállíthatja jelszavát az első bejelentkezéshez.</p>
-                        
-                        <p>A jelszó beállításához kattintson az alábbi gombra:</p>
-                        
-                        <a href="{login_url}" class="button">Jelszó beállítása</a>
-                        
-                        <p>vagy másolja be a következő linket a böngészőjébe:</p>
-                        <p><a href="{login_url}">{login_url}</a></p>
-                        
-                        <p><strong>Fontos információk:</strong></p>
-                        <ul>
-                            <li>Ez a link 30 napig érvényes</li>
-                            <li>A link biztonságosan kódolt (csak a szerver tudja dekódolni)</li>
-                            <li>A jelszó beállítása után már a szokásos bejelentkezési folyamatot használhatja</li>
-                        </ul>
-                    </div>
-                    <div class="footer">
-                        <p>Ez egy automatikus email, kérjük ne válaszoljon rá.</p>
-                        <p>© 2025 FTV. Minden jog fenntartva.</p>
-                    </div>
-                </div>
-            </body>
-        </html>
-        """
+        # Import email templates
+        from backend.email_templates import (
+            get_base_email_template, 
+            get_first_login_email_content
+        )
+        
+        # Get user name
+        user_name = user.get_full_name() if user.get_full_name() else user.username
+        
+        # Generate email content using the new template system
+        content = get_first_login_email_content(user_name, login_url)
+        
+        # Create complete HTML email
+        html_message = get_base_email_template(
+            title="Üdvözöljük az FTV rendszerben!",
+            content=content,
+            button_text="Jelszó beállítása",
+            button_url=login_url
+        )
         
         # Create plain text version
         plain_message = f"""
-Kedves {user.first_name or user.username}!
+Kedves {user_name}!
 
 Üdvözöljük a FTV rendszerben! Fiókja létrehozásra került, és most beállíthatja jelszavát az első bejelentkezéshez.
 
@@ -444,69 +404,29 @@ def send_password_reset_email(user: User, reset_token: str) -> bool:
 
         subject = "FTV - Jelszó visszaállítása"
 
-        # Create HTML email content
-        html_message = f"""
-        <html>
-            <head>
-                <style>
-                    body {{ font-family: Roboto, sans-serif; line-height: 1.6; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background-color: #f4f4f4; padding: 20px; text-align: center; }}
-                    .content {{ padding: 20px; }}
-                    .button {{ 
-                        display: inline-block; 
-                        padding: 10px 20px; 
-                        background-color: #007bff; 
-                        color: white !important; 
-                        text-decoration: none; 
-                        border-radius: 5px; 
-                        margin: 20px 0;
-                    }}
-                    .footer {{ 
-                        background-color: #f4f4f4; 
-                        padding: 20px; 
-                        text-align: center; 
-                        font-size: 12px; 
-                        color: #666;
-                    }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>FTV - Jelszó Visszaállítása</h1>
-                    </div>
-                    <div class="content">
-                        <p>Kedves {user.first_name or user.username}!</p>
-                        
-                        <p>Jelszó visszaállítási kérelmet kaptunk az Ön fiókjához az FTV rendszerben.</p>
-                        
-                        <p>Amennyiben Ön kérte a jelszó visszaállítást, kattintson az alábbi gombra:</p>
-                        
-                        <a href="{reset_url}" class="button">Jelszó visszaállítása</a>
-                        
-                        <p>vagy másolja be a következő linket a böngészőjébe:</p>
-                        <p><a href="{reset_url}">{reset_url}</a></p>
-                        
-                        <p><strong>Fontos információk:</strong></p>
-                        <ul>
-                            <li>Ez a link 1 órán belül lejár</li>
-                            <li>A link biztonságosan kódolt (csak a szerver tudja dekódolni)</li>
-                            <li>Ha nem Ön kérte a jelszó visszaállítást, hagyja figyelmen kívül ezt az emailt</li>
-                        </ul>
-                    </div>
-                    <div class="footer">
-                        <p>Ez egy automatikus email, kérjük ne válaszoljon rá.</p>
-                        <p>© 2025 FTV. Minden jog fenntartva.</p>
-                    </div>
-                </div>
-            </body>
-        </html>
-        """
+        # Import email templates
+        from backend.email_templates import (
+            get_base_email_template, 
+            get_password_reset_email_content
+        )
+        
+        # Get user name
+        user_name = user.get_full_name() if user.get_full_name() else user.username
+        
+        # Generate email content using the new template system
+        content = get_password_reset_email_content(user_name, reset_url)
+        
+        # Create complete HTML email
+        html_message = get_base_email_template(
+            title="Jelszó visszaállítása",
+            content=content,
+            button_text="Jelszó visszaállítása",
+            button_url=reset_url
+        )
         
         # Create plain text version
         plain_message = f"""
-Kedves {user.first_name or user.username}!
+Kedves {user_name}!
 
 Jelszó visszaállítási kérést kaptunk az Ön fiókjához a FTV rendszerben.
 
@@ -568,14 +488,14 @@ def send_announcement_notification_email(announcement, recipients_list: list) ->
         frontend_url = getattr(settings, 'FRONTEND_URL', 'https://ftv.szlg.info')
         print(f"[DEBUG] Frontend URL: {frontend_url}")
         
-        # Create recipient list for BCC (bulk email)
+        # Filter recipients with valid email addresses
         recipient_emails = []
         for user in recipients_list:
             print(f"[DEBUG] Checking user: {user.username} (ID: {user.id})")
             print(f"[DEBUG] - Email: {user.email}")
             print(f"[DEBUG] - Is active: {user.is_active}")
             if user.email and user.is_active:
-                recipient_emails.append(user.email)
+                recipient_emails.append(user.email.strip())
                 print(f"[DEBUG] - Added to recipient list")
             else:
                 print(f"[DEBUG] - Skipped (no email or inactive)")
@@ -594,64 +514,23 @@ def send_announcement_notification_email(announcement, recipients_list: list) ->
         author_name = announcement.author.get_full_name() if announcement.author else "FTV Rendszer"
         print(f"[DEBUG] Author: {author_name}")
         
-        # Create HTML email content
-        html_message = f"""
-        <html>
-            <head>
-                <style>
-                    body {{ font-family: Roboto, sans-serif; line-height: 1.6; color: #333; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background-color: #2c3e50; color: white; padding: 20px; text-align: center; }}
-                    .content {{ padding: 20px; background-color: #f9f9f9; }}
-                    .announcement-body {{ 
-                        background-color: white; 
-                        padding: 20px; 
-                        margin: 20px 0; 
-                        border-left: 4px solid #3498db; 
-                        border-radius: 5px;
-                    }}
-                    .footer {{ 
-                        background-color: #34495e; 
-                        color: white; 
-                        padding: 20px; 
-                        text-align: center; 
-                        font-size: 12px; 
-                    }}
-                    .meta-info {{ 
-                        color: #666; 
-                        font-size: 14px; 
-                        margin-bottom: 15px; 
-                    }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>📢 Új közlemény érkezett</h1>
-                    </div>
-                    <div class="content">
-                        <h2>{announcement.title}</h2>
-                        
-                        <div class="meta-info">
-                            <strong>Feladó:</strong> {author_name}<br>
-                            <strong>Dátum:</strong> {announcement.created_at.strftime('%Y. %m. %d. %H:%M')}
-                        </div>
-                        
-                        <div class="announcement-body">
-                            {announcement.body.replace(chr(10), '<br>')}
-                        </div>
-                        
-                        <p>A teljes közlemény megtekintéséhez látogassa meg a FTV rendszert:</p>
-                        <p><a href="{frontend_url}" target="_blank">{frontend_url}</a></p>
-                    </div>
-                    <div class="footer">
-                        <p>Ez egy automatikus értesítés az FTV rendszerből.</p>
-                        <p>© 2025 FTV. Minden jog fenntartva.</p>
-                    </div>
-                </div>
-            </body>
-        </html>
-        """
+        # Import email templates
+        from backend.email_templates import (
+            get_base_email_template, 
+            get_announcement_email_content,
+            send_html_emails_to_multiple_recipients
+        )
+        
+        # Generate email content using the new template system
+        content = get_announcement_email_content(announcement, author_name)
+        
+        # Create complete HTML email
+        html_message = get_base_email_template(
+            title="Új közlemény",
+            content=content,
+            button_text="FTV Rendszer megnyitása",
+            button_url=frontend_url
+        )
         
         # Create plain text version
         plain_message = f"""
@@ -671,35 +550,30 @@ Ez egy automatikus értesítés az FTV rendszerből.
 © 2025 FTV. Minden jog fenntartva.
         """
         
-        print(f"[DEBUG] About to send announcement emails to {len(recipient_emails)} recipients using mass mail")
+        print(f"[DEBUG] About to send announcement emails to {len(recipient_emails)} recipients using HTML template")
         print(f"[DEBUG] Recipients: {recipient_emails}")
         print(f"[DEBUG] From email: {settings.DEFAULT_FROM_EMAIL}")
         
-        # Use send_mass_mail for efficient bulk email sending
+        # Send HTML emails to multiple recipients
         try:
-            print(f"[DEBUG] Preparing mass mail messages...")
-            from django.core.mail import send_mass_mail
+            successful_count, failed_emails = send_html_emails_to_multiple_recipients(
+                subject=subject,
+                html_content=html_message,
+                plain_content=plain_message,
+                recipient_emails=recipient_emails,
+                from_email=settings.DEFAULT_FROM_EMAIL
+            )
             
-            # Prepare all messages for mass sending
-            messages = []
-            for email_address in recipient_emails:
-                message_tuple = (
-                    subject,           # subject
-                    plain_message,     # message (plain text)
-                    settings.DEFAULT_FROM_EMAIL,  # from_email
-                    [email_address],   # recipient_list
-                )
-                messages.append(message_tuple)
+            print(f"[DEBUG] HTML email sending completed")
+            print(f"[SUCCESS] Announcement emails sent to {successful_count}/{len(recipient_emails)} recipients")
             
-            print(f"[DEBUG] Sending {len(messages)} messages via send_mass_mail...")
-            emails_sent = send_mass_mail(messages, fail_silently=False)
+            if failed_emails:
+                print(f"[WARNING] Failed to send emails to: {failed_emails}")
             
-            print(f"[DEBUG] send_mass_mail completed successfully")
-            print(f"[SUCCESS] Announcement emails sent to {emails_sent} recipients via mass mail")
-            success = True if emails_sent > 0 else False
+            success = successful_count > 0
                 
         except Exception as send_error:
-            print(f"[ERROR] Mass mail sending failed: {str(send_error)}")
+            print(f"[ERROR] HTML email sending failed: {str(send_error)}")
             import traceback
             print(f"[ERROR] Full traceback: {traceback.format_exc()}")
             success = False
@@ -894,28 +768,47 @@ Ez egy automatikus értesítés az FTV rendszerből.
                 """
                 
                 try:
-                    print(f"[DEBUG] About to send assignment addition emails to {len(added_emails)} recipients using mass mail")
+                    print(f"[DEBUG] About to send assignment addition emails to {len(added_emails)} recipients using HTML template")
                     print(f"[DEBUG] Recipients: {added_emails}")
                     print(f"[DEBUG] From email: {settings.DEFAULT_FROM_EMAIL}")
                     
-                    from django.core.mail import send_mass_mail
+                    # Import email templates
+                    from backend.email_templates import (
+                        get_base_email_template, 
+                        get_assignment_addition_email_content,
+                        send_html_emails_to_multiple_recipients
+                    )
                     
-                    # Prepare all messages for mass sending
-                    messages = []
-                    for email_address in added_emails:
-                        message_tuple = (
-                            subject,           # subject
-                            plain_message,     # message (plain text)
-                            settings.DEFAULT_FROM_EMAIL,  # from_email
-                            [email_address],   # recipient_list
-                        )
-                        messages.append(message_tuple)
+                    # Get contact person name
+                    contact_person_name = forgatas.contactPerson.name if forgatas.contactPerson else "Rendszer adminisztrátor"
                     
-                    print(f"[DEBUG] Sending {len(messages)} assignment addition messages via send_mass_mail...")
-                    emails_sent = send_mass_mail(messages, fail_silently=False)
+                    # Generate email content using the new template system
+                    content = get_assignment_addition_email_content(forgatas, contact_person_name)
                     
-                    print(f"[DEBUG] Assignment addition mass mail completed successfully")
-                    print(f"[SUCCESS] Assignment addition emails sent to {emails_sent} users via mass mail")
+                    # Create complete HTML email
+                    html_message = get_base_email_template(
+                        title="Új forgatási beosztás",
+                        content=content,
+                        button_text="FTV Rendszer megnyitása",
+                        button_url=frontend_url
+                    )
+                    
+                    # Send HTML emails to multiple recipients
+                    successful_count, failed_emails = send_html_emails_to_multiple_recipients(
+                        subject=subject,
+                        html_content=html_message,
+                        plain_content=plain_message,
+                        recipient_emails=added_emails,
+                        from_email=settings.DEFAULT_FROM_EMAIL
+                    )
+                    
+                    print(f"[DEBUG] Assignment addition HTML email sending completed")
+                    print(f"[SUCCESS] Assignment addition emails sent to {successful_count}/{len(added_emails)} recipients")
+                    
+                    if failed_emails:
+                        print(f"[WARNING] Failed to send emails to: {failed_emails}")
+                        success = False
+                        
                 except Exception as e:
                     print(f"[ERROR] Failed to send assignment addition email: {str(e)}")
                     import traceback
@@ -1039,33 +932,47 @@ Ez egy automatikus értesítés az FTV rendszerből.
                 """
 
                 try:
-                    print(f"[DEBUG] About to send assignment removal emails to {len(removed_emails)} recipients using mass mail")
+                    print(f"[DEBUG] About to send assignment removal emails to {len(removed_emails)} recipients using HTML template")
                     print(f"[DEBUG] Recipients: {removed_emails}")
                     print(f"[DEBUG] From email: {settings.DEFAULT_FROM_EMAIL}")
                     
-                    from django.core.mail import send_mass_mail
+                    # Import email templates
+                    from backend.email_templates import (
+                        get_base_email_template, 
+                        get_assignment_removal_email_content,
+                        send_html_emails_to_multiple_recipients
+                    )
                     
-                    # Prepare all messages for mass sending
-                    messages = []
-                    for email_address in removed_emails:
-                        message_tuple = (
-                            subject,           # subject
-                            plain_message,     # message (plain text)
-                            settings.DEFAULT_FROM_EMAIL,  # from_email
-                            [email_address],   # recipient_list
-                        )
-                        messages.append(message_tuple)
+                    # Get contact person name
+                    contact_person_name = forgatas.contactPerson.name if forgatas.contactPerson else "Rendszer adminisztrátor"
                     
-                    print(f"[DEBUG] Sending {len(messages)} assignment removal messages via send_mass_mail...")
-                    emails_sent = send_mass_mail(messages, fail_silently=False)
+                    # Generate email content using the new template system
+                    content = get_assignment_removal_email_content(forgatas, contact_person_name)
                     
-                    print(f"[DEBUG] Assignment removal mass mail completed successfully")
-                    print(f"[SUCCESS] Assignment removal emails sent to {emails_sent} users via mass mail")
-                    email.content_subtype = "html"
-                    email.send(fail_silently=False)
+                    # Create complete HTML email
+                    html_message = get_base_email_template(
+                        title="Forgatási beosztás módosítás",
+                        content=content,
+                        button_text="FTV Rendszer megnyitása",
+                        button_url=frontend_url
+                    )
                     
-                    print(f"[DEBUG] EmailMessage completed successfully for removal email")
-                    print(f"[SUCCESS] Assignment removal email sent to {len(removed_emails)} users")
+                    # Send HTML emails to multiple recipients
+                    successful_count, failed_emails = send_html_emails_to_multiple_recipients(
+                        subject=subject,
+                        html_content=html_message,
+                        plain_content=plain_message,
+                        recipient_emails=removed_emails,
+                        from_email=settings.DEFAULT_FROM_EMAIL
+                    )
+                    
+                    print(f"[DEBUG] Assignment removal HTML email sending completed")
+                    print(f"[SUCCESS] Assignment removal emails sent to {successful_count}/{len(removed_emails)} recipients")
+                    
+                    if failed_emails:
+                        print(f"[WARNING] Failed to send emails to: {failed_emails}")
+                        success = False
+                        
                 except Exception as e:
                     print(f"[ERROR] Failed to send assignment removal email: {str(e)}")
                     import traceback

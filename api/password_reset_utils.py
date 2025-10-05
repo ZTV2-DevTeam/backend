@@ -78,73 +78,31 @@ def send_password_reset_email(user: User, reset_token: str, frontend_url: str = 
         frontend_url: Base URL of the frontend application
     """
     reset_url = f"{frontend_url}/elfelejtett_jelszo/{reset_token}"
-
     subject = "FTV - Jelszó visszaállítása"
 
-    # Create HTML email content
-    html_message = f"""
-    <html>
-        <head>
-            <style>
-                body {{ font-family: Roboto, sans-serif; line-height: 1.6; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background-color: #f4f4f4; padding: 20px; text-align: center; display: flex; justify-content: around; align-items: center; }}
-                .header svg {{ max-width: 50px; }}
-                .content {{ padding: 20px; }}
-                .button {{ 
-                    display: inline-block; 
-                    padding: 10px 20px; 
-                    background-color: #007bff; 
-                    color: white !important; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
-                    margin: 20px 0;
-                }}
-                .footer {{ 
-                    background-color: #f4f4f4; 
-                    padding: 20px; 
-                    text-align: center; 
-                    font-size: 12px; 
-                    color: #666;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>FTV - Jelszó Visszaállítása</h1>
-                </div>
-                <div class="content">
-                    <p>Kedves {user.first_name or user.username}!</p>
-                    
-                    <p>Jelszó visszaállítási kérelmet kaptunk az Ön fiókjához az FTV rendszerben.</p>
-                    
-                    <p>Amennyiben Ön kérte a jelszó visszaállítást, kattintson az alábbi gombra:</p>
-                    
-                    <a href="{reset_url}" class="button">Jelszó visszaállítása</a>
-                    
-                    <p>vagy másolja be a következő linket a böngészőjébe:</p>
-                    <p><a href="{reset_url}">{reset_url}</a></p>
-                    
-                    <p><strong>Fontos információk:</strong></p>
-                    <ul>
-                        <li>Ez a link 1 órán belül lejár</li>
-                        <li>A link csak egyszer használható</li>
-                        <li>Ha nem Ön kérte a jelszó visszaállítást, hagyja figyelmen kívül ezt az emailt</li>
-                    </ul>
-                </div>
-                <div class="footer">
-                    <p>Ez egy automatikus email, kérjük ne válaszoljon rá.</p>
-                    <p>© 2025 FTV. Minden jog fenntartva.</p>
-                </div>
-            </div>
-        </body>
-    </html>
-    """
+    # Import email templates
+    from backend.email_templates import (
+        get_base_email_template, 
+        get_password_reset_email_content
+    )
+    
+    # Get user name
+    user_name = user.get_full_name() if user.get_full_name() else user.username
+    
+    # Generate email content using the new template system
+    content = get_password_reset_email_content(user_name, reset_url)
+    
+    # Create complete HTML email
+    html_message = get_base_email_template(
+        title="Jelszó visszaállítása",
+        content=content,
+        button_text="Jelszó visszaállítása",
+        button_url=reset_url
+    )
     
     # Create plain text version
     plain_message = f"""
-Kedves {user.first_name or user.username}!
+Kedves {user_name}!
 
 Jelszó visszaállítási kérést kaptunk az Ön fiókjához a FTV rendszerben.
 
@@ -170,6 +128,10 @@ Ez egy automatikus email, kérjük ne válaszoljon rá.
             recipient_list=[user.email],
             fail_silently=False,
         )
+        return True
+    except Exception as e:
+        print(f"Failed to send password reset email to {user.email}: {str(e)}")
+        return False
         return True
     except Exception as e:
         print(f"Failed to send password reset email to {user.email}: {str(e)}")

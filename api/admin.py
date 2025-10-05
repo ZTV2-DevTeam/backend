@@ -61,122 +61,29 @@ def send_login_info_email(user, password):
     """
     subject = "FTV - Új bejelentkezési adatok"
     
-    # Create HTML email content
-    html_message = f"""
-    <html>
-        <head>
-            <style>
-                body {{ font-family: Roboto, Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; }}
-                .header {{ 
-                    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); 
-                    color: white; 
-                    padding: 30px 20px; 
-                    text-align: center; 
-                    border-radius: 10px 10px 0 0;
-                }}
-                .header h1 {{ margin: 0; font-size: 28px; }}
-                .content {{ 
-                    background: white; 
-                    padding: 30px; 
-                    border-radius: 0 0 10px 10px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }}
-                .login-box {{ 
-                    background: #f8f9fa; 
-                    padding: 20px; 
-                    border-radius: 8px; 
-                    border-left: 4px solid #007bff;
-                    margin: 20px 0;
-                }}
-                .login-item {{ margin: 10px 0; }}
-                .login-item strong {{ color: #007bff; }}
-                .password-box {{ 
-                    background: #e9ecef; 
-                    padding: 15px; 
-                    border-radius: 5px; 
-                    font-family: 'Courier New', monospace; 
-                    font-size: 18px; 
-                    font-weight: bold; 
-                    text-align: center; 
-                    letter-spacing: 2px;
-                    border: 2px dashed #007bff;
-                }}
-                .warning-box {{ 
-                    background: #fff3cd; 
-                    border: 1px solid #ffeaa7; 
-                    color: #856404; 
-                    padding: 15px; 
-                    border-radius: 5px; 
-                    margin: 20px 0;
-                }}
-                .footer {{ 
-                    text-align: center; 
-                    padding: 20px; 
-                    font-size: 12px; 
-                    color: #666;
-                }}
-                .login-url {{ 
-                    display: inline-block; 
-                    background: #007bff; 
-                    color: white !important; 
-                    text-decoration: none; 
-                    padding: 12px 24px; 
-                    border-radius: 5px; 
-                    margin: 15px 0;
-                    font-weight: bold;
-                }}
-                .login-url:hover {{ background: #0056b3; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>🎬 FTV Bejelentkezési Adatok</h1>
-                </div>
-                <div class="content">
-                    <p><strong>Kedves {user.first_name or user.username}!</strong></p>
-                    
-                    <p>Új jelszót generáltunk az Ön FTV rendszerbeli fiókjához. Az alábbi adatokkal tud bejelentkezni:</p>
-                    
-                    <div class="login-box">
-                        <div class="login-item">
-                            <strong>Felhasználónév:</strong> {user.username}
-                        </div>
-                        <div class="login-item">
-                            <strong>Új jelszó:</strong>
-                        </div>
-                        <div class="password-box">
-                            {password}
-                        </div>
-                    </div>
-                    
-                    <div class="warning-box">
-                        <strong>⚠️ Fontos biztonsági tudnivalók:</strong>
-                        <ul>
-                            <li>Ne ossza meg senkivel a bejelentkezési adatait</li>
-                            <li>Tartsa biztonságban ezt az emailt</li>
-                        </ul>
-                    </div>
-                    
-                    <p style="text-align: center;">
-                        <a href="https://ftv.szlg.info" class="login-url">🔐 Bejelentkezés az FTV rendszerbe</a>
-                    </p>
-                    
-                    <p>Ha kérdése van, vagy problémája adódna, kérjük vegye fel a kapcsolatot a rendszergazdával.</p>
-                </div>
-                <div class="footer">
-                    <p>Ez egy automatikus email, kérjük ne válaszoljon rá.</p>
-                    <p>© 2025 FTV. Minden jog fenntartva.</p>
-                </div>
-            </div>
-        </body>
-    </html>
-    """
+    # Import email templates
+    from backend.email_templates import (
+        get_base_email_template, 
+        get_login_info_email_content
+    )
+    
+    # Get user name
+    user_name = user.get_full_name() if user.get_full_name() else user.username
+    
+    # Generate email content using the new template system
+    content = get_login_info_email_content(user_name, user.username, password)
+    
+    # Create complete HTML email
+    html_message = get_base_email_template(
+        title="Új bejelentkezési adatok",
+        content=content,
+        button_text="FTV Rendszer megnyitása",
+        button_url="https://ftv.szlg.info"
+    )
     
     # Create plain text version
     plain_message = f"""
-Kedves {user.first_name or user.username}!
+Kedves {user_name}!
 
 Új jelszót generáltunk az Ön FTV rendszerbeli fiókjához.
 
