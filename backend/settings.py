@@ -146,7 +146,7 @@ USE_TZ = False # False, mert csak egy időzónát használunk
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-if DEBUG:
+if local_settings.DJANGO_DEBUG == True:
     STATIC_URL = '/static/'
 else:
     STATIC_URL = 'https://node.szlg.info/__szlg/static/'
