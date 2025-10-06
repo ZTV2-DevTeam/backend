@@ -1106,7 +1106,7 @@ class RadioStabAdmin(ImportExportModelAdmin):
     stab_display.short_description = 'Stáb neve'
     
     def team_code_display(self, obj):
-        colors = {'A1': '#ff6b35', 'A2': '#f7931e', 'B3': '#0066cc', 'B4': '#004e89'}
+        colors = {'A1': '#0066cc', 'A2': '#004e89', 'B3': '#28a745', 'B4': '#1e7e34'}
         color = colors.get(obj.team_code, '#6c757d')
         return format_html('<span style="background-color: {}; color: white; padding: 2px 6px; border-radius: 3px; font-weight: bold;">{}</span>', color, obj.team_code)
     team_code_display.short_description = 'Csapat kód'
