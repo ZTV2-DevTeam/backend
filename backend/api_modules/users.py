@@ -157,6 +157,7 @@ class FuggoForgatasSchema(Schema):
     location: Optional[str] = None
     time: str  # Combined timeFrom - timeTo format
     szerkeszto: Optional[str] = None
+    notes: Optional[str] = None
 
 class FuggoForgatosokResponseSchema(Schema):
     """Response schema for fuggo forgatasok endpoint."""
@@ -256,7 +257,8 @@ def create_fuggo_forgatas_response(forgatas: Forgatas) -> dict:
         "date": forgatas.date.isoformat(),
         "location": forgatas.location.name if forgatas.location else None,
         "time": f"{forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}",
-        "szerkeszto": forgatas.szerkeszto.get_full_name() if forgatas.szerkeszto else None
+        "szerkeszto": forgatas.szerkeszto.get_full_name() if forgatas.szerkeszto else None,
+        "notes": forgatas.notes
     }
 
 def filter_radio_students(profiles):

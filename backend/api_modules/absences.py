@@ -114,6 +114,7 @@ class ForgatSchema(Schema):
     time_from: str
     time_to: str
     type: str
+    notes: Optional[str] = None
 
 class OsztalySchema(Schema):
     """Basic osztaly information schema."""
@@ -183,7 +184,8 @@ def create_forgatas_basic_response(forgatas: Forgatas) -> dict:
         "date": forgatas.date.isoformat(),
         "time_from": forgatas.timeFrom.isoformat(),
         "time_to": forgatas.timeTo.isoformat(),
-        "type": forgatas.forgTipus
+        "type": forgatas.forgTipus,
+        "notes": forgatas.notes
     }
 
 def create_osztaly_response(osztaly: Osztaly) -> dict:
