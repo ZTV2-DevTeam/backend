@@ -353,11 +353,7 @@ def create_forgatas_basic_response(forgatas: Forgatas) -> dict:
         # Szerkesztő
         try:
             if forgatas.szerkeszto:
-                response["szerkeszto"] = {
-                    "id": forgatas.szerkeszto.id,
-                    "username": forgatas.szerkeszto.username,
-                    "full_name": forgatas.szerkeszto.get_full_name()
-                }
+                response["szerkeszto"] = create_user_basic_response(forgatas.szerkeszto)
                 print(f"✅ [DEBUG] Added szerkeszto: '{response['szerkeszto']}'")
             else:
                 response["szerkeszto"] = None
