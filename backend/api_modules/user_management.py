@@ -238,6 +238,7 @@ class UserDetailSchema(Schema):
     is_active: bool
     admin_type: str
     special_role: str
+    gyv: bool
     telefonszam: Optional[str] = None
     osztaly: Optional[dict] = None
     stab: Optional[dict] = None
@@ -374,6 +375,7 @@ def create_user_detail_response(user: User, profile: Profile = None) -> dict:
         "is_active": user.is_active,
         "admin_type": profile.admin_type if profile else 'none',
         "special_role": profile.special_role if profile else 'none',
+        "gyv": profile.is_production_leader if profile else False,
         "telefonszam": profile.telefonszam if profile else None,
         "osztaly": {
             "id": profile.osztaly.id,
@@ -885,7 +887,7 @@ def register_user_management_endpoints(api):
             from api.models import Osztaly
             
             # Check admin permissions
-            has_permission, error_message = check_admin_permissions(request.auth)
+            has_permission, error_message = check_system_admin_permissions(request.auth)
             if not has_permission:
                 return 400, {"message": error_message}
             
@@ -915,7 +917,7 @@ def register_user_management_endpoints(api):
             from api.models import Osztaly
             
             # Check admin permissions
-            has_permission, error_message = check_admin_permissions(request.auth)
+            has_permission, error_message = check_system_admin_permissions(request.auth)
             if not has_permission:
                 return 400, {"message": error_message}
             
@@ -953,7 +955,7 @@ def register_user_management_endpoints(api):
             from api.models import Stab
             
             # Check admin permissions
-            has_permission, error_message = check_admin_permissions(request.auth)
+            has_permission, error_message = check_system_admin_permissions(request.auth)
             if not has_permission:
                 return 400, {"message": error_message}
             
@@ -981,7 +983,7 @@ def register_user_management_endpoints(api):
             from api.models import Stab
             
             # Check admin permissions
-            has_permission, error_message = check_admin_permissions(request.auth)
+            has_permission, error_message = check_system_admin_permissions(request.auth)
             if not has_permission:
                 return 400, {"message": error_message}
             
