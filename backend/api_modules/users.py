@@ -99,7 +99,7 @@ All datetime parameters should use ISO 8601 format:
 
 from ninja import Schema
 from django.contrib.auth.models import User
-from api.models import Profile
+from api.models import Profile, Forgatas, Beosztas
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime, timedelta
 from typing import Optional
@@ -148,6 +148,19 @@ class UpdatePhoneNumberResponse(Schema):
     """Response schema for phone number update."""
     message: str
     telefonszam: Optional[str] = None
+
+class FuggoForgatasSchema(Schema):
+    """Schema for fuggo forgatas details."""
+    id: int
+    name: str
+    location: Optional[str] = None
+    time: str  # Combined timeFrom - timeTo format
+    szerkeszto: Optional[str] = None
+
+class FuggoForgatosokResponseSchema(Schema):
+    """Response schema for fuggo forgatasok endpoint."""
+    no_szerepkor_relations: list[FuggoForgatasSchema]
+    has_szerepkor_relations: list[FuggoForgatasSchema]
 
 # ============================================================================
 # Utility Functions
@@ -226,6 +239,24 @@ def check_admin_permissions(user: User) -> tuple[bool, str]:
     except Profile.DoesNotExist:
         return False, "Felhasználói profil nem található"
 
+def create_fuggo_forgatas_response(forgatas: Forgatas) -> dict:
+    """
+    Create standardized fuggo forgatas response dictionary.
+    
+    Args:
+        forgatas: Forgatas model instance
+        
+    Returns:
+        Dictionary with forgatas information
+    """
+    return {
+        "id": forgatas.id,
+        "name": forgatas.name,
+        "location": forgatas.location.name if forgatas.location else None,
+        "time": f"{forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}",
+        "szerkeszto": forgatas.szerkeszto.get_full_name() if forgatas.szerkeszto else None
+    }
+
 def filter_radio_students(profiles):
     """
     Filter profiles to get only second year radio students (9F).
@@ -283,6 +314,49 @@ def register_user_endpoints(api):
             return 200, response
         except Exception as e:
             return 500, {"message": f"Error fetching users: {str(e)}"}
+
+    @api.get("/users/fuggo-forgatasok", auth=JWTAuth(), response={200: FuggoForgatosokResponseSchema, 500: ErrorSchema})
+    def get_fuggo_forgatasok(request):
+        """
+        Get fuggo forgatasok (pending filming sessions).
+        
+        Returns two categories of draft forgatások:
+        1. Those with beosztás but no szerepkör relations
+        2. Those with minimum 1 szerepkör relation
+        
+        Requires authentication.
+        
+        Returns:
+            200: Object with two lists of fuggo forgatasok
+            500: Server error
+        """
+        try:
+            # Get all draft beosztások that have a forgatas
+            draft_beosztasok = Beosztas.objects.filter(
+                kesz=False,
+                forgatas__isnull=False
+            ).select_related('forgatas', 'forgatas__location', 'forgatas__szerkeszto').prefetch_related('szerepkor_relaciok')
+            
+            no_szerepkor_relations = []
+            has_szerepkor_relations = []
+            
+            for beosztas in draft_beosztasok:
+                forgatas_response = create_fuggo_forgatas_response(beosztas.forgatas)
+                
+                # Check if there are any szerepkör relations
+                szerepkor_count = beosztas.szerepkor_relaciok.count()
+                
+                if szerepkor_count == 0:
+                    no_szerepkor_relations.append(forgatas_response)
+                else:
+                    has_szerepkor_relations.append(forgatas_response)
+            
+            return 200, {
+                "no_szerepkor_relations": no_szerepkor_relations,
+                "has_szerepkor_relations": has_szerepkor_relations
+            }
+        except Exception as e:
+            return 500, {"message": f"Error fetching fuggo forgatasok: {str(e)}"}
 
     @api.get("/users/{user_id}", auth=JWTAuth(), response={200: UserProfileSchema, 404: ErrorSchema, 500: ErrorSchema})
     def get_user_details(request, user_id: int):
