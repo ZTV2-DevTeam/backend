@@ -1675,6 +1675,60 @@ def assignment_users_changed(sender, instance, action, pk_set, **kwargs):
             import traceback
             print(f"[ERROR] Full traceback: {traceback.format_exc()}")
 
+
+@receiver(post_save, sender=Forgatas)
+def send_forgatas_creation_email(sender, instance, created, **kwargs):
+    """
+    Send email notification to all Médiatanár users when a new Forgatás is created.
+    Only triggers on creation, not on updates.
+    """
+    if created:
+        print(f"[DEBUG] ========== FORGATAS CREATED SIGNAL ==========")
+        print(f"[DEBUG] New forgatás created: {instance.name}")
+        
+        try:
+            # Import email function
+            from backend.api_modules.authentication import send_forgatas_creation_notification_email
+            
+            # Get the user who created the forgatás (if available from context)
+            # If szerkeszto is set, use that, otherwise try to get from current user context
+            creator_user = instance.szerkeszto
+            
+            if not creator_user:
+                # Try to get current user from thread local or request context
+                # For now, we'll use a fallback approach
+                from django.contrib.auth.models import User
+                try:
+                    # This is a fallback - in a real scenario, you might want to pass
+                    # the creator through the save method or use threading.local
+                    creator_user = User.objects.filter(is_superuser=True).first()
+                    if not creator_user:
+                        creator_user = User.objects.filter(is_staff=True).first()
+                except:
+                    pass
+            
+            if not creator_user:
+                print(f"[WARNING] Could not determine creator for forgatás: {instance.name}")
+                # Create a placeholder user for email purposes
+                from django.contrib.auth.models import User
+                creator_user = User(username='system', first_name='Rendszer', last_name='Felhasználó')
+            
+            print(f"[DEBUG] Creator identified as: {creator_user.get_full_name() or creator_user.username}")
+            
+            # Send email notification to all Médiatanár users
+            email_sent = send_forgatas_creation_notification_email(instance, creator_user)
+            
+            if email_sent:
+                print(f"[SUCCESS] Forgatás creation email sent successfully: {instance.name}")
+            else:
+                print(f"[WARNING] Failed to send forgatás creation email: {instance.name}")
+                
+        except Exception as e:
+            print(f"[ERROR] Forgatás creation email signal failed: {str(e)}")
+            import traceback
+            print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+
+
 class SystemMessage(models.Model):
     # Severity choices
     SEVERITY_INFO = 'info'

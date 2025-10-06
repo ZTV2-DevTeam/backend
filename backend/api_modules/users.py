@@ -153,6 +153,7 @@ class FuggoForgatasSchema(Schema):
     """Schema for fuggo forgatas details."""
     id: int
     name: str
+    date: str  # Date of the forgatas (ISO format)
     location: Optional[str] = None
     time: str  # Combined timeFrom - timeTo format
     szerkeszto: Optional[str] = None
@@ -252,6 +253,7 @@ def create_fuggo_forgatas_response(forgatas: Forgatas) -> dict:
     return {
         "id": forgatas.id,
         "name": forgatas.name,
+        "date": forgatas.date.isoformat(),
         "location": forgatas.location.name if forgatas.location else None,
         "time": f"{forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}",
         "szerkeszto": forgatas.szerkeszto.get_full_name() if forgatas.szerkeszto else None

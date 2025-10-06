@@ -989,6 +989,124 @@ Ez egy automatikus értesítés az FTV rendszerből.
         print(f"[ERROR] Full traceback: {traceback.format_exc()}")
         return False
 
+
+def send_forgatas_creation_notification_email(forgatas, creator_user) -> bool:
+    """
+    Send notification email to all Médiatanár users when a new Forgatás is created.
+    
+    Args:
+        forgatas: Forgatas model instance that was created
+        creator_user: User who created the Forgatás
+        
+    Returns:
+        Boolean indicating if email was sent successfully
+    """
+    print(f"[DEBUG] ========== FORGATAS CREATION EMAIL DEBUG START ==========")
+    print(f"[DEBUG] Function: send_forgatas_creation_notification_email")
+    print(f"[DEBUG] Forgatas: {forgatas.name}")
+    print(f"[DEBUG] Creator: {creator_user.get_full_name()}")
+    
+    try:
+        # Check if emails are enabled in config
+        from api.models import Config
+        
+        try:
+            config = Config.objects.first()
+            if not config or not config.allowEmails:
+                print(f"[DEBUG] Emails are disabled in config, skipping notification")
+                return False
+        except Exception as e:
+            print(f"[WARNING] Could not check email config, proceeding: {str(e)}")
+        
+        # Get all Médiatanár users (admin_type = 'teacher')
+        from api.models import Profile
+        from django.contrib.auth.models import User
+        
+        medias_profiles = Profile.objects.filter(
+            admin_type='teacher',
+            user__is_active=True,
+            user__email__isnull=False
+        ).exclude(user__email='').select_related('user')
+        
+        recipients = [profile.user for profile in medias_profiles]
+        
+        print(f"[DEBUG] Found {len(recipients)} Médiatanár recipients")
+        
+        if not recipients:
+            print(f"[DEBUG] No Médiatanár users found with valid email addresses")
+            return True  # Not an error, just no recipients
+        
+        # Log recipient emails for debugging
+        recipient_emails = [user.email for user in recipients]
+        print(f"[DEBUG] Recipient emails: {recipient_emails}")
+        
+        # Generate email content
+        from backend.email_templates import (
+            get_base_email_template,
+            get_forgatas_creation_email_content,
+            send_html_emails_to_multiple_recipients
+        )
+        
+        creator_name = creator_user.get_full_name() or creator_user.username
+        email_content = get_forgatas_creation_email_content(forgatas, creator_name)
+        
+        # Create HTML email
+        subject = f"FTV - Új forgatás létrehozva: {forgatas.name}"
+        html_content = get_base_email_template(
+            title="Új forgatás létrehozva",
+            content=email_content,
+            button_text="FTV Rendszer megnyitása",
+            button_url="https://ftv.szlg.info",  # Adjust URL as needed
+            footer_text="Ez egy automatikus értesítés az új forgatás létrehozásáról."
+        )
+        
+        # Plain text fallback
+        plain_content = f"""
+Új forgatás létrehozva az FTV rendszerben
+
+Forgatás: {forgatas.name}
+Dátum: {forgatas.date.strftime('%Y. %m. %d.')}
+Időpont: {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}
+Helyszín: {forgatas.location.name if forgatas.location else 'Nincs megadva'}
+Létrehozta: {creator_name}
+
+További részletekért látogassa meg az FTV rendszert: https://ftv.szlg.info
+
+Ez egy automatikus email, kérjük ne válaszoljon rá.
+        """.strip()
+        
+        print(f"[DEBUG] Email subject: {subject}")
+        print(f"[DEBUG] HTML content length: {len(html_content)} chars")
+        print(f"[DEBUG] Plain content length: {len(plain_content)} chars")
+        
+        # Send emails
+        successful_count, failed_emails = send_html_emails_to_multiple_recipients(
+            subject=subject,
+            html_content=html_content,
+            plain_content=plain_content,
+            recipient_emails=recipient_emails
+        )
+        
+        if successful_count > 0:
+            print(f"[SUCCESS] Forgatás creation notification sent to {successful_count} Médiatanár users")
+            
+            if failed_emails:
+                print(f"[WARNING] Failed to send to {len(failed_emails)} recipients: {failed_emails}")
+            
+            return True
+        else:
+            print(f"[ERROR] Failed to send Forgatás creation notification to any recipients")
+            return False
+            
+    except Exception as e:
+        print(f"[ERROR] Failed to send Forgatás creation notification email: {str(e)}")
+        import traceback
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        return False
+    finally:
+        print(f"[DEBUG] ========== FORGATAS CREATION EMAIL DEBUG END ==========")
+
+
 # ============================================================================
 # Password Validation Utilities
 # ============================================================================

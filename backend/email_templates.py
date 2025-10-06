@@ -618,6 +618,66 @@ def get_login_info_email_content(user_name: str, username: str, password: str) -
     """
 
 
+def get_forgatas_creation_email_content(forgatas, creator_name: str) -> str:
+    """
+    Generate HTML content for new Forgatás creation notification emails.
+    
+    Args:
+        forgatas: Forgatas model instance
+        creator_name: Full name of the person who created the Forgatás
+        
+    Returns:
+        HTML content for Forgatás creation notification email
+    """
+    # Format forgatas type in Hungarian
+    forgatas_type_display = {
+        'kacsa': 'KaCsa',
+        'rendes': 'Rendes',
+        'rendezveny': 'Rendezvény',
+        'egyeb': 'Egyéb'
+    }.get(forgatas.forgTipus, forgatas.forgTipus)
+    
+    return f"""
+    <div class="content-section">
+        <h2>🎬 Új forgatás létrehozva</h2>
+        <p>Kedves Médiatanár!</p>
+        <p>Új forgatást hoztak létre az FTV rendszerben.</p>
+    </div>
+    
+    <div class="highlight-box">
+        <h3>{forgatas.name}</h3>
+        <p><strong>Új forgatás érkezett a rendszerbe!</strong></p>
+    </div>
+    
+    <div class="info-box">
+        <h3>Forgatás részletei</h3>
+        <div class="info-item"><strong>Név:</strong> {forgatas.name}</div>
+        <div class="info-item"><strong>Leírás:</strong> {forgatas.description or 'Nincs megadva'}</div>
+        <div class="info-item"><strong>Típus:</strong> {forgatas_type_display}</div>
+        <div class="info-item"><strong>Dátum:</strong> {forgatas.date.strftime('%Y. %m. %d.')}</div>
+        <div class="info-item"><strong>Időpont:</strong> {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}</div>
+        <div class="info-item"><strong>Helyszín:</strong> {forgatas.location.name if forgatas.location else 'Nincs megadva'}</div>
+        <div class="info-item"><strong>Kapcsolattartó:</strong> {forgatas.contactPerson.name if forgatas.contactPerson else 'Nincs megadva'}</div>
+        <div class="info-item"><strong>Létrehozta:</strong> {creator_name}</div>
+        <div class="info-item"><strong>Tanév:</strong> {forgatas.tanev if forgatas.tanev else 'Nincs megadva'}</div>
+    </div>
+    
+    {f'''<div class="content-section">
+        <h2>További megjegyzések</h2>
+        <p>{forgatas.notes}</p>
+    </div>''' if forgatas.notes else ''}
+    
+    <div class="content-section">
+        <p>Kérjük, tekintse át az új forgatás részleteit és szükség esetén vegye fel a kapcsolatot a létrehozójával vagy a kapcsolattartóval.</p>
+        <p>A teljes információk és a beosztások kezeléséhez látogassa meg a FTV rendszert.</p>
+    </div>
+    
+    <div class="warning-box">
+        <p><strong>Figyelem:</strong> Ez egy automatikus értesítés az új forgatás létrehozásáról. A forgatás részletei változhatnak a véglegesítésig.</p>
+    </div>
+    """
+
+
 def send_html_emails_to_multiple_recipients(
     subject: str,
     html_content: str,
