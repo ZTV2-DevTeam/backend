@@ -367,6 +367,45 @@ def register_equipment_endpoints(api):
                 return 400, {"message": "Ezzel a névvel már létezik eszköz típus"}
             return 400, {"message": f"Error creating equipment type: {str(e)}"}
 
+    @api.delete("/equipment-types/{type_id}", auth=JWTAuth(), response={200: dict, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def delete_equipment_type(request, type_id: int):
+        """
+        Delete equipment type.
+        
+        Requires admin permissions. Permanently removes equipment type from database.
+        Note: This will fail if equipment items are still using this type.
+        
+        Args:
+            type_id: Unique equipment type identifier
+            
+        Returns:
+            200: Equipment type deleted successfully
+            400: Equipment type has associated equipment items
+            404: Equipment type not found
+            401: Authentication or permission failed
+        """
+        try:
+            # Check if user has admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 401, {"message": error_message}
+            
+            equipment_type = EquipmentTipus.objects.get(id=type_id)
+            
+            # Check if there are any equipment items using this type
+            equipment_count = equipment_type.equipments.count()
+            if equipment_count > 0:
+                return 400, {"message": f"Nem törölhető az eszköz típus, mert {equipment_count} eszköz használja"}
+            
+            type_name = equipment_type.name
+            equipment_type.delete()
+            
+            return 200, {"message": f"Eszköz típus '{type_name}' sikeresen törölve"}
+        except EquipmentTipus.DoesNotExist:
+            return 404, {"message": "Eszköz típus nem található"}
+        except Exception as e:
+            return 400, {"message": f"Error deleting equipment type: {str(e)}"}
+
     # ========================================================================
     # Equipment Endpoints
     # ========================================================================
