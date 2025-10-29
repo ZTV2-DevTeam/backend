@@ -49,6 +49,7 @@ Security:
 """
 
 from ninja import Schema, Router
+from ninja.security import HttpBearer
 from django.contrib.auth.models import User
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
@@ -69,7 +70,7 @@ from api.models import (
 # External Token Authentication
 # ============================================================================
 
-class ExternalTokenAuth:
+class ExternalTokenAuth(HttpBearer):
     """
     Custom authentication class for external API access using bearer token.
     Validates against the EXTERNAL_ACCESS_TOKEN from local_settings.
@@ -84,19 +85,19 @@ class ExternalTokenAuth:
             token: The bearer token from Authorization header
             
         Returns:
-            True if token is valid, raises error otherwise
+            True if token is valid, None otherwise (which triggers 401 error)
         """
         # Get the expected token from settings
         expected_token = getattr(local_settings, 'EXTERNAL_ACCESS_TOKEN', None)
         
         if not expected_token:
-            raise Exception("External access token not configured in local_settings")
+            return None  # Token not configured
         
         # Compare tokens (constant-time comparison for security)
         if token == expected_token:
-            return True
+            return token  # Return token to indicate success
         
-        raise Exception("Invalid external access token")
+        return None  # Invalid token
 
 # ============================================================================
 # Request/Response Schemas
