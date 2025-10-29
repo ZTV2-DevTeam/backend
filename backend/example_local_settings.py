@@ -13,3 +13,6 @@ DEFAULT_FROM_EMAIL = ''
 
 # Password Reset Settings
 PASSWORD_RESET_TIMEOUT = 3600  # 1 hour in seconds
+
+# External API Access Token (for Igazoláskezelő integration)
+EXTERNAL_ACCESS_TOKEN = 'your-secure-token-here-change-in-production'

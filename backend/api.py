@@ -275,6 +275,7 @@ from .api_modules.user_import import register_user_import_endpoints
 from .api_modules.students import register_student_endpoints
 from .api_modules.configuration_wizard import register_configuration_wizard_endpoints
 from .api_modules.legacy import register_legacy_endpoints
+from .api_modules.sync import register_sync_endpoints  # External system sync API
 
 # ============================================================================
 # API Configuration
@@ -313,3 +314,4 @@ register_assignment_endpoints(api)      # Filming assignment management (beoszt�
 register_config_endpoints(api)          # System configuration endpoints
 register_configuration_wizard_endpoints(api)  # Configuration wizard endpoints
 register_legacy_endpoints(api)          # Legacy system endpoints
+register_sync_endpoints(api)            # External system sync API (Igazoláskezelő integration)
