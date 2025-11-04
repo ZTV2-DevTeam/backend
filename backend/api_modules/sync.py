@@ -32,6 +32,7 @@ GET /api/sync/osztalyok                      - Get all classes
 GET /api/sync/osztaly/year/{start_year}      - Get all users for a specific class by start year
 
 Absence Endpoints:
+GET /api/sync/hianyzasok/osztaly?startYear={year}&szekcio={section}  - Get absences by class year/section
 GET /api/sync/hianyzas/{id}                  - Get specific absence details
 GET /api/sync/hianyzasok/user/{user_id}      - Get all absences for a user
 
@@ -570,6 +571,58 @@ def register_sync_endpoints(api):
     # ============================================================================
     # Hiányzás (Absence) Endpoints
     # ============================================================================
+    
+    @router.get(
+        "/hianyzasok/osztaly",
+        response={200: List[AbsenceSchema], 404: ErrorSchema, 401: ErrorSchema},
+        summary="Get all absences for a class by year and section",
+        description="Retrieve all absence records for students in a specific class identified by start year and section."
+    )
+    def get_hianyzasok_by_osztaly_params(request, startYear: int, szekcio: str, debug_performance: bool = False):
+        """Get all absences for a class by year and section parameters."""
+        perf = PerformanceMonitor(debug_performance)
+        
+        # Find osztaly by start year and szekcio
+        perf.start_timer("fetch_osztaly")
+        try:
+            osztaly = Osztaly.objects.select_related('tanev').get(startYear=startYear, szekcio=szekcio)
+        except Osztaly.DoesNotExist:
+            return 404, {"detail": f"No class found with start year {startYear} and section {szekcio}"}
+        perf.end_timer("fetch_osztaly")
+        
+        # Get all users in this class
+        perf.start_timer("fetch_users")
+        users_in_class = list(User.objects.filter(profile__osztaly=osztaly))
+        perf.end_timer("fetch_users")
+        perf.record_count("user_count", len(users_in_class))
+        
+        # SAFETY CHECK: If class has no students, return 404 to prevent accidental deletion
+        if len(users_in_class) == 0:
+            return 404, {"detail": f"No students found in class {startYear}{szekcio}. Cannot return absence data for empty class."}
+        
+        # Get all absences for these users
+        perf.start_timer("fetch_absences")
+        absences = list(
+            Absence.objects.filter(
+                diak__in=users_in_class
+            ).select_related(
+                'diak', 'forgatas', 'forgatas__location'
+            ).order_by('-date', '-timeFrom')
+        )
+        perf.end_timer("fetch_absences")
+        perf.record_count("absence_count", len(absences))
+        
+        perf.start_timer("serialize")
+        result = [serialize_absence(a) for a in absences]
+        perf.end_timer("serialize")
+        
+        if debug_performance:
+            return 200, {
+                'data': result,
+                'performance': perf.get_results()
+            }
+        
+        return 200, result
     
     @router.get(
         "/hianyzas/{absence_id}",
