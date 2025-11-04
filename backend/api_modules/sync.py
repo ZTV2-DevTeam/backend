@@ -617,6 +617,11 @@ def register_sync_endpoints(api):
         perf.end_timer("fetch_users")
         perf.record_count("user_count", len(users_in_class))
         
+        # SAFETY CHECK: If class has no students, return 404 to prevent accidental deletion
+        # Empty response should only be returned when class exists but legitimately has no absences
+        if len(users_in_class) == 0:
+            return 404, {"detail": f"No students found in class {osztaly_id}. Cannot return absence data for empty class."}
+        
         # Get all absences for these users
         perf.start_timer("fetch_absences")
         absences = list(
