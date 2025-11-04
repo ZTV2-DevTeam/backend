@@ -21,12 +21,25 @@ The token is configured in local_settings.py as EXTERNAL_ACCESS_TOKEN.
 Available Endpoints:
 ===================
 
-GET /api/sync/osztalyok          - Get all classes
-GET /api/sync/osztaly/{id}       - Get specific class details
+Full Sync:
+GET /api/sync/full                           - Full sync (all classes and all users)
+
+Base Sync:
+GET /api/sync/base                           - Base sync (all classes + only student users)
+
+Class Endpoints:
+GET /api/sync/osztalyok                      - Get all classes
+GET /api/sync/osztaly/{id}                   - Get specific class details
+GET /api/sync/osztaly/year/{start_year}      - Get all users for a specific class by start year
+
+Absence Endpoints:
 GET /api/sync/hianyzasok/osztaly/{osztaly_id}  - Get all absences for a class
-GET /api/sync/hianyzas/{id}      - Get specific absence details
-GET /api/sync/hianyzasok/user/{user_id}        - Get all absences for a user
-GET /api/sync/profile/{email}    - Get user profile by email
+GET /api/sync/hianyzas/{id}                  - Get specific absence details
+GET /api/sync/hianyzasok/user/{user_id}      - Get all absences for a user
+
+Profile Endpoints:
+GET /api/sync/profile/{email}                - Get user profile by email
+GET /api/sync/user/email/{email}             - Get user details by email
 
 Common Key for Integration:
 ===========================
@@ -38,6 +51,11 @@ Response Format:
 
 All endpoints return JSON data with consistent structure.
 Errors return: {"detail": "error message"}
+
+Performance Monitoring:
+======================
+
+Add ?debug-performance=true to any endpoint to get performance metrics in response.
 
 Security:
 =========
@@ -53,8 +71,10 @@ from ninja.security import HttpBearer
 from django.contrib.auth.models import User
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
-from typing import List, Optional
+from django.db.models import Prefetch
+from typing import List, Optional, Dict, Any
 from datetime import datetime, date, time as dt_time
+import time
 import local_settings
 
 from api.models import (
@@ -65,6 +85,48 @@ from api.models import (
     Stab,
     RadioStab
 )
+
+# ============================================================================
+# Performance Monitoring
+# ============================================================================
+
+class PerformanceMonitor:
+    """Track performance metrics for API calls."""
+    
+    def __init__(self, enabled: bool = False):
+        self.enabled = enabled
+        self.metrics = {}
+        self.start_time = time.time() if enabled else None
+    
+    def start_timer(self, key: str):
+        """Start timing a specific operation."""
+        if self.enabled:
+            self.metrics[f"{key}_start"] = time.time()
+    
+    def end_timer(self, key: str):
+        """End timing and record duration."""
+        if self.enabled:
+            start_key = f"{key}_start"
+            if start_key in self.metrics:
+                duration = time.time() - self.metrics[start_key]
+                self.metrics[key] = round(duration * 1000, 2)  # Convert to ms
+                del self.metrics[start_key]
+    
+    def record_count(self, key: str, count: int):
+        """Record a count metric."""
+        if self.enabled:
+            self.metrics[key] = count
+    
+    def get_results(self) -> Dict[str, Any]:
+        """Get all performance metrics."""
+        if not self.enabled:
+            return {}
+        
+        total_duration = time.time() - self.start_time
+        return {
+            "total_duration_ms": round(total_duration * 1000, 2),
+            "metrics": self.metrics
+        }
 
 # ============================================================================
 # External Token Authentication
@@ -188,9 +250,58 @@ class ErrorSchema(Schema):
     """Schema for error responses."""
     detail: str
 
+class BaseSyncSchema(Schema):
+    """Schema for base sync data (classes + student users)."""
+    osztalyok: List[OsztalySchema]
+    students: List[ProfileMinimalSchema]
+    performance: Optional[Dict[str, Any]] = None
+
+class FullSyncSchema(Schema):
+    """Schema for full sync data (classes + all users)."""
+    osztalyok: List[OsztalySchema]
+    users: List[ProfileMinimalSchema]
+    performance: Optional[Dict[str, Any]] = None
+
+class OsztalyUsersSchema(Schema):
+    """Schema for osztaly users data."""
+    osztaly: OsztalySchema
+    students: List[ProfileMinimalSchema]
+    performance: Optional[Dict[str, Any]] = None
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
+def is_student(profile: Profile) -> bool:
+    """Check if a profile belongs to a student (not admin or production leader)."""
+    return (
+        profile.admin_type == 'none' and 
+        profile.special_role not in ['production_leader']
+    )
+
+def get_optimized_profiles_queryset():
+    """Get optimized queryset for profiles with all related data prefetched."""
+    return Profile.objects.select_related(
+        'user',
+        'osztaly',
+        'osztaly__tanev',
+        'stab',
+        'radio_stab'
+    ).all()
+
+def get_student_profiles_queryset():
+    """Get optimized queryset for student profiles only."""
+    return Profile.objects.select_related(
+        'user',
+        'osztaly',
+        'osztaly__tanev',
+        'stab',
+        'radio_stab'
+    ).filter(
+        admin_type='none'
+    ).exclude(
+        special_role='production_leader'
+    )
 
 def serialize_osztaly(osztaly: Osztaly) -> dict:
     """Serialize Osztaly instance to dictionary."""
@@ -299,6 +410,80 @@ def register_sync_endpoints(api):
     router = Router(auth=ExternalTokenAuth())
     
     # ============================================================================
+    # Sync Endpoints
+    # ============================================================================
+    
+    @router.get(
+        "/full",
+        response={200: FullSyncSchema, 401: ErrorSchema},
+        summary="Full sync - all classes and all users",
+        description="Retrieve all classes and all users in the system (including admins and production leaders)."
+    )
+    def full_sync(request, debug_performance: bool = False):
+        """Full sync endpoint - returns all classes and all users."""
+        perf = PerformanceMonitor(debug_performance)
+        
+        # Fetch classes
+        perf.start_timer("fetch_classes")
+        osztalyok = list(Osztaly.objects.select_related('tanev').all())
+        perf.end_timer("fetch_classes")
+        perf.record_count("class_count", len(osztalyok))
+        
+        # Fetch all users
+        perf.start_timer("fetch_users")
+        profiles = list(get_optimized_profiles_queryset())
+        perf.end_timer("fetch_users")
+        perf.record_count("user_count", len(profiles))
+        
+        # Serialize
+        perf.start_timer("serialize")
+        result = {
+            'osztalyok': [serialize_osztaly(o) for o in osztalyok],
+            'users': [serialize_profile_minimal(p) for p in profiles],
+        }
+        perf.end_timer("serialize")
+        
+        if debug_performance:
+            result['performance'] = perf.get_results()
+        
+        return 200, result
+    
+    @router.get(
+        "/base",
+        response={200: BaseSyncSchema, 401: ErrorSchema},
+        summary="Base sync - classes and student users only",
+        description="Retrieve all classes and only student users (no admins or production leaders)."
+    )
+    def base_sync(request, debug_performance: bool = False):
+        """Base sync endpoint - returns classes and only student users."""
+        perf = PerformanceMonitor(debug_performance)
+        
+        # Fetch classes
+        perf.start_timer("fetch_classes")
+        osztalyok = list(Osztaly.objects.select_related('tanev').all())
+        perf.end_timer("fetch_classes")
+        perf.record_count("class_count", len(osztalyok))
+        
+        # Fetch student users only
+        perf.start_timer("fetch_students")
+        students = list(get_student_profiles_queryset())
+        perf.end_timer("fetch_students")
+        perf.record_count("student_count", len(students))
+        
+        # Serialize
+        perf.start_timer("serialize")
+        result = {
+            'osztalyok': [serialize_osztaly(o) for o in osztalyok],
+            'students': [serialize_profile_minimal(p) for p in students],
+        }
+        perf.end_timer("serialize")
+        
+        if debug_performance:
+            result['performance'] = perf.get_results()
+        
+        return 200, result
+    
+    # ============================================================================
     # Osztály (Class) Endpoints
     # ============================================================================
     
@@ -308,10 +493,26 @@ def register_sync_endpoints(api):
         summary="Get all classes",
         description="Retrieve all classes in the system with their current names and school year information."
     )
-    def get_osztalyok(request):
+    def get_osztalyok(request, debug_performance: bool = False):
         """Get all classes."""
-        osztalyok = Osztaly.objects.all().select_related('tanev')
-        return 200, [serialize_osztaly(o) for o in osztalyok]
+        perf = PerformanceMonitor(debug_performance)
+        
+        perf.start_timer("fetch_classes")
+        osztalyok = list(Osztaly.objects.select_related('tanev').all())
+        perf.end_timer("fetch_classes")
+        perf.record_count("class_count", len(osztalyok))
+        
+        perf.start_timer("serialize")
+        result = [serialize_osztaly(o) for o in osztalyok]
+        perf.end_timer("serialize")
+        
+        if debug_performance:
+            return 200, {
+                'data': result,
+                'performance': perf.get_results()
+            }
+        
+        return 200, result
     
     @router.get(
         "/osztaly/{osztaly_id}",
@@ -319,10 +520,77 @@ def register_sync_endpoints(api):
         summary="Get class details",
         description="Retrieve detailed information for a specific class by ID."
     )
-    def get_osztaly(request, osztaly_id: int):
+    def get_osztaly(request, osztaly_id: int, debug_performance: bool = False):
         """Get specific class details."""
+        perf = PerformanceMonitor(debug_performance)
+        
+        perf.start_timer("fetch_class")
         osztaly = get_object_or_404(Osztaly.objects.select_related('tanev'), id=osztaly_id)
-        return 200, serialize_osztaly(osztaly)
+        perf.end_timer("fetch_class")
+        
+        perf.start_timer("serialize")
+        result = serialize_osztaly(osztaly)
+        perf.end_timer("serialize")
+        
+        if debug_performance:
+            result['performance'] = perf.get_results()
+        
+        return 200, result
+    
+    @router.get(
+        "/osztaly/year/{start_year}",
+        response={200: OsztalyUsersSchema, 404: ErrorSchema, 401: ErrorSchema},
+        summary="Get all students for a class by start year",
+        description="Retrieve all student users for a specific class by start year. Supports both YYYY (e.g., 2023) and YY (e.g., 23) formats."
+    )
+    def get_osztaly_by_year(request, start_year: str, debug_performance: bool = False):
+        """Get all students for a class by start year (supports YYYY or YY format)."""
+        perf = PerformanceMonitor(debug_performance)
+        
+        # Normalize start year to integer
+        perf.start_timer("parse_year")
+        try:
+            year = int(start_year)
+            # If 2-digit year, convert to 4-digit (assume 20xx)
+            if year < 100:
+                year = 2000 + year
+        except ValueError:
+            return 404, {"detail": f"Invalid year format: {start_year}"}
+        perf.end_timer("parse_year")
+        
+        # Find osztaly by start year
+        perf.start_timer("fetch_osztaly")
+        osztalyok = list(Osztaly.objects.select_related('tanev').filter(startYear=year))
+        perf.end_timer("fetch_osztaly")
+        
+        if not osztalyok:
+            return 404, {"detail": f"No osztaly found with start year {year}"}
+        
+        # For now, take the first one (there might be multiple sections)
+        # In the future, you might want to add szekcio parameter
+        osztaly = osztalyok[0]
+        perf.record_count("osztaly_count", len(osztalyok))
+        
+        # Fetch student users in this osztaly
+        perf.start_timer("fetch_students")
+        students = list(
+            get_student_profiles_queryset().filter(osztaly=osztaly)
+        )
+        perf.end_timer("fetch_students")
+        perf.record_count("student_count", len(students))
+        
+        # Serialize
+        perf.start_timer("serialize")
+        result = {
+            'osztaly': serialize_osztaly(osztaly),
+            'students': [serialize_profile_minimal(p) for p in students],
+        }
+        perf.end_timer("serialize")
+        
+        if debug_performance:
+            result['performance'] = perf.get_results()
+        
+        return 200, result
     
     # ============================================================================
     # Hiányzás (Absence) Endpoints
@@ -334,20 +602,44 @@ def register_sync_endpoints(api):
         summary="Get all absences for a class",
         description="Retrieve all absence records for students in a specific class."
     )
-    def get_hianyzasok_by_osztaly(request, osztaly_id: int):
+    def get_hianyzasok_by_osztaly(request, osztaly_id: int, debug_performance: bool = False):
         """Get all absences for a class."""
+        perf = PerformanceMonitor(debug_performance)
+        
         # Verify class exists
+        perf.start_timer("fetch_osztaly")
         osztaly = get_object_or_404(Osztaly, id=osztaly_id)
+        perf.end_timer("fetch_osztaly")
         
         # Get all users in this class
-        users_in_class = User.objects.filter(profile__osztaly=osztaly)
+        perf.start_timer("fetch_users")
+        users_in_class = list(User.objects.filter(profile__osztaly=osztaly))
+        perf.end_timer("fetch_users")
+        perf.record_count("user_count", len(users_in_class))
         
         # Get all absences for these users
-        absences = Absence.objects.filter(
-            diak__in=users_in_class
-        ).select_related('diak', 'forgatas', 'forgatas__location').order_by('-date', '-timeFrom')
+        perf.start_timer("fetch_absences")
+        absences = list(
+            Absence.objects.filter(
+                diak__in=users_in_class
+            ).select_related(
+                'diak', 'forgatas', 'forgatas__location'
+            ).order_by('-date', '-timeFrom')
+        )
+        perf.end_timer("fetch_absences")
+        perf.record_count("absence_count", len(absences))
         
-        return 200, [serialize_absence(a) for a in absences]
+        perf.start_timer("serialize")
+        result = [serialize_absence(a) for a in absences]
+        perf.end_timer("serialize")
+        
+        if debug_performance:
+            return 200, {
+                'data': result,
+                'performance': perf.get_results()
+            }
+        
+        return 200, result
     
     @router.get(
         "/hianyzas/{absence_id}",
@@ -355,13 +647,25 @@ def register_sync_endpoints(api):
         summary="Get absence details",
         description="Retrieve detailed information for a specific absence record by ID."
     )
-    def get_hianyzas(request, absence_id: int):
+    def get_hianyzas(request, absence_id: int, debug_performance: bool = False):
         """Get specific absence details."""
+        perf = PerformanceMonitor(debug_performance)
+        
+        perf.start_timer("fetch_absence")
         absence = get_object_or_404(
             Absence.objects.select_related('diak', 'forgatas', 'forgatas__location'),
             id=absence_id
         )
-        return 200, serialize_absence(absence)
+        perf.end_timer("fetch_absence")
+        
+        perf.start_timer("serialize")
+        result = serialize_absence(absence)
+        perf.end_timer("serialize")
+        
+        if debug_performance:
+            result['performance'] = perf.get_results()
+        
+        return 200, result
     
     @router.get(
         "/hianyzasok/user/{user_id}",
@@ -369,17 +673,38 @@ def register_sync_endpoints(api):
         summary="Get all absences for a user",
         description="Retrieve all absence records for a specific user by user ID."
     )
-    def get_hianyzasok_by_user(request, user_id: int):
+    def get_hianyzasok_by_user(request, user_id: int, debug_performance: bool = False):
         """Get all absences for a user."""
+        perf = PerformanceMonitor(debug_performance)
+        
         # Verify user exists
+        perf.start_timer("fetch_user")
         user = get_object_or_404(User, id=user_id)
+        perf.end_timer("fetch_user")
         
         # Get all absences for this user
-        absences = Absence.objects.filter(
-            diak=user
-        ).select_related('diak', 'forgatas', 'forgatas__location').order_by('-date', '-timeFrom')
+        perf.start_timer("fetch_absences")
+        absences = list(
+            Absence.objects.filter(
+                diak=user
+            ).select_related(
+                'diak', 'forgatas', 'forgatas__location'
+            ).order_by('-date', '-timeFrom')
+        )
+        perf.end_timer("fetch_absences")
+        perf.record_count("absence_count", len(absences))
         
-        return 200, [serialize_absence(a) for a in absences]
+        perf.start_timer("serialize")
+        result = [serialize_absence(a) for a in absences]
+        perf.end_timer("serialize")
+        
+        if debug_performance:
+            return 200, {
+                'data': result,
+                'performance': perf.get_results()
+            }
+        
+        return 200, result
     
     # ============================================================================
     # Profile Endpoints
@@ -391,15 +716,69 @@ def register_sync_endpoints(api):
         summary="Get user profile by email",
         description="Retrieve detailed user profile information using email address as the common key."
     )
-    def get_profile_by_email(request, email: str):
+    def get_profile_by_email(request, email: str, debug_performance: bool = False):
         """Get user profile by email address."""
+        perf = PerformanceMonitor(debug_performance)
+        
         # Find user by email
-        user = get_object_or_404(User, email=email)
+        perf.start_timer("fetch_user")
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return 404, {"detail": f"No user found with email: {email}"}
+        perf.end_timer("fetch_user")
         
         # Get or create profile
-        profile, created = Profile.objects.get_or_create(user=user)
+        perf.start_timer("fetch_profile")
+        profile, created = Profile.objects.select_related(
+            'user', 'osztaly', 'osztaly__tanev', 'stab', 'radio_stab'
+        ).get_or_create(user=user)
+        perf.end_timer("fetch_profile")
+        perf.record_count("profile_created", 1 if created else 0)
         
-        return 200, serialize_profile_detailed(profile)
+        perf.start_timer("serialize")
+        result = serialize_profile_detailed(profile)
+        perf.end_timer("serialize")
+        
+        if debug_performance:
+            result['performance'] = perf.get_results()
+        
+        return 200, result
+    
+    @router.get(
+        "/user/email/{email}",
+        response={200: ProfileMinimalSchema, 404: ErrorSchema, 401: ErrorSchema},
+        summary="Get user details by email",
+        description="Retrieve user details using email address. Returns minimal profile information."
+    )
+    def get_user_by_email(request, email: str, debug_performance: bool = False):
+        """Get user details by email address (minimal info)."""
+        perf = PerformanceMonitor(debug_performance)
+        
+        # Find user by email
+        perf.start_timer("fetch_user")
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return 404, {"detail": f"No user found with email: {email}"}
+        perf.end_timer("fetch_user")
+        
+        # Get or create profile
+        perf.start_timer("fetch_profile")
+        profile, created = Profile.objects.select_related(
+            'user', 'osztaly', 'osztaly__tanev', 'stab', 'radio_stab'
+        ).get_or_create(user=user)
+        perf.end_timer("fetch_profile")
+        perf.record_count("profile_created", 1 if created else 0)
+        
+        perf.start_timer("serialize")
+        result = serialize_profile_minimal(profile)
+        perf.end_timer("serialize")
+        
+        if debug_performance:
+            result['performance'] = perf.get_results()
+        
+        return 200, result
     
     # Register the router with the main API
     api.add_router("/sync", router)
