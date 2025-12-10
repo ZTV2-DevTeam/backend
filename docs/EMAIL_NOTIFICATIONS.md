@@ -26,13 +26,16 @@ The FTV system now includes comprehensive email notifications for announcements 
 **When emails are sent:**
 - New assignment created → Emails sent to all assigned users
 - Assignment updated with user changes → Separate emails for added/removed users
-- Assignment finalized → Confirmation emails sent to all assigned users
+- **Assignment status changed from Piszkozat to Kész → "Beosztás véglegesítve" emails sent to all assigned users**
 
 **Email content includes:**
-- Assignment type (new assignment, modification, removal)
+- Assignment type (new assignment, modification, removal, finalization)
 - Filming session details (name, description, date, time, location)
 - Contact person information (if available)
 - Professional formatting with color-coded headers
+
+**Special Email Types:**
+- **Beosztás véglegesítve**: Sent specifically when a Beosztás status changes from `kesz=False` (Piszkozat) to `kesz=True` (Kész). This confirms that the assignment is finalized and participation is mandatory.
 
 ## SMTP Protection
 
@@ -92,6 +95,27 @@ Időpont: [Time From] - [Time To]
 
 Önt eltávolították ebből a beosztásból.
 Már nem szükséges részt vennie ezen a forgatáson.
+```
+
+### Assignment Finalized Email Template
+```html
+✅ Beosztás véglegesítve
+
+Kedves Kolléga!
+
+Tájékoztatjuk, hogy a következő forgatáshoz tartozó beosztás véglegesítésre került:
+
+Forgatás: [Name]
+Leírás: [Description]
+Dátum: [Date]
+Időpont: [Time From] - [Time To]
+Helyszín: [Location]
+Kapcsolattartó: [Contact Person]
+
+A beosztás végleges - kérjük, készüljön fel a forgatásra!
+
+A beosztás véglegesítése azt jelenti, hogy részvétele kötelező ezen a forgatáson.
+Kérjük, jegyezze fel a forgatás részleteit és időben érkezzen a helyszínre!
 ```
 
 ## API Usage

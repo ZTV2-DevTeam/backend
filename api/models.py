@@ -1536,10 +1536,28 @@ def announcement_recipients_changed(sender, instance, action, pk_set, **kwargs):
             print(f"[ERROR] Full traceback: {traceback.format_exc()}")
 
 
+# Storage for tracking old beosztas state before save
+_beosztas_old_state = {}
+
+@receiver(pre_save, sender=Beosztas)
+def track_beosztas_state(sender, instance, **kwargs):
+    """
+    Track the old state of Beosztas before save to detect status changes.
+    """
+    if instance.pk:
+        try:
+            old_instance = Beosztas.objects.get(pk=instance.pk)
+            _beosztas_old_state[instance.pk] = {
+                'kesz': old_instance.kesz
+            }
+        except Beosztas.DoesNotExist:
+            pass
+
 @receiver(post_save, sender=Beosztas)
 def send_assignment_email(sender, instance, created, **kwargs):
     """
     Send email notification when an assignment is created or updated.
+    Specifically sends 'Beosztás véglegesítve' email when status changes from Piszkozat to Kész.
     """
     print(f"[DEBUG] ========== ASSIGNMENT SAVED SIGNAL ==========")
     print(f"[DEBUG] Assignment saved - Created: {created}, ID: {instance.id}")
@@ -1554,8 +1572,14 @@ def send_assignment_email(sender, instance, created, **kwargs):
         return
     
     try:
-        # Import email function
+        # Import email functions
         from backend.api_modules.authentication import send_assignment_change_notification_email
+        from backend.email_templates import (
+            get_base_email_template,
+            get_assignment_finalized_email_content,
+            send_html_emails_to_multiple_recipients
+        )
+        from django.conf import settings
         
         # Get current assigned users
         current_users = []
@@ -1564,7 +1588,87 @@ def send_assignment_email(sender, instance, created, **kwargs):
         
         print(f"[DEBUG] Current assigned users: {len(current_users)}")
         
-        if created:
+        # Check if status changed from Piszkozat (False) to Kész (True)
+        old_state = _beosztas_old_state.get(instance.pk, {})
+        status_changed_to_kesz = (
+            not created and 
+            old_state.get('kesz') == False and 
+            instance.kesz == True
+        )
+        
+        if status_changed_to_kesz:
+            # Status changed from Piszkozat to Kész - send finalization email
+            print(f"[DEBUG] *** Beosztás status changed from Piszkozat to Kész - sending finalization email ***")
+            
+            if current_users:
+                # Collect valid email addresses
+                recipient_emails = []
+                for user in current_users:
+                    if user.email and user.is_active:
+                        recipient_emails.append(user.email)
+                        print(f"[DEBUG] - Will notify: {user.get_full_name()} ({user.email})")
+                    else:
+                        print(f"[DEBUG] - Skipped (no email or inactive): {user.get_full_name()}")
+                
+                if recipient_emails:
+                    subject = f"FTV - Beosztás véglegesítve: {instance.forgatas.name}"
+                    contact_person_name = instance.forgatas.contactPerson.name if instance.forgatas.contactPerson else "Rendszer adminisztrátor"
+                    
+                    # Generate email content using the new finalization template
+                    content = get_assignment_finalized_email_content(instance.forgatas, contact_person_name)
+                    
+                    # Get frontend URL from settings
+                    frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+                    
+                    # Create complete HTML email
+                    html_message = get_base_email_template(
+                        title="Beosztás véglegesítve",
+                        content=content,
+                        button_text="FTV Rendszer megnyitása",
+                        button_url=frontend_url
+                    )
+                    
+                    # Plain text version
+                    plain_message = f"""
+✅ Beosztás véglegesítve
+
+Kedves Kolléga!
+
+Tájékoztatjuk, hogy a következő forgatáshoz tartozó beosztás véglegesítésre került:
+
+Forgatás: {instance.forgatas.name}
+Leírás: {instance.forgatas.description or 'Nincs megadva'}
+Dátum: {instance.forgatas.date.strftime('%Y. %m. %d.')}
+Időpont: {instance.forgatas.timeFrom.strftime('%H:%M')} - {instance.forgatas.timeTo.strftime('%H:%M')}
+Helyszín: {instance.forgatas.location or 'Nincs megadva'}
+Kapcsolattartó: {contact_person_name}
+
+A beosztás véglegesítése azt jelenti, hogy részvétele kötelező ezen a forgatáson.
+Kérjük, jegyezze fel a forgatás részleteit és időben érkezzen a helyszínre!
+
+Ha bármilyen kérdése van, kérjük vegye fel a kapcsolatot a kapcsolattartóval vagy a médiatanáraival!
+
+© 2025 FTV. Minden jog fenntartva.
+                    """
+                    
+                    # Send HTML emails to multiple recipients
+                    successful_count, failed_emails = send_html_emails_to_multiple_recipients(
+                        subject=subject,
+                        html_content=html_message,
+                        plain_content=plain_message,
+                        recipient_emails=recipient_emails,
+                        from_email=settings.DEFAULT_FROM_EMAIL
+                    )
+                    
+                    if successful_count > 0:
+                        print(f"[SUCCESS] Beosztás véglegesítve email sent to {successful_count} users: {instance.forgatas.name}")
+                    if failed_emails:
+                        print(f"[WARNING] Failed to send finalization email to: {failed_emails}")
+                else:
+                    print(f"[DEBUG] No valid email addresses for assigned users")
+            else:
+                print(f"[DEBUG] No users assigned to finalized assignment")
+        elif created:
             # New assignment - notify all assigned users
             print(f"[DEBUG] New assignment created, notifying all assigned users")
             
@@ -1582,26 +1686,11 @@ def send_assignment_email(sender, instance, created, **kwargs):
             else:
                 print(f"[DEBUG] No users assigned to new assignment")
         else:
-            # Assignment updated - we would need to track changes
-            # For now, just notify if it's being finalized
-            if instance.kesz:
-                print(f"[DEBUG] Assignment finalized, notifying all assigned users")
-                
-                if current_users:
-                    email_sent = send_assignment_change_notification_email(
-                        instance.forgatas,
-                        current_users,  # notify all assigned users about finalization
-                        []  # no removed users
-                    )
-                    
-                    if email_sent:
-                        print(f"[SUCCESS] Assignment finalization email sent: {instance.forgatas.name}")
-                    else:
-                        print(f"[WARNING] Failed to send assignment finalization email: {instance.forgatas.name}")
-                else:
-                    print(f"[DEBUG] No users assigned to finalized assignment")
-            else:
-                print(f"[DEBUG] Assignment updated but not finalized, no email sent")
+            print(f"[DEBUG] Assignment updated but status not changed to Kész, no email sent")
+        
+        # Clean up old state tracking
+        if instance.pk in _beosztas_old_state:
+            del _beosztas_old_state[instance.pk]
                 
     except Exception as e:
         print(f"[ERROR] Assignment email signal failed: {str(e)}")

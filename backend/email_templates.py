@@ -491,6 +491,48 @@ def get_assignment_removal_email_content(forgatas, contact_person_name: str) -> 
     """
 
 
+def get_assignment_finalized_email_content(forgatas, contact_person_name: str) -> str:
+    """
+    Generate HTML content for filming assignment finalization emails.
+    Sent when assignment status changes from Piszkozat to Kész.
+    
+    Args:
+        forgatas: Forgatas model instance
+        contact_person_name: Name of the contact person
+        
+    Returns:
+        HTML content for assignment finalization email
+    """
+    return f"""
+    <div class="content-section">
+        <h2>✅ Beosztás véglegesítve</h2>
+        <p>Kedves Kolléga!</p>
+        <p>Tájékoztatjuk, hogy a következő forgatáshoz tartozó beosztás véglegesítésre került:</p>
+    </div>
+    
+    <div class="highlight-box">
+        <h3>{forgatas.name}</h3>
+        <p><strong>A beosztás végleges - kérjük, készüljön fel a forgatásra!</strong></p>
+    </div>
+    
+    <div class="info-box">
+        <h3>Forgatás részletei</h3>
+        <div class="info-item"><strong>Név:</strong> {forgatas.name}</div>
+        <div class="info-item"><strong>Leírás:</strong> {forgatas.description or 'Nincs megadva'}</div>
+        <div class="info-item"><strong>Dátum:</strong> {forgatas.date.strftime('%Y. %m. %d.')}</div>
+        <div class="info-item"><strong>Időpont:</strong> {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}</div>
+        <div class="info-item"><strong>Helyszín:</strong> {forgatas.location or 'Nincs megadva'}</div>
+        <div class="info-item"><strong>Kapcsolattartó:</strong> {contact_person_name}</div>
+    </div>
+    
+    <div class="content-section">
+        <p>A beosztás véglegesítése azt jelenti, hogy részvétele kötelező ezen a forgatáson.</p>
+        <p>Kérjük, jegyezze fel a forgatás részleteit és időben érkezzen a helyszínre!</p>
+        <p>Ha bármilyen kérdése van, kérjük vegye fel a kapcsolatot a kapcsolattartóval vagy a médiatanáraival!</p>
+    </div>
+    """
+
+
 def get_password_reset_email_content(user_name: str, reset_url: str) -> str:
     """
     Generate HTML content for password reset emails.
