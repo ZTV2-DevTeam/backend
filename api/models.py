@@ -971,6 +971,8 @@ class Tavollet(models.Model):
     tipus = models.ForeignKey('TavolletTipus', on_delete=models.PROTECT, blank=True, null=True, 
                              verbose_name='Távolléti típus', 
                              help_text='A távollét típusa (betegség, iskolai elfoglaltság, stb.)')
+    teacher_reason = models.TextField(max_length=500, blank=True, null=True, verbose_name='Tanári indoklás', 
+                                     help_text='A tanár által megadott indoklás a jóváhagyás vagy elutasítás okáról (opcionális, maximum 500 karakter)')
 
     def __str__(self):
         return f'{self.user.get_full_name()}: {self.start_date.strftime("%Y-%m-%d %H:%M")} - {self.end_date.strftime("%Y-%m-%d %H:%M")}'

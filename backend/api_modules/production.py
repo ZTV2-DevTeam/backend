@@ -851,6 +851,33 @@ def register_production_endpoints(api):
                     author=request.auth
                 )
                 print(f"Created Beosztas {beosztas.id} for Forgatas {forgatas.id}")
+                
+                # If the forgatás has a szerkeszto assigned, automatically add them to the Beosztás with a Stábvezető role
+                if forgatas.szerkeszto:
+                    try:
+                        # Get or create the "Stábvezető" role
+                        from api.models import Szerepkor, SzerepkorRelaciok
+                        stabvezeto_role, created = Szerepkor.objects.get_or_create(
+                            name="Stábvezető",
+                            defaults={'ev': None}
+                        )
+                        if created:
+                            print(f"Created new szerepkor: Stábvezető")
+                        
+                        # Create role relation for the szerkeszto
+                        szerepkor_relacio = SzerepkorRelaciok.objects.create(
+                            user=forgatas.szerkeszto,
+                            szerepkor=stabvezeto_role
+                        )
+                        
+                        # Add to beosztás
+                        beosztas.szerepkor_relaciok.add(szerepkor_relacio)
+                        print(f"Added {forgatas.szerkeszto.get_full_name()} as Stábvezető to Beosztas {beosztas.id}")
+                        
+                    except Exception as role_error:
+                        print(f"Warning: Could not add szerkeszto to Beosztas role: {role_error}")
+                        # Don't fail the operation if adding role fails
+                    
             except Exception as beosztas_error:
                 print(f"Warning: Could not create Beosztas for Forgatas {forgatas.id}: {beosztas_error}")
                 # Don't fail the whole operation if beosztas creation fails

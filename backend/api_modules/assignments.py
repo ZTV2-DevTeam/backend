@@ -543,6 +543,34 @@ def check_user_availability_for_forgatas(user: User, forgatas: Forgatas) -> dict
                 "radio_stab": session.radio_stab.name
             })
     
+    # Check for other filming assignment conflicts
+    # Find other finalized assignments (beosztás) for the same date and overlapping time
+    other_assignments = Beosztas.objects.filter(
+        szerepkor_relaciok__user=user,
+        forgatas__date=forgatas.date,
+        kesz=True  # Only check finalized assignments
+    ).exclude(
+        forgatas=forgatas  # Exclude current forgatas
+    ).select_related('forgatas')
+    
+    has_other_assignment = False
+    for assignment in other_assignments:
+        if assignment.forgatas:
+            assignment_start = datetime.combine(assignment.forgatas.date, assignment.forgatas.timeFrom)
+            assignment_end = datetime.combine(assignment.forgatas.date, assignment.forgatas.timeTo)
+            
+            if assignment_start < forgatas_end and assignment_end > forgatas_start:
+                has_other_assignment = True
+                conflicts.append({
+                    "type": "other_assignment",
+                    "description": f"Már beosztva: {assignment.forgatas.name}",
+                    "forgatas_id": assignment.forgatas.id,
+                    "forgatas_name": assignment.forgatas.name,
+                    "date": assignment.forgatas.date.isoformat(),
+                    "time_from": assignment.forgatas.timeFrom.isoformat(),
+                    "time_to": assignment.forgatas.timeTo.isoformat(),
+                })
+    
     # User is available if they have no conflicts
     is_available = len(conflicts) == 0
     
@@ -555,7 +583,8 @@ def check_user_availability_for_forgatas(user: User, forgatas: Forgatas) -> dict
         "is_available": is_available,
         "conflicts": conflicts,
         "is_on_vacation": is_on_vacation,
-        "has_radio_session": has_radio_session
+        "has_radio_session": has_radio_session,
+        "has_other_assignment": has_other_assignment
     }
 
 def create_beosztas_with_availability_response(beosztas: Beosztas) -> dict:
@@ -577,6 +606,7 @@ def create_beosztas_with_availability_response(beosztas: Beosztas) -> dict:
     users_available = []
     users_on_vacation = []
     users_with_radio_session = []
+    users_with_other_assignment = []
     
     for relacio in szerepkor_relaciok:
         user_availability = check_user_availability_for_forgatas(relacio.user, beosztas.forgatas)
@@ -595,6 +625,12 @@ def create_beosztas_with_availability_response(beosztas: Beosztas) -> dict:
             })
         elif user_availability["has_radio_session"]:
             users_with_radio_session.append({
+                "user": create_user_basic_response(relacio.user),
+                "role": create_szerepkor_response(relacio.szerepkor),
+                "availability": user_availability
+            })
+        elif user_availability.get("has_other_assignment", False):
+            users_with_other_assignment.append({
                 "user": create_user_basic_response(relacio.user),
                 "role": create_szerepkor_response(relacio.szerepkor),
                 "availability": user_availability
@@ -621,11 +657,13 @@ def create_beosztas_with_availability_response(beosztas: Beosztas) -> dict:
             "users_available": users_available,
             "users_on_vacation": users_on_vacation,
             "users_with_radio_session": users_with_radio_session,
+            "users_with_other_assignment": users_with_other_assignment,
             "summary": {
                 "total_users": len(szerepkor_relaciok),
                 "available_count": len(users_available),
                 "vacation_count": len(users_on_vacation),
-                "radio_session_count": len(users_with_radio_session)
+                "radio_session_count": len(users_with_radio_session),
+                "other_assignment_count": len(users_with_other_assignment)
             }
         }
     }

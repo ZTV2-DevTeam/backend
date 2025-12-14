@@ -88,6 +88,7 @@ class TavolletSchema(Schema):
     duration_days: int
     status: str
     tipus: Optional[TavolletTipusBasicSchema] = None
+    teacher_reason: Optional[str] = None
 
 class TavolletCreateSchema(Schema):
     """Request schema for creating new absence."""
@@ -98,13 +99,38 @@ class TavolletCreateSchema(Schema):
     tipus_id: Optional[int] = None  # Optional absence type
 
 class TavolletUpdateSchema(Schema):
-    """Request schema for updating existing absence."""
-    start_date: Optional[str] = None    # ISO datetime string
-    end_date: Optional[str] = None      # ISO datetime string
+    """Request schema for updating absence."""
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
     reason: Optional[str] = None
     denied: Optional[bool] = None
     approved: Optional[bool] = None
+    tipus_id: Optional[int] = None
+    teacher_reason: Optional[str] = None
+
+class TeacherReasonSchema(Schema):
+    """Request schema for updating teacher reason."""
+    teacher_reason: str
+
+class TavolletBulkCreateSchema(Schema):
+    """Request schema for bulk creating absences."""
+    user_ids: list[int]  # List of user IDs to create absences for
+    start_date: str    # ISO datetime string
+    end_date: str      # ISO datetime string
+    reason: Optional[str] = None
+    tipus_id: Optional[int] = None
+    """Request schema for creating multiple absences for multiple users (admin only)."""
+    user_ids: list[int]  # List of user IDs to create absences for
+    start_date: str      # ISO datetime string
+    end_date: str        # ISO datetime string
+    reason: Optional[str] = None
     tipus_id: Optional[int] = None  # Optional absence type
+
+class TavolletBulkCreateResponseSchema(Schema):
+    """Response schema for bulk absence creation."""
+    created_count: int
+    absences: list[TavolletSchema]
+    errors: Optional[list[str]] = None
 
 # ============================================================================
 # Utility Functions
@@ -215,7 +241,8 @@ def create_tavollet_response(tavollet: Tavollet) -> dict:
         "approved": tavollet.approved,
         "duration_days": duration,
         "status": status,
-        "tipus": tipus_info
+        "tipus": tipus_info,
+        "teacher_reason": getattr(tavollet, 'teacher_reason', None)
     }
 
 def check_admin_permissions(user) -> tuple[bool, str]:
@@ -636,6 +663,125 @@ def register_absence_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error creating absence: {str(e)}"}
 
+    @api.post("/absences/bulk-create", auth=JWTAuth(), response={201: TavolletBulkCreateResponseSchema, 400: ErrorSchema, 401: ErrorSchema})
+    def create_bulk_absences(request, data: TavolletBulkCreateSchema):
+        """
+        Create multiple absences for multiple users (admin only).
+        
+        Creates automatically approved absences for the selected users.
+        This is an admin-only function used to create absences en masse.
+        
+        Args:
+            data: Bulk absence creation data with user IDs
+            
+        Returns:
+            201: Absences created successfully
+            400: Invalid data
+            401: Authentication or permission failed
+        """
+        try:
+            requesting_user = request.auth
+            
+            # Only admins can create bulk absences
+            has_admin_permission, error_message = check_admin_permissions(requesting_user)
+            if not has_admin_permission:
+                return 401, {"message": error_message}
+            
+            # Validate user IDs
+            if not data.user_ids or len(data.user_ids) == 0:
+                return 400, {"message": "Legalább egy felhasználót ki kell választani"}
+            
+            # Validate datetime strings
+            try:
+                start_datetime = datetime.fromisoformat(data.start_date.replace('Z', '+00:00'))
+                end_datetime = datetime.fromisoformat(data.end_date.replace('Z', '+00:00'))
+                
+                # Convert to local naive datetimes for SQLite compatibility
+                start_datetime = convert_to_local_naive_datetime(start_datetime)
+                end_datetime = convert_to_local_naive_datetime(end_datetime)
+                    
+            except ValueError:
+                return 400, {"message": "Hibás dátum/idő formátum. Használj ISO formátumot (pl. 2024-03-15T14:00:00)"}
+            
+            if start_datetime >= end_datetime:
+                return 400, {"message": "A záró időpontnak a kezdő időpont után kell lennie"}
+            
+            # Validate absence type if provided
+            tipus = None
+            if data.tipus_id:
+                try:
+                    tipus = TavolletTipus.objects.get(id=data.tipus_id)
+                except TavolletTipus.DoesNotExist:
+                    return 400, {"message": "Távolléti típus nem található"}
+            
+            # Create absences for each user
+            created_absences = []
+            errors = []
+            
+            for user_id in data.user_ids:
+                try:
+                    # Get target user
+                    try:
+                        target_user = User.objects.get(id=user_id)
+                    except User.DoesNotExist:
+                        errors.append(f"Felhasználó ID {user_id} nem található")
+                        continue
+                    
+                    # Check for overlapping absences (optional - we could skip this for admin-created absences)
+                    overlapping_absences = Tavollet.objects.filter(
+                        user=target_user,
+                        start_date__lt=end_datetime,
+                        end_date__gt=start_datetime
+                    ).select_related('tipus')
+                    
+                    overlapping = False
+                    for absence in overlapping_absences:
+                        if absence.denied:
+                            continue  # Denied absences don't count as conflicts
+                        elif absence.approved:
+                            overlapping = True
+                            break
+                        else:
+                            # Pending absence - check tipus
+                            if absence.tipus and absence.tipus.ignored_counts_as == 'denied':
+                                continue  # Type defaults to denied - no conflict
+                            else:
+                                # No tipus or defaults to approved - conflict
+                                overlapping = True
+                                break
+                    
+                    if overlapping:
+                        errors.append(f"Átfedő távollét már létezik {target_user.last_name} {target_user.first_name} részére")
+                        continue
+                    
+                    # Create absence - automatically approved for admin-created absences
+                    absence = Tavollet.objects.create(
+                        user=target_user,
+                        start_date=start_datetime,
+                        end_date=end_datetime,
+                        reason=data.reason,
+                        denied=False,
+                        approved=True,  # Automatically approved for admin-created absences
+                        tipus=tipus
+                    )
+                    
+                    created_absences.append(absence)
+                    
+                except Exception as e:
+                    errors.append(f"Hiba {target_user.last_name} {target_user.first_name} részére: {str(e)}")
+            
+            # Prepare response
+            response_absences = [create_tavollet_response(absence) for absence in created_absences]
+            
+            return 201, {
+                "created_count": len(created_absences),
+                "absences": response_absences,
+                "errors": errors if errors else None
+            }
+            
+        except Exception as e:
+            return 400, {"message": f"Error creating bulk absences: {str(e)}"}
+
     @api.put("/absences/{absence_id}", auth=JWTAuth(), response={200: TavolletSchema, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
     def update_absence(request, absence_id: int, data: TavolletUpdateSchema):
         """
@@ -774,7 +920,7 @@ def register_absence_endpoints(api):
             return 400, {"message": f"Error updating absence: {str(e)}"}
 
     @api.put("/absences/{absence_id}/approve", auth=JWTAuth(), response={200: TavolletSchema, 401: ErrorSchema, 404: ErrorSchema})
-    def approve_absence(request, absence_id: int):
+    def approve_absence(request, absence_id: int, payload: TeacherReasonSchema = None):
         """
         Approve absence (set approved=True, denied=False).
         
@@ -782,6 +928,7 @@ def register_absence_endpoints(api):
         
         Args:
             absence_id: Unique absence identifier
+            payload: Optional TeacherReasonSchema with 'teacher_reason' field
             
         Returns:
             200: Absence approved successfully
@@ -797,6 +944,11 @@ def register_absence_endpoints(api):
             absence = Tavollet.objects.get(id=absence_id)
             absence.approved = True
             absence.denied = False  # Ensure mutual exclusivity
+            
+            # Update teacher reason if provided
+            if payload and payload.teacher_reason:
+                absence.teacher_reason = payload.teacher_reason
+            
             absence.save()
             
             return 200, create_tavollet_response(absence)
@@ -806,7 +958,7 @@ def register_absence_endpoints(api):
             return 400, {"message": f"Error approving absence: {str(e)}"}
 
     @api.put("/absences/{absence_id}/deny", auth=JWTAuth(), response={200: TavolletSchema, 401: ErrorSchema, 404: ErrorSchema})
-    def deny_absence(request, absence_id: int):
+    def deny_absence(request, absence_id: int, payload: TeacherReasonSchema = None):
         """
         Deny absence (set denied=True, approved=False).
         
@@ -814,6 +966,7 @@ def register_absence_endpoints(api):
         
         Args:
             absence_id: Unique absence identifier
+            payload: Optional TeacherReasonSchema with 'teacher_reason' field
             
         Returns:
             200: Absence denied successfully
@@ -829,6 +982,11 @@ def register_absence_endpoints(api):
             absence = Tavollet.objects.get(id=absence_id)
             absence.denied = True
             absence.approved = False  # Ensure mutual exclusivity
+            
+            # Update teacher reason if provided
+            if payload and payload.teacher_reason:
+                absence.teacher_reason = payload.teacher_reason
+            
             absence.save()
             
             return 200, create_tavollet_response(absence)
@@ -868,6 +1026,38 @@ def register_absence_endpoints(api):
             return 404, {"message": "Távollét nem található"}
         except Exception as e:
             return 400, {"message": f"Error resetting absence status: {str(e)}"}
+
+    @api.put("/absences/{absence_id}/teacher-reason", auth=JWTAuth(), response={200: TavolletSchema, 401: ErrorSchema, 404: ErrorSchema})
+    def update_teacher_reason(request, absence_id: int, payload: TeacherReasonSchema):
+        """
+        Update teacher reason for an absence decision.
+        
+        Requires admin permissions. Allows teachers to provide reasoning for approval/denial.
+        
+        Args:
+            absence_id: Unique absence identifier
+            payload: TeacherReasonSchema with 'teacher_reason' field
+            
+        Returns:
+            200: Teacher reason updated successfully
+            404: Absence not found
+            401: Authentication or permission failed
+        """
+        try:
+            # Check if user has admin permissions
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 401, {"message": error_message}
+            
+            absence = Tavollet.objects.get(id=absence_id)
+            absence.teacher_reason = payload.teacher_reason
+            absence.save()
+            
+            return 200, create_tavollet_response(absence)
+        except Tavollet.DoesNotExist:
+            return 404, {"message": "Távollét nem található"}
+        except Exception as e:
+            return 400, {"message": f"Error updating teacher reason: {str(e)}"}
 
     @api.delete("/absences/{absence_id}", auth=JWTAuth(), response={200: dict, 401: ErrorSchema, 404: ErrorSchema})
     def delete_absence(request, absence_id: int):
