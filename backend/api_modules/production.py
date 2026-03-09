@@ -715,10 +715,34 @@ def register_production_endpoints(api):
         """
         try:
             session = Forgatas.objects.select_related(
-                'location', 'contactPerson', 'relatedKaCsa', 'tanev'
-            ).prefetch_related('equipments').get(id=forgatas_id)
+                'location', 'contactPerson', 'relatedKaCsa', 'tanev', 'szerkeszto'
+            ).prefetch_related(
+                'equipments__equipmentType'
+            ).get(id=forgatas_id)
             
-            return 200, create_forgatas_response(session)
+            response = create_forgatas_response(session)
+            
+            # Add detailed equipment info directly to avoid N+1 queries
+            equipment_details = []
+            for equipment in session.equipments.all():
+                equipment_details.append({
+                    "id": equipment.id,
+                    "nickname": equipment.nickname,
+                    "brand": equipment.brand,
+                    "model": equipment.model,
+                    "serial_number": equipment.serialNumber,
+                    "equipment_type": {
+                        "id": equipment.equipmentType.id,
+                        "name": equipment.equipmentType.name,
+                        "emoji": equipment.equipmentType.emoji
+                    } if equipment.equipmentType else None,
+                    "functional": equipment.functional,
+                    "notes": equipment.notes,
+                    "display_name": str(equipment)
+                })
+            response["equipment_details"] = equipment_details
+            
+            return 200, response
         except Forgatas.DoesNotExist:
             return 404, {"message": "Forgatás nem található"}
         except Exception as e:
@@ -1251,3 +1275,138 @@ def register_production_endpoints(api):
             return 200, response
         except Exception as e:
             return 401, {"message": f"Error fetching unassigned sessions: {str(e)}"}
+
+    @api.get("/production/filming-sessions-optimized", auth=JWTAuth(), response={200: list, 401: ErrorSchema})
+    def get_filming_sessions_optimized(request, start_date: str = None, end_date: str = None, type: str = None):
+        """
+        Get filming sessions with ALL related data in a single optimized query.
+        
+        This endpoint returns filming sessions with assignments, equipment details,
+        and user details all in one response to eliminate frontend waterfall loading.
+        
+        Optimized with select_related and prefetch_related for minimal database queries.
+        
+        Args:
+            start_date: Optional start date filter (ISO format)
+            end_date: Optional end date filter (ISO format)
+            type: Optional type filter (kacsa, rendes, rendezveny, egyeb)
+            
+        Returns:
+            200: List of filming sessions with complete related data
+            401: Authentication failed
+        """
+        try:
+            # Optimized query with all relations prefetched
+            sessions = Forgatas.objects.select_related(
+                'location', 'contactPerson', 'relatedKaCsa', 'tanev', 'szerkeszto'
+            ).prefetch_related(
+                'equipments',
+                'beosztasok__szerepkor_relaciok__user__profile__stab',
+                'beosztasok__szerepkor_relaciok__szerepkor',
+                'beosztasok__author',
+                'beosztasok__stab'
+            ).all()
+            
+            # Apply filters
+            if start_date:
+                sessions = sessions.filter(date__gte=start_date)
+            if end_date:
+                sessions = sessions.filter(date__lte=end_date)
+            if type:
+                sessions = sessions.filter(forgTipus=type)
+            
+            response = []
+            for session in sessions:
+                # Build base session data
+                session_data = create_forgatas_response(session)
+                
+                # Add equipment details directly
+                equipment_details = []
+                for equipment in session.equipments.all():
+                    equipment_details.append({
+                        "id": equipment.id,
+                        "name": equipment.nickname,
+                        "type": equipment.equipmentType.name if equipment.equipmentType else None,
+                        "functional": equipment.functional
+                    })
+                session_data["equipment_details"] = equipment_details
+                
+                # Add assignment details with full user data
+                try:
+                    assignment = session.beosztasok.first()  # Already prefetched
+                    if assignment:
+                        szerepkor_relaciok = assignment.szerepkor_relaciok.all()  # Already prefetched
+                        
+                        # Build detailed user list
+                        assigned_users = []
+                        roles_summary = {}
+                        
+                        for relacio in szerepkor_relaciok:
+                            user = relacio.user
+                            role = relacio.szerepkor
+                            
+                            # Get user profile data (already prefetched)
+                            profile_data = {}
+                            try:
+                                profile = user.profile
+                                profile_data = {
+                                    "stab": {"id": profile.stab.id, "name": profile.stab.name} if profile.stab else None,
+                                    "telefonszam": profile.telefonszam,
+                                    "is_admin": profile.has_admin_permission('any')
+                                }
+                            except:
+                                pass
+                            
+                            assigned_users.append({
+                                "id": user.id,
+                                "username": user.username,
+                                "first_name": user.first_name,
+                                "last_name": user.last_name,
+                                "full_name": user.get_full_name(),
+                                "email": user.email,
+                                "profile": profile_data,
+                                "role": {
+                                    "id": role.id,
+                                    "name": role.name,
+                                    "ev": role.ev
+                                }
+                            })
+                            
+                            # Update roles summary
+                            role_name = role.name
+                            if role_name not in roles_summary:
+                                roles_summary[role_name] = 0
+                            roles_summary[role_name] += 1
+                        
+                        session_data["assignment"] = {
+                            "id": assignment.id,
+                            "finalized": assignment.kesz,
+                            "student_count": len(szerepkor_relaciok),
+                            "author": {
+                                "id": assignment.author.id,
+                                "username": assignment.author.username,
+                                "full_name": assignment.author.get_full_name()
+                            } if assignment.author else None,
+                            "stab": {
+                                "id": assignment.stab.id,
+                                "name": assignment.stab.name,
+                                "team_code": assignment.stab.team_code
+                            } if assignment.stab else None,
+                            "created_at": assignment.created_at.isoformat(),
+                            "assigned_users": assigned_users,
+                            "roles_summary": [{"role": role, "count": count} for role, count in roles_summary.items()]
+                        }
+                    else:
+                        session_data["assignment"] = None
+                except Exception as e:
+                    session_data["assignment"] = None
+                    print(f"Error processing assignment for session {session.id}: {e}")
+                
+                response.append(session_data)
+            
+            return 200, response
+        except Exception as e:
+            import traceback
+            print(f"Error in optimized endpoint: {traceback.format_exc()}")
+            return 401, {"message": f"Error fetching optimized filming sessions: {str(e)}"}
+

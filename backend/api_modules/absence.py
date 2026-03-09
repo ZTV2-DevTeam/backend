@@ -9,6 +9,12 @@ from api.models import Tavollet, TavolletTipus
 from .auth import JWTAuth, ErrorSchema
 from datetime import datetime, date
 from typing import Optional
+from backend.email_templates import (
+    get_base_email_template,
+    get_absence_approved_email_content,
+    get_absence_denied_email_content,
+    send_html_emails_to_multiple_recipients
+)
 
 # ============================================================================
 # Utility Functions for Timezone Handling
@@ -659,6 +665,92 @@ def register_absence_endpoints(api):
                 tipus=tipus
             )
             
+            # Check for reverse conflicts with existing Forgatás (Beosztás) records
+            # This happens when a student submits a távollét but is already assigned to a forgatás
+            from api.models import Beosztas, SzerepkorRelaciok
+            
+            conflicting_forgatas_list = []
+            
+            # Find all Beosztás records where this user is assigned
+            user_role_assignments = SzerepkorRelaciok.objects.filter(
+                user=target_user
+            ).select_related('szerepkor')
+            
+            # Get the Beosztás records that have this user
+            for role_assignment in user_role_assignments:
+                beosztasok = role_assignment.beosztasok.filter(
+                    forgatas__isnull=False
+                ).select_related('forgatas')
+                
+                for beosztas in beosztasok:
+                    forgatas = beosztas.forgatas
+                    if not forgatas:
+                        continue
+                    
+                    # Check if this forgatás overlaps with the new absence
+                    forgatas_start = datetime.combine(forgatas.date, forgatas.timeFrom)
+                    forgatas_end = datetime.combine(forgatas.date, forgatas.timeTo)
+                    
+                    # Convert to local naive datetimes for comparison
+                    forgatas_start = convert_to_local_naive_datetime(forgatas_start)
+                    forgatas_end = convert_to_local_naive_datetime(forgatas_end)
+                    
+                    # Check for overlap
+                    if forgatas_start < end_datetime and forgatas_end > start_datetime:
+                        if forgatas not in conflicting_forgatas_list:
+                            conflicting_forgatas_list.append(forgatas)
+            
+            # If there are conflicts, send email notifications
+            if conflicting_forgatas_list:
+                print(f"[REVERSE_CONFLICT] Found {len(conflicting_forgatas_list)} conflicting forgatás records for absence {absence.id}")
+                
+                # Send email notifications to teachers and student
+                try:
+                    from backend.email_templates import get_base_email_template, get_absence_forgatas_reverse_conflict_email_content, send_html_emails_to_multiple_recipients
+                    from api.models import Profile
+                    
+                    # Get email content
+                    email_content = get_absence_forgatas_reverse_conflict_email_content(absence, conflicting_forgatas_list)
+                    html_content = get_base_email_template(
+                        title="Távollét és Forgatás Ütközés",
+                        content=email_content
+                    )
+                    plain_content = f"Új távollét kérelem ütközik meglévő forgatási beosztással. Diák: {target_user.get_full_name()}"
+                    
+                    # Collect recipient emails
+                    recipient_emails = []
+                    
+                    # Add the student's email
+                    if target_user.email:
+                        recipient_emails.append(target_user.email)
+                        print(f"[REVERSE_CONFLICT] Added student email: {target_user.email}")
+                    
+                    # Add all teachers' emails (admin_type='teacher')
+                    teacher_profiles = Profile.objects.filter(admin_type='teacher').select_related('user')
+                    for profile in teacher_profiles:
+                        if profile.user.email and profile.user.email not in recipient_emails:
+                            recipient_emails.append(profile.user.email)
+                            print(f"[REVERSE_CONFLICT] Added teacher email: {profile.user.email}")
+                    
+                    # Send emails if there are recipients
+                    if recipient_emails:
+                        print(f"[REVERSE_CONFLICT] Sending reverse conflict emails to {len(recipient_emails)} recipients")
+                        successful_count, failed_emails = send_html_emails_to_multiple_recipients(
+                            subject=f"⚠️ Távollét és Forgatás Ütközés - {target_user.get_full_name()}",
+                            html_content=html_content,
+                            plain_content=plain_content,
+                            recipient_emails=recipient_emails
+                        )
+                        print(f"[REVERSE_CONFLICT] Email notification sent: {successful_count} successful, {len(failed_emails)} failed")
+                    else:
+                        print(f"[REVERSE_CONFLICT] No recipient emails found, skipping email notification")
+                        
+                except Exception as email_error:
+                    # Don't fail the request if email sending fails
+                    print(f"[REVERSE_CONFLICT] Error sending reverse conflict email: {str(email_error)}")
+                    import traceback
+                    print(traceback.format_exc())
+            
             return 201, create_tavollet_response(absence)
         except Exception as e:
             return 400, {"message": f"Error creating absence: {str(e)}"}
@@ -766,6 +858,92 @@ def register_absence_endpoints(api):
                     )
                     
                     created_absences.append(absence)
+                    
+                    # Check for reverse conflicts with existing Forgatás (Beosztás) records
+                    # This happens when a student has távollét but is already assigned to a forgatás
+                    from api.models import Beosztas, SzerepkorRelaciok
+                    
+                    conflicting_forgatas_list = []
+                    
+                    # Find all Beosztás records where this user is assigned
+                    user_role_assignments = SzerepkorRelaciok.objects.filter(
+                        user=target_user
+                    ).select_related('szerepkor')
+                    
+                    # Get the Beosztás records that have this user
+                    for role_assignment in user_role_assignments:
+                        beosztasok = role_assignment.beosztasok.filter(
+                            forgatas__isnull=False
+                        ).select_related('forgatas')
+                        
+                        for beosztas in beosztasok:
+                            forgatas = beosztas.forgatas
+                            if not forgatas:
+                                continue
+                            
+                            # Check if this forgatás overlaps with the new absence
+                            forgatas_start = datetime.combine(forgatas.date, forgatas.timeFrom)
+                            forgatas_end = datetime.combine(forgatas.date, forgatas.timeTo)
+                            
+                            # Convert to local naive datetimes for comparison
+                            forgatas_start = convert_to_local_naive_datetime(forgatas_start)
+                            forgatas_end = convert_to_local_naive_datetime(forgatas_end)
+                            
+                            # Check for overlap
+                            if forgatas_start < end_datetime and forgatas_end > start_datetime:
+                                if forgatas not in conflicting_forgatas_list:
+                                    conflicting_forgatas_list.append(forgatas)
+                    
+                    # If there are conflicts, send email notifications
+                    if conflicting_forgatas_list:
+                        print(f"[REVERSE_CONFLICT_BULK] Found {len(conflicting_forgatas_list)} conflicting forgatás records for absence {absence.id}")
+                        
+                        # Send email notifications to teachers and student
+                        try:
+                            from backend.email_templates import get_base_email_template, get_absence_forgatas_reverse_conflict_email_content, send_html_emails_to_multiple_recipients
+                            from api.models import Profile
+                            
+                            # Get email content
+                            email_content = get_absence_forgatas_reverse_conflict_email_content(absence, conflicting_forgatas_list)
+                            html_content = get_base_email_template(
+                                title="Távollét és Forgatás Ütközés",
+                                content=email_content
+                            )
+                            plain_content = f"Új távollét kérelem ütközik meglévő forgatási beosztással. Diák: {target_user.get_full_name()}"
+                            
+                            # Collect recipient emails
+                            recipient_emails = []
+                            
+                            # Add the student's email
+                            if target_user.email:
+                                recipient_emails.append(target_user.email)
+                                print(f"[REVERSE_CONFLICT_BULK] Added student email: {target_user.email}")
+                            
+                            # Add all teachers' emails (admin_type='teacher')
+                            teacher_profiles = Profile.objects.filter(admin_type='teacher').select_related('user')
+                            for profile in teacher_profiles:
+                                if profile.user.email and profile.user.email not in recipient_emails:
+                                    recipient_emails.append(profile.user.email)
+                                    print(f"[REVERSE_CONFLICT_BULK] Added teacher email: {profile.user.email}")
+                            
+                            # Send emails if there are recipients
+                            if recipient_emails:
+                                print(f"[REVERSE_CONFLICT_BULK] Sending reverse conflict emails to {len(recipient_emails)} recipients")
+                                successful_count, failed_emails = send_html_emails_to_multiple_recipients(
+                                    subject=f"⚠️ Távollét és Forgatás Ütközés - {target_user.get_full_name()}",
+                                    html_content=html_content,
+                                    plain_content=plain_content,
+                                    recipient_emails=recipient_emails
+                                )
+                                print(f"[REVERSE_CONFLICT_BULK] Email notification sent: {successful_count} successful, {len(failed_emails)} failed")
+                            else:
+                                print(f"[REVERSE_CONFLICT_BULK] No recipient emails found, skipping email notification")
+                                
+                        except Exception as email_error:
+                            # Don't fail the request if email sending fails
+                            print(f"[REVERSE_CONFLICT_BULK] Error sending reverse conflict email: {str(email_error)}")
+                            import traceback
+                            print(traceback.format_exc())
                     
                 except Exception as e:
                     errors.append(f"Hiba {target_user.last_name} {target_user.first_name} részére: {str(e)}")

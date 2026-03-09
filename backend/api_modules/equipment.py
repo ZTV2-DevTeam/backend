@@ -439,6 +439,70 @@ def register_equipment_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error fetching equipment: {str(e)}"}
 
+    @api.get("/equipment/availability-overview", auth=JWTAuth(), response={200: list[dict], 401: ErrorSchema})
+    def get_equipment_availability_overview(request, date: str, type_id: int = None):
+        """
+        Get availability overview for all equipment on a specific date.
+        
+        Requires authentication. Returns availability status for all equipment,
+        optionally filtered by equipment type.
+        
+        Args:
+            date: Date to check (YYYY-MM-DD format)
+            type_id: Optional equipment type filter
+            
+        Returns:
+            200: List of equipment with availability status
+            401: Authentication failed
+            400: Invalid date format
+        """
+        try:
+            # Parse date
+            try:
+                from datetime import datetime
+                check_date = datetime.strptime(date, '%Y-%m-%d').date()
+            except ValueError as e:
+                return 400, {"message": f"Hibás dátum formátum: {str(e)}"}
+            
+            # Get equipment
+            equipment_qs = Equipment.objects.select_related('equipmentType')
+            if type_id:
+                equipment_qs = equipment_qs.filter(equipmentType_id=type_id)
+            
+            equipment_list = equipment_qs.all()
+            
+            # Check availability for each equipment
+            overview = []
+            for equip in equipment_list:
+                # Get bookings for this date
+                bookings_today = equip.forgatasok.filter(date=check_date).order_by('timeFrom')
+                
+                booking_details = []
+                for booking in bookings_today:
+                    booking_details.append({
+                        "forgatas_id": booking.id,
+                        "forgatas_name": booking.name,
+                        "time_from": booking.timeFrom.isoformat(),
+                        "time_to": booking.timeTo.isoformat(),
+                        "type": booking.forgTipus,
+                        "location": booking.location.name if booking.location else None
+                    })
+                
+                overview.append({
+                    "equipment_id": equip.id,
+                    "equipment_name": equip.nickname,
+                    "equipment_type": equip.equipmentType.name if equip.equipmentType else None,
+                    "functional": equip.functional,
+                    "available_periods": bookings_today.count() == 0,  # Simplified - fully free day
+                    "bookings": booking_details,
+                    "booking_count": bookings_today.count()
+                })
+            
+            return 200, overview
+            
+        except Exception as e:
+            return 401, {"message": f"Error getting equipment availability overview: {str(e)}"}
+
     @api.get("/equipment/{equipment_id}", auth=JWTAuth(), response={200: EquipmentSchema, 401: ErrorSchema, 404: ErrorSchema})
     def get_equipment_details(request, equipment_id: int):
         """
@@ -864,66 +928,3 @@ def register_equipment_endpoints(api):
         except Exception as e:
             return 401, {"message": f"Error getting equipment usage: {str(e)}"}
 
-    @api.get("/equipment/availability-overview", auth=JWTAuth(), response={200: list[dict], 401: ErrorSchema})
-    def get_equipment_availability_overview(request, date: str, type_id: int = None):
-        """
-        Get availability overview for all equipment on a specific date.
-        
-        Requires authentication. Returns availability status for all equipment,
-        optionally filtered by equipment type.
-        
-        Args:
-            date: Date to check (YYYY-MM-DD format)
-            type_id: Optional equipment type filter
-            
-        Returns:
-            200: List of equipment with availability status
-            401: Authentication failed
-            400: Invalid date format
-        """
-        try:
-            # Parse date
-            try:
-                from datetime import datetime
-                check_date = datetime.strptime(date, '%Y-%m-%d').date()
-            except ValueError as e:
-                return 400, {"message": f"Hibás dátum formátum: {str(e)}"}
-            
-            # Get equipment
-            equipment_qs = Equipment.objects.select_related('equipmentType')
-            if type_id:
-                equipment_qs = equipment_qs.filter(equipmentType_id=type_id)
-            
-            equipment_list = equipment_qs.all()
-            
-            # Check availability for each equipment
-            overview = []
-            for equip in equipment_list:
-                # Get bookings for this date
-                bookings_today = equip.forgatasok.filter(date=check_date).order_by('timeFrom')
-                
-                booking_details = []
-                for booking in bookings_today:
-                    booking_details.append({
-                        "forgatas_id": booking.id,
-                        "forgatas_name": booking.name,
-                        "time_from": booking.timeFrom.isoformat(),
-                        "time_to": booking.timeTo.isoformat(),
-                        "type": booking.forgTipus,
-                        "location": booking.location.name if booking.location else None
-                    })
-                
-                overview.append({
-                    "equipment_id": equip.id,
-                    "equipment_name": equip.nickname,
-                    "equipment_type": equip.equipmentType.name if equip.equipmentType else None,
-                    "functional": equip.functional,
-                    "available_periods": bookings_today.count() == 0,  # Simplified - fully free day
-                    "bookings": booking_details,
-                    "booking_count": bookings_today.count()
-                })
-            
-            return 200, overview
-            
-        except Exception as e:
-            return 401, {"message": f"Error getting equipment availability overview: {str(e)}"}

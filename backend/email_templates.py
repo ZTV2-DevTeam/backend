@@ -350,7 +350,7 @@ def get_base_email_template(
             <div class="email-header">
                 <div class="logo-section">
                     <div class="logo-text">FTV</div>
-                    <div class="platform-subtitle">Hiányzás Áttekintő Platform</div>
+                    <div class="platform-subtitle">Forgatásszervezési Platform</div>
                 </div>
                 <div class="email-title">{title}</div>
             </div>
@@ -720,6 +720,100 @@ def get_forgatas_creation_email_content(forgatas, creator_name: str) -> str:
     """
 
 
+def get_absence_approved_email_content(absence, approver_name: str, teacher_reason: str = None) -> str:
+    """
+    Generate HTML content for absence approval notification emails.
+    
+    Args:
+        absence: Tavollet model instance (the approved absence)
+        approver_name: Name of the person who approved the absence
+        teacher_reason: Optional reason/explanation for the approval
+        
+    Returns:
+        HTML content for absence approval email
+    """
+    # Format absence type if available
+    absence_type = absence.tipus.name if absence.tipus else 'Nincs megadva'
+    
+    return f"""
+    <div class="content-section">
+        <h2>✅ Távollét jóváhagyva</h2>
+        <p>Kedves {absence.user.get_full_name()}!</p>
+        <p>Tájékoztatjuk, hogy távollét kérését jóváhagyták.</p>
+    </div>
+    
+    <div class="success-box">
+        <p><strong>A távollét kérése elfogadásra került!</strong></p>
+    </div>
+    
+    <div class="info-box">
+        <h3>Jóváhagyott távollét részletei</h3>
+        <div class="info-item"><strong>Kezdő időpont:</strong> {absence.start_date.strftime('%Y. %m. %d. %H:%M')}</div>
+        <div class="info-item"><strong>Záró időpont:</strong> {absence.end_date.strftime('%Y. %m. %d. %H:%M')}</div>
+        <div class="info-item"><strong>Típus:</strong> {absence_type}</div>
+        {f'<div class="info-item"><strong>Ön indoklása:</strong> {absence.reason}</div>' if absence.reason else ''}
+        <div class="info-item"><strong>Jóváhagyta:</strong> {approver_name}</div>
+    </div>
+    
+    {f'''<div class="highlight-box">
+        <h3>Tanári megjegyzés</h3>
+        <p>{teacher_reason}</p>
+    </div>''' if teacher_reason else ''}
+    
+    <div class="content-section">
+        <p>A távollét jóváhagyva lett, és a rendszerben rögzítésre került.</p>
+        <p>Ha kérdése van, kérjük vegye fel a kapcsolatot az osztályfőnökével vagy a médiatanáraival.</p>
+    </div>
+    """
+
+
+def get_absence_denied_email_content(absence, denier_name: str, teacher_reason: str = None) -> str:
+    """
+    Generate HTML content for absence denial notification emails.
+    
+    Args:
+        absence: Tavollet model instance (the denied absence)
+        denier_name: Name of the person who denied the absence
+        teacher_reason: Optional reason/explanation for the denial
+        
+    Returns:
+        HTML content for absence denial email
+    """
+    # Format absence type if available
+    absence_type = absence.tipus.name if absence.tipus else 'Nincs megadva'
+    
+    return f"""
+    <div class="content-section">
+        <h2>❌ Távollét elutasítva</h2>
+        <p>Kedves {absence.user.get_full_name()}!</p>
+        <p>Tájékoztatjuk, hogy távollét kérését elutasították.</p>
+    </div>
+    
+    <div class="warning-box">
+        <p><strong>A távollét kérése nem került elfogadásra.</strong></p>
+    </div>
+    
+    <div class="info-box">
+        <h3>Elutasított távollét részletei</h3>
+        <div class="info-item"><strong>Kezdő időpont:</strong> {absence.start_date.strftime('%Y. %m. %d. %H:%M')}</div>
+        <div class="info-item"><strong>Záró időpont:</strong> {absence.end_date.strftime('%Y. %m. %d. %H:%M')}</div>
+        <div class="info-item"><strong>Típus:</strong> {absence_type}</div>
+        {f'<div class="info-item"><strong>Ön indoklása:</strong> {absence.reason}</div>' if absence.reason else ''}
+        <div class="info-item"><strong>Elutasította:</strong> {denier_name}</div>
+    </div>
+    
+    {f'''<div class="highlight-box">
+        <h3>Elutasítás indoklása</h3>
+        <p>{teacher_reason}</p>
+    </div>''' if teacher_reason else ''}
+    
+    <div class="content-section">
+        <p>A távollét elutasításra került. Ha kérdése van az elutasítással kapcsolatban, vagy úgy gondolja, hogy hiba történt, kérjük vegye fel a kapcsolatot az osztályfőnökével vagy a médiatanáraival.</p>
+        <p>Szükség esetén új távollét kérelmet nyújthat be a FTV rendszerben.</p>
+    </div>
+    """
+
+
 def send_html_emails_to_multiple_recipients(
     subject: str,
     html_content: str,
@@ -837,3 +931,100 @@ def send_html_emails_to_multiple_recipients(
     print(f"[EMAIL_DEBUG] ========== EMAIL SENDING DEBUG END ==========")
     
     return successful_count, failed_emails
+
+
+def get_absence_forgatas_reverse_conflict_email_content(absence, conflicting_forgatas_list) -> str:
+    """
+    Generate HTML content for reverse conflict notification emails.
+    This is used when a new Távollét request conflicts with existing Forgatás (Beosztás) records.
+    
+    Args:
+        absence: Tavollet model instance (the newly created absence)
+        conflicting_forgatas_list: List of conflicting Forgatas model instances
+        
+    Returns:
+        HTML content for reverse conflict notification email
+    """
+    # Format absence dates
+    from datetime import datetime
+    
+    absence_start = absence.start_date
+    absence_end = absence.end_date
+    
+    if hasattr(absence_start, 'strftime'):
+        absence_start_str = absence_start.strftime('%Y-%m-%d %H:%M')
+    else:
+        absence_start_str = str(absence_start)
+        
+    if hasattr(absence_end, 'strftime'):
+        absence_end_str = absence_end.strftime('%Y-%m-%d %H:%M')
+    else:
+        absence_end_str = str(absence_end)
+    
+    # Format absence type if available
+    absence_type = absence.tipus.name if absence.tipus else 'Nincs megadva'
+    
+    # Build list of conflicting forgatások
+    forgatas_list_html = ""
+    for forgatas in conflicting_forgatas_list:
+        forgatas_date_str = forgatas.date.strftime('%Y-%m-%d') if hasattr(forgatas.date, 'strftime') else str(forgatas.date)
+        forgatas_time_from = forgatas.timeFrom.strftime('%H:%M') if hasattr(forgatas.timeFrom, 'strftime') else str(forgatas.timeFrom)
+        forgatas_time_to = forgatas.timeTo.strftime('%H:%M') if hasattr(forgatas.timeTo, 'strftime') else str(forgatas.timeTo)
+        
+        forgatas_list_html += f"""
+        <div style="margin: 12px 0; padding: 12px; background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6; border-radius: 4px;">
+            <div style="font-weight: 600; color: #1e40af; margin-bottom: 4px;">
+                {forgatas.name}
+            </div>
+            <div style="font-size: 14px; color: #64748b;">
+                📅 {forgatas_date_str} | ⏰ {forgatas_time_from} - {forgatas_time_to}
+            </div>
+            {f'<div style="font-size: 14px; color: #64748b; margin-top: 4px;">📍 {forgatas.location.name}</div>' if forgatas.location else ''}
+        </div>
+        """
+    
+    return f"""
+    <div class="content-section">
+        <h2>⚠️ Távollét és Forgatás ütközés</h2>
+        <p>Kedves {absence.user.get_full_name()}!</p>
+        <p>Új távollét kérelmet nyújtott be, amely <strong>ütközik egy vagy több meglévő forgatási beosztással</strong>.</p>
+        <p>Ez azt jelenti, hogy a diákot már beosztották egy forgatásra, de távollét kérelmet is benyújtott ugyanarra az időpontra.</p>
+    </div>
+    
+    <div class="warning-box">
+        <h3>Új távollét részletei</h3>
+        <div class="info-item"><strong>Kezdés:</strong> {absence_start_str}</div>
+        <div class="info-item"><strong>Befejezés:</strong> {absence_end_str}</div>
+        <div class="info-item"><strong>Típus:</strong> {absence_type}</div>
+        {f'<div class="info-item"><strong>Indoklás:</strong> {absence.reason}</div>' if absence.reason else ''}
+    </div>
+    
+    <div class="highlight-box">
+        <h3>Ütköző forgatások</h3>
+        <p style="margin-bottom: 16px;">Az alábbi forgatási beosztásokkal van ütközés:</p>
+        {forgatas_list_html}
+    </div>
+    
+    <div class="content-section">
+        <h3>Mi a következő lépés?</h3>
+        <p><strong>Tanárok számára:</strong></p>
+        <ul style="margin-left: 20px; margin-bottom: 16px;">
+            <li>Ellenőrizze a távollét kérelem jogosságát</li>
+            <li>Ha a távollét valós, hagyja jóvá és szervezze át a forgatást</li>
+            <li>Ha a távollét nem indokolt, utasítsa el a kérelmet</li>
+        </ul>
+        
+        <p><strong>Diák számára:</strong></p>
+        <ul style="margin-left: 20px;">
+            <li>Kérjük ellenőrizze a forgatási beosztását</li>
+            <li>Ha mégis részt tud venni a forgatáson, vonja vissza a távollét kérelmet</li>
+            <li>Ha a távollét indokolt, várja meg a tanárok döntését</li>
+        </ul>
+    </div>
+    
+    <div class="content-section">
+        <p style="font-size: 14px; color: #64748b;">
+            Ez egy automatikus értesítés az FTV rendszerből. A konfliktus kezeléséhez jelentkezzen be a rendszerbe.
+        </p>
+    </div>
+    """
