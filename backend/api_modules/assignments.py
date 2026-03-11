@@ -791,7 +791,9 @@ def register_assignment_endpoints(api):
             )
 
             # Dictionary to collect data: user_id -> szerepkor_id -> list of occurrences
+            # Also track seen combinations to avoid duplicates: user_id -> szerepkor_id -> set of beosztas_ids
             matrix_data = {u.id: {} for u in users}
+            seen_combinations = {u.id: {} for u in users}
             all_roles = {}
             
             for beosztas in assignments:
@@ -804,14 +806,19 @@ def register_assignment_endpoints(api):
                         role_name = rel.szerepkor.name
                         all_roles[role_id] = role_name
                         
+                        # Initialize structures if needed
                         if role_id not in matrix_data[rel.user_id]:
                             matrix_data[rel.user_id][role_id] = []
-                            
-                        matrix_data[rel.user_id][role_id].append({
-                            "forgatas_name": beosztas.forgatas.name,
-                            "date": beosztas.forgatas.date.isoformat(),
-                            "time": beosztas.forgatas.timeFrom.isoformat()
-                        })
+                            seen_combinations[rel.user_id][role_id] = set()
+                        
+                        # Only add if this beosztas hasn't been recorded for this user-role combination
+                        if beosztas.id not in seen_combinations[rel.user_id][role_id]:
+                            seen_combinations[rel.user_id][role_id].add(beosztas.id)
+                            matrix_data[rel.user_id][role_id].append({
+                                "forgatas_name": beosztas.forgatas.name,
+                                "date": beosztas.forgatas.date.isoformat(),
+                                "time": beosztas.forgatas.timeFrom.isoformat()
+                            })
             
             # Build roles list
             roles_list = [{"id": r_id, "name": r_name} for r_id, r_name in all_roles.items()]
