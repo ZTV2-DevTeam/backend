@@ -454,11 +454,13 @@ class Osztaly(models.Model):
             return str(self)  # Fallback to original logic
         
         if self.szekcio.upper() == 'F':
-            year_diff = reference_tanev.start_year - self.startYear + 7
+            year_diff = reference_tanev.start_year - self.startYear + 8
             if year_diff < 8:
                 return 'Bejövő NYF'
+            elif year_diff == 8:
+                return 'NYF'
             return f'{year_diff}F'
-        return f'{self.startYear[:-2]}{self.szekcio.upper()}'
+        return f'{str(self.startYear)[-2:]}{self.szekcio.upper()}'
     
     def get_osztaly_fonokei(self):
         """Get all users assigned as class teachers for this class"""
