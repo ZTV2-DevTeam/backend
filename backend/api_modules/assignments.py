@@ -775,11 +775,19 @@ def register_assignment_endpoints(api):
                 }
             
             # Fetch all role mappings for these users from finalized assignments
+            from django.db.models import Prefetch
+            
+            # Only prefetch relations for users in THIS class
             assignments = Beosztas.objects.filter(
                 kesz=True,
                 szerepkor_relaciok__user__in=users
             ).select_related('forgatas').prefetch_related(
-                'szerepkor_relaciok', 'szerepkor_relaciok__szerepkor', 'szerepkor_relaciok__user'
+                Prefetch(
+                    'szerepkor_relaciok',
+                    queryset=SzerepkorRelaciok.objects.filter(
+                        user__in=users
+                    ).select_related('szerepkor', 'user')
+                )
             )
 
             # Dictionary to collect data: user_id -> szerepkor_id -> list of occurrences
