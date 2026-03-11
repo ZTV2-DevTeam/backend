@@ -742,14 +742,10 @@ def register_assignment_endpoints(api):
     """Register all assignment-related endpoints with the API router."""
     
     @api.get("/assignments/class-matrix/{class_id}", auth=JWTAuth(), response={200: ClassMatrixResponseSchema, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
-    def get_class_matrix(request, class_id: int, include_drafts: bool = False):
+    def get_class_matrix(request, class_id: int):
         """
         Get assignment matrix for a specific class.
         Shows how many times each class member was assigned each role.
-        
-        Args:
-            class_id: ID of the class
-            include_drafts: If True, includes both draft and finalized assignments. If False, only finalized.
         """
         try:
             requesting_user = request.auth
@@ -778,20 +774,14 @@ def register_assignment_endpoints(api):
                     "members": []
                 }
             
-            # Fetch all role mappings for these users
+            # Fetch all role mappings for these users from finalized assignments
             from django.db.models import Prefetch
             
-            # Build query: if include_drafts is False, filter only finalized (kesz=True)
-            # If include_drafts is True, include all assignments (no filter on kesz)
-            assignments_query = Beosztas.objects.filter(
-                szerepkor_relaciok__user__in=users
-            )
-            
-            if not include_drafts:
-                assignments_query = assignments_query.filter(kesz=True)
-            
             # Only prefetch relations for users in THIS class
-            assignments = assignments_query.select_related('forgatas').prefetch_related(
+            assignments = Beosztas.objects.filter(
+                kesz=True,
+                szerepkor_relaciok__user__in=users
+            ).select_related('forgatas').prefetch_related(
                 Prefetch(
                     'szerepkor_relaciok',
                     queryset=SzerepkorRelaciok.objects.filter(
