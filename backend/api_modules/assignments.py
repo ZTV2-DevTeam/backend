@@ -172,6 +172,36 @@ class StudentRolePairSchema(Schema):
     user_id: int
     szerepkor_id: int
 
+class ClassMatrixOccurrenceSchema(Schema):
+    """Schema for a single role assignment occurrence."""
+    forgatas_name: str
+    date: str
+    time: str
+
+class ClassMatrixCellSchema(Schema):
+    """Schema for a role cell in the matrix."""
+    szerepkor_id: int
+    count: int
+    occurrences: List[ClassMatrixOccurrenceSchema]
+
+class ClassMatrixMemberSchema(Schema):
+    """Schema for a student member in the matrix."""
+    user_id: int
+    user_name: str
+    roles: List[ClassMatrixCellSchema]
+
+class ClassMatrixRoleSchema(Schema):
+    """Schema for a role representation in the matrix."""
+    id: int
+    name: str
+
+class ClassMatrixResponseSchema(Schema):
+    """Response schema for the class assignment matrix."""
+    class_id: int
+    class_name: str
+    roles: List[ClassMatrixRoleSchema]
+    members: List[ClassMatrixMemberSchema]
+
 # ============================================================================
 # Utility Functions
 # ============================================================================
@@ -711,6 +741,107 @@ def auto_create_absences_for_beosztas(beosztas: Beosztas):
 def register_assignment_endpoints(api):
     """Register all assignment-related endpoints with the API router."""
     
+    @api.get("/assignments/class-matrix/{class_id}", auth=JWTAuth(), response={200: ClassMatrixResponseSchema, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
+    def get_class_matrix(request, class_id: int):
+        """
+        Get assignment matrix for a specific class.
+        Shows how many times each class member was assigned each role.
+        """
+        try:
+            requesting_user = request.auth
+            
+            # Check permissions (admin or teacher)
+            has_perm, msg = check_admin_or_teacher_permissions(requesting_user)
+            if not has_perm:
+                return 403, {"message": msg}
+                
+            from api.models import Osztaly
+            
+            try:
+                osztaly = Osztaly.objects.get(id=class_id)
+            except Osztaly.DoesNotExist:
+                return 404, {"message": "Osztály nem található."}
+
+            profiles = Profile.objects.filter(osztaly=osztaly).select_related('user')
+            users = [p.user for p in profiles]
+            user_ids = [u.id for u in users]
+            
+            if not users:
+                return 200, {
+                    "class_id": osztaly.id, 
+                    "class_name": osztaly.nev if hasattr(osztaly, 'nev') else f"{osztaly.startYear}-{osztaly.szekcio}", 
+                    "roles": [], 
+                    "members": []
+                }
+            
+            # Fetch all role mappings for these users from finalized assignments
+            assignments = Beosztas.objects.filter(
+                kesz=True,
+                szerepkor_relaciok__user__in=users
+            ).select_related('forgatas').prefetch_related(
+                'szerepkor_relaciok', 'szerepkor_relaciok__szerepkor', 'szerepkor_relaciok__user'
+            )
+
+            # Dictionary to collect data: user_id -> szerepkor_id -> list of occurrences
+            matrix_data = {u.id: {} for u in users}
+            all_roles = {}
+            
+            for beosztas in assignments:
+                if not beosztas.forgatas:
+                    continue
+                # For each relation in this beosztas
+                for rel in beosztas.szerepkor_relaciok.all():
+                    if rel.user_id in matrix_data:
+                        role_id = rel.szerepkor_id
+                        role_name = rel.szerepkor.name
+                        all_roles[role_id] = role_name
+                        
+                        if role_id not in matrix_data[rel.user_id]:
+                            matrix_data[rel.user_id][role_id] = []
+                            
+                        matrix_data[rel.user_id][role_id].append({
+                            "forgatas_name": beosztas.forgatas.name,
+                            "date": beosztas.forgatas.date.isoformat(),
+                            "time": beosztas.forgatas.timeFrom.isoformat()
+                        })
+            
+            # Build roles list
+            roles_list = [{"id": r_id, "name": r_name} for r_id, r_name in all_roles.items()]
+            # Sort roles alphabetically by name
+            roles_list.sort(key=lambda x: x["name"])
+            
+            # Build members list
+            members_list = []
+            for user in users:
+                roles_cells = []
+                for role_id in all_roles.keys():
+                    occurrences = matrix_data[user.id].get(role_id, [])
+                    roles_cells.append({
+                        "szerepkor_id": role_id,
+                        "count": len(occurrences),
+                        "occurrences": occurrences
+                    })
+                members_list.append({
+                    "user_id": user.id,
+                    "user_name": user.get_full_name() or user.username,
+                    "roles": roles_cells
+                })
+            
+            # Sort members alphabetically by name
+            members_list.sort(key=lambda x: x["user_name"])
+            
+            class_name = getattr(osztaly, 'nev', f"{osztaly.startYear}-{osztaly.szekcio}")
+
+            return 200, {
+                "class_id": osztaly.id,
+                "class_name": class_name,
+                "roles": roles_list,
+                "members": members_list
+            }
+
+        except Exception as e:
+            return 500, {"message": f"Hiba történt a statisztika lekérése során: {str(e)}"}
+            
     @api.get("/assignments/filming-assignments", auth=JWTAuth(), response={200: List[BeosztasSchema], 401: ErrorSchema, 500: ErrorSchema})
     def get_filming_assignments(request, forgatas_id: int = None, kesz: bool = None, 
                                start_date: str = None, end_date: str = None, stab_id: int = None):
