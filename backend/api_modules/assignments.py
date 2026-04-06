@@ -742,7 +742,7 @@ def register_assignment_endpoints(api):
     """Register all assignment-related endpoints with the API router."""
     
     @api.get("/assignments/class-matrix/{class_id}", auth=JWTAuth(), response={200: ClassMatrixResponseSchema, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
-    def get_class_matrix(request, class_id: int):
+    def get_class_matrix(request, class_id: int, time_filter: str = 'all'):
         """
         Get assignment matrix for a specific class.
         Shows how many times each class member was assigned each role.
@@ -776,12 +776,19 @@ def register_assignment_endpoints(api):
             
             # Fetch all role mappings for these users from finalized assignments
             from django.db.models import Prefetch
+            from django.utils import timezone
+            
+            # Base filters
+            filters = {
+                'kesz': True,
+                'szerepkor_relaciok__user__in': users
+            }
+            
+            if time_filter == 'past':
+                filters['forgatas__date__lt'] = timezone.now().date()
             
             # Only prefetch relations for users in THIS class
-            assignments = Beosztas.objects.filter(
-                kesz=True,
-                szerepkor_relaciok__user__in=users
-            ).select_related('forgatas').prefetch_related(
+            assignments = Beosztas.objects.filter(**filters).select_related('forgatas').prefetch_related(
                 Prefetch(
                     'szerepkor_relaciok',
                     queryset=SzerepkorRelaciok.objects.filter(

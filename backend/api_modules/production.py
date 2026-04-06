@@ -264,12 +264,14 @@ class ForgatSchema(Schema):
     time_to: str
     location: Optional[dict] = None
     contact_person: Optional[ContactPersonSchema] = None
+    szerkeszto: Optional[dict] = None
     notes: Optional[str] = None
     type: str
     type_display: str
     related_kacsa: Optional[dict] = None
     equipment_ids: list[int] = []
     equipment_count: int = 0
+    equipment_details: list[dict] = []
     tanev: Optional[dict] = None
 
 class ForgatWithRolesSchema(Schema):
@@ -282,12 +284,14 @@ class ForgatWithRolesSchema(Schema):
     time_to: str
     location: Optional[dict] = None
     contact_person: Optional[ContactPersonSchema] = None
+    szerkeszto: Optional[dict] = None
     notes: Optional[str] = None
     type: str
     type_display: str
     related_kacsa: Optional[dict] = None
     equipment_ids: list[int] = []
     equipment_count: int = 0
+    equipment_details: list[dict] = []
     tanev: Optional[dict] = None
     # Role assignment information
     assignment: Optional[dict] = None  # Beosztás information if exists
@@ -418,7 +422,23 @@ def create_forgatas_response(forgatas: Forgatas) -> dict:
             "id": forgatas.tanev.id,
             "display_name": str(forgatas.tanev),
             "is_active": Tanev.get_active() and Tanev.get_active().id == forgatas.tanev.id
-        } if forgatas.tanev else None
+        } if forgatas.tanev else None,
+        "equipment_details": [
+            {
+                "id": equipment.id,
+                "nickname": equipment.nickname,
+                "brand": equipment.brand,
+                "model": equipment.model,
+                "serial_number": equipment.serialNumber,
+                "equipment_type": {
+                    "name": equipment.equipmentType.name,
+                    "emoji": equipment.equipmentType.emoji,
+                } if equipment.equipmentType else None,
+                "functional": equipment.functional,
+                "notes": equipment.notes
+            }
+            for equipment in forgatas.equipments.all()
+        ]
     }
 
 def create_forgatas_with_roles_response(forgatas: Forgatas) -> dict:
@@ -626,9 +646,9 @@ def register_production_endpoints(api):
         """
         try:
             sessions = Forgatas.objects.select_related(
-                'location', 'contactPerson', 'relatedKaCsa', 'tanev'
-            ).prefetch_related('equipments').all()
-            
+                'location', 'contactPerson', 'relatedKaCsa', 'tanev', 'szerkeszto'
+            ).prefetch_related('equipments__equipmentType').all()
+
             if start_date:
                 sessions = sessions.filter(date__gte=start_date)
             if end_date:
@@ -1123,8 +1143,10 @@ def register_production_endpoints(api):
             401: Authentication failed
         """
         try:
-            forgatas_list = Forgatas.objects.all()
-            
+            forgatas_list = Forgatas.objects.select_related(
+                'location', 'contactPerson', 'relatedKaCsa', 'tanev', 'szerkeszto'
+            ).prefetch_related('equipments__equipmentType').all()
+
             # Apply date filters
             if date_from:
                 try:
