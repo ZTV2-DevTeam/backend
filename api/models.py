@@ -519,7 +519,7 @@ class RadioStab(models.Model):
     
     name = models.CharField(max_length=50, blank=False, null=False, verbose_name='Stáb név',
                            help_text='A rádiós stáb neve')
-    team_code = models.CharField(max_length=2, choices=RADIO_TEAMS, unique=True, verbose_name='Csapat kód',
+    team_code = models.CharField(max_length=2, choices=RADIO_TEAMS, verbose_name='Csapat kód',
                                 help_text='A rádiós csapat egyedi kódja (A1, A2, B3, B4)')
     description = models.TextField(max_length=300, blank=True, null=True, verbose_name='Leírás',
                                   help_text='A rádiós stáb részletes leírása (maximum 300 karakter)')
