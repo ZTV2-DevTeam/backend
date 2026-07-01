@@ -532,10 +532,9 @@ def create_classes_from_data(data: list) -> dict:
                     osztaly = Osztaly.objects.create(
                         startYear=record['start_year'],
                         szekcio=record['section'],
-                        tanev=current_tanev
                     )
                     
-                    # Add to current school year if it exists
+                    # Add to current school year if it exists (M2M-en át)
                     if current_tanev:
                         current_tanev.add_osztaly(osztaly)
                     

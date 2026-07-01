@@ -428,39 +428,58 @@ class Osztaly(models.Model):
                                    help_text='Az év, amikor az osztály első alkalommal megkezdte tanulmányait')
     szekcio = models.CharField(max_length=1, blank=False, null=False, verbose_name='Szekció', 
                               help_text='Az osztály szekciója (pl. F, A, B, stb.)')
-    tanev = models.ForeignKey('Tanev', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Tanév', 
-                              help_text='Az a tanév, amikor ez az osztály aktív volt/lesz')
     osztaly_fonokei = models.ManyToManyField('auth.User', blank=True, related_name='osztaly_fonokei', 
                                            verbose_name='Osztályfőnökei', 
                                            help_text='Az osztályfőnök és helyettese')
 
     def __str__(self):
+        # A megjelenített osztálynév mindig az aktuálisan aktív tanév alapján
+        # kerül kiszámításra (a Tanev.osztalyok M2M az igazságforrás arra, hogy
+        # egy osztály melyik tanévben aktív).
+        return self.get_current_year_name()
+
+    def get_current_year_name(self, reference_tanev=None):
+        """Az osztály neve egy adott tanévhez viszonyítva.
+
+        Ha nincs megadva ``reference_tanev``, akkor az aktuálisan aktív tanévet
+        használjuk. Ha nincs aktív tanév egyáltalán (pl. nyári szünet vagy
+        friss telepítés), akkor a mai dátum alapján próbálunk visszaesni egy
+        naptári becslésre, hogy a régi viselkedést megőrizzük.
+        """
+        if reference_tanev is None:
+            reference_tanev = Tanev.get_active()
+
+        szekcio = self.szekcio.upper()
+
+        if reference_tanev is not None:
+            if szekcio == 'F':
+                year_diff = reference_tanev.start_year - self.startYear + 8
+                if year_diff < 8:
+                    return 'Bejövő NYF'
+                if year_diff == 8:
+                    return 'NYF'
+                return f'{year_diff}F'
+            return f'{str(self.startYear)[-2:]}{szekcio}'
+
+        # Fallback: nincs aktív tanév, számoljunk a mai dátum alapján.
         current_year = datetime.now().year
         month = datetime.now().month
-        szekcio = self.szekcio.upper()
         if szekcio == 'F':
             if self.startYear == current_year and month < 9:
                 return 'NYF'
             year_diff = current_year - self.startYear + (9 if month >= 9 else 8) - 1
             return 'NYF' if year_diff <= 8 else f'{year_diff}F'
-        return f'{str(self.startYear)[:-2]}{szekcio}'
-    
-    def get_current_year_name(self, reference_tanev=None):
-        """Get the class name for a specific school year"""
-        if reference_tanev is None:
-            reference_tanev = Tanev.get_active()
-        
-        if not reference_tanev:
-            return str(self)  # Fallback to original logic
-        
-        if self.szekcio.upper() == 'F':
-            year_diff = reference_tanev.start_year - self.startYear + 8
-            if year_diff < 8:
-                return 'Bejövő NYF'
-            elif year_diff == 8:
-                return 'NYF'
-            return f'{year_diff}F'
-        return f'{str(self.startYear)[-2:]}{self.szekcio.upper()}'
+        return f'{str(self.startYear)[-2:]}{szekcio}'
+
+    @property
+    def tanev(self):
+        """A legutóbbi tanév, amelyhez ez az osztály hozzá van rendelve (M2M).
+
+        Visszamenőleges kompatibilitás érdekében megtartjuk ezt az attribútumot
+        olvasásra: mostantól a ``Tanev.osztalyok`` M2M-en keresztül számoljuk,
+        így nincs két külön adatforrás.
+        """
+        return self.tanevek.order_by('-start_date').first()
     
     def get_osztaly_fonokei(self):
         """Get all users assigned as class teachers for this class"""
