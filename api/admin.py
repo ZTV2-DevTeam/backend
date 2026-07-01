@@ -656,16 +656,15 @@ class TanevAdmin(ImportExportModelAdmin):
 @admin.register(Osztaly)
 class OsztalyAdmin(ImportExportModelAdmin):
     resource_class = OsztalyResource
-    list_display = ['display_osztaly', 'startYear', 'szekcio', 'tanev', 'student_count', 'fonok_count']
-    list_filter = ['szekcio', 'startYear', 'tanev']
+    list_display = ['display_osztaly', 'startYear', 'szekcio', 'display_tanev', 'student_count', 'fonok_count']
+    list_filter = ['szekcio', 'startYear', 'tanevek']
     search_fields = ['szekcio', 'startYear']
-    autocomplete_fields = ['tanev']
     filter_horizontal = ['osztaly_fonokei']
     
     fieldsets = (
         ('🏫 Osztály adatok', {
-            'fields': ('startYear', 'szekcio', 'tanev'),
-            'description': 'Az osztály alapvető azonosítói'
+            'fields': ('startYear', 'szekcio'),
+            'description': 'Az osztály alapvető azonosítói. A tanévhez rendelést a Tanév képernyőn kell kezelni.'
         }),
         ('👨‍🏫 Osztályfőnökök', {
             'fields': ('osztaly_fonokei',),
@@ -676,6 +675,11 @@ class OsztalyAdmin(ImportExportModelAdmin):
     def display_osztaly(self, obj):
         return format_html('<strong style="color: #0066cc;">{}</strong>', str(obj))
     display_osztaly.short_description = 'Osztály'
+
+    def display_tanev(self, obj):
+        tanev = obj.tanev
+        return str(tanev) if tanev else '-'
+    display_tanev.short_description = 'Tanév'
     
     def student_count(self, obj):
         count = Profile.objects.filter(osztaly=obj).count()

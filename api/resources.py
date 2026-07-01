@@ -387,14 +387,21 @@ class TanevResource(resources.ModelResource):
 
 
 class OsztalyResource(resources.ModelResource):
-    """Class import/export with school year relationship"""
-    
+    """Class import/export.
+
+    A tanévhez tartozást a ``Tanev.osztalyok`` M2M kezeli, ezért itt csak
+    kiszámított kimenő mezőként exportáljuk (a legutóbbi kapcsolódó tanévet).
+    """
+
     tanev_display = fields.Field(
         column_name='tanev_display',
-        attribute='tanev',
-        readonly=True
+        readonly=True,
     )
-    
+
+    def dehydrate_tanev_display(self, osztaly):
+        tanev = osztaly.tanev
+        return str(tanev) if tanev else ''
+
     class Meta:
         model = Osztaly
         fields = ('id', 'startYear', 'szekcio', 'tanev_display')
