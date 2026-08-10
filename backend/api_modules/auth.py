@@ -86,14 +86,20 @@ class JWTAuth(HttpBearer):
             user_id = payload.get("user_id")
             if user_id:
                 user = User.objects.get(id=user_id)
-                if user.is_active:  # Check if user is active
-                    print(f"User {user.username} authenticated successfully")  # Debug
-                    user.last_login = datetime.now()
-                    user.save(update_fields=["last_login"])
-                    return user
-                else:
+                if not user.is_active:  # Check if user is active
                     print(f"User {user.username} is not active")  # Debug
                     return None
+                # Az aktuális tanévhez nem tartozó (nem tanár/admin) diákok
+                # tokenjét is elutasítjuk, hogy a régi tokennel se lehessen
+                # bejutni a rendszer erőforrásaiba.
+                allowed, deny_reason = is_user_allowed_for_current_tanev(user)
+                if not allowed:
+                    print(f"User {user.username} not allowed for current tanev: {deny_reason}")
+                    return None
+                print(f"User {user.username} authenticated successfully")  # Debug
+                user.last_login = datetime.now()
+                user.save(update_fields=["last_login"])
+                return user
             else:
                 print("No user_id in JWT payload")  # Debug
                 return None
@@ -133,6 +139,67 @@ class ErrorSchema(Schema):
 # ============================================================================
 # Utility Functions
 # ============================================================================
+
+def is_user_allowed_for_current_tanev(user: User) -> tuple[bool, str]:
+    """Ellenőrzi, hogy egy felhasználó bejelentkezhet-e az aktuális tanév alapján.
+
+    A rendszer több ``Tanev`` objektumot is kezel egyidejűleg, ezért ez a
+    függvény azt vizsgálja, hogy a felhasználó osztálya benne van-e a
+    jelenleg aktív tanév ``osztalyok`` M2M kapcsolatában. Kivételek:
+    tanárok, adminisztrátorok, osztályfőnökök (illetve a Django staff/
+    superuser) mindig beléphetnek, mert az ő szerepük nincs egyetlen
+    tanévhez kötve.
+
+    Args:
+        user: A hitelesített ``auth.User`` példány
+
+    Returns:
+        Tuple ``(allowed, reason)``. ``allowed`` True, ha bejelentkezhet;
+        egyébként ``reason`` egy magyar nyelvű, felhasználónak megjeleníthető
+        üzenet.
+    """
+    # Django-szintű privilegizált fiókok mindig beléphetnek.
+    if user.is_superuser or user.is_staff:
+        return True, ""
+
+    try:
+        from api.models import Profile, Tanev, Osztaly
+    except Exception as e:  # pragma: no cover - very unlikely
+        print(f"is_user_allowed_for_current_tanev import error: {e}")
+        return True, ""
+
+    # Adminisztrátorok/tanárok/osztályfőnökök szintén mindig beléphetnek.
+    try:
+        profile = Profile.objects.select_related('osztaly').get(user=user)
+    except Profile.DoesNotExist:
+        # Nincs profil -> nem diák, engedjük bejelentkezni (pl. új admin).
+        return True, ""
+
+    if profile.is_admin:
+        return True, ""
+    if Osztaly.objects.filter(osztaly_fonokei=user).exists():
+        return True, ""
+
+    active_tanev = Tanev.get_active()
+    if active_tanev is None:
+        # Nincs beállított aktív tanév: nem tudjuk kikényszeríteni a
+        # korlátozást, ezért a régi viselkedést tartjuk és engedjük belépni.
+        return True, ""
+
+    if profile.osztaly is None:
+        return False, (
+            "A felhasználó nincs osztályhoz rendelve, ezért az aktuális tanévben "
+            "nem jelentkezhet be. Fordulj a médiatanárhoz."
+        )
+
+    if not active_tanev.osztalyok.filter(pk=profile.osztaly_id).exists():
+        return False, (
+            "A felhasználó osztálya nem tartozik az aktuális tanévhez, ezért "
+            "a bejelentkezés le van tiltva."
+        )
+
+    return True, ""
+
 
 def generate_jwt_token(user: User) -> str:
     """
@@ -184,12 +251,17 @@ def create_user_response(user: User, token: str = None) -> dict:
 def register_auth_endpoints(api):
     """Register all authentication endpoints with the API router."""
     
-    @api.post("/login", response={200: LoginSchema, 401: ErrorSchema})
+    @api.post("/login", response={200: LoginSchema, 401: ErrorSchema, 403: ErrorSchema})
     def login(request, username: Form[str], password: Form[str]):
         """
         User login endpoint.
         
         Authenticates user credentials and returns JWT token.
+
+        Note: A rendszer csak azoknak a diákoknak engedi a bejelentkezést,
+        akiknek az osztálya az aktuálisan aktív tanévhez van rendelve.
+        Tanárok, adminisztrátorok és osztályfőnökök mindig beléphetnek,
+        függetlenül a tanévi hozzárendelésektől.
         
         Args:
             username: User's username
@@ -198,6 +270,7 @@ def register_auth_endpoints(api):
         Returns:
             200: Login successful with token and user info
             401: Authentication failed
+            403: Login denied (user is not in the current school year)
         """
         print(f"Login attempt for username: {username}")  # Debug print
         
@@ -213,6 +286,13 @@ def register_auth_endpoints(api):
         if not user.is_active:
             print(f"User {username} is not active")  # Debug print
             return 401, {"message": "Unauthorized"}
+
+        # Csak az aktuális tanévhez tartozó diákok jelentkezhetnek be.
+        # A tanárok/adminok/osztályfőnökök kivételek.
+        allowed, deny_reason = is_user_allowed_for_current_tanev(user)
+        if not allowed:
+            print(f"User {username} not allowed for current tanev: {deny_reason}")
+            return 403, {"message": deny_reason}
 
         # Update user's last login timestamp on successful authentication
         from django.utils import timezone

@@ -172,6 +172,7 @@ class OsztalySchema(Schema):
     current_name: str
     tanev_id: Optional[int] = None
     tanev_name: Optional[str] = None
+    tanev_ids: List[int] = []
 
 class ProfileMinimalSchema(Schema):
     """Minimal profile schema for user information."""
@@ -283,20 +284,18 @@ def get_optimized_profiles_queryset():
     return Profile.objects.select_related(
         'user',
         'osztaly',
-        'osztaly__tanev',
         'stab',
         'radio_stab'
-    ).all()
+    ).prefetch_related('osztaly__tanevek').all()
 
 def get_student_profiles_queryset():
     """Get optimized queryset for student profiles only."""
     return Profile.objects.select_related(
         'user',
         'osztaly',
-        'osztaly__tanev',
         'stab',
         'radio_stab'
-    ).filter(
+    ).prefetch_related('osztaly__tanevek').filter(
         admin_type='none'
     ).exclude(
         special_role='production_leader'
@@ -304,13 +303,19 @@ def get_student_profiles_queryset():
 
 def serialize_osztaly(osztaly: Osztaly) -> dict:
     """Serialize Osztaly instance to dictionary."""
+    # A tanév információt a Tanev.osztalyok M2M-en keresztül számoljuk. A
+    # `tanev_id`/`tanev_name` mezők a legutóbbi kapcsolódó tanévet adják vissza
+    # visszamenőleges kompatibilitás miatt; a `tanev_ids` az összeset.
+    tanevek = list(osztaly.tanevek.all().order_by('-start_date'))
+    latest = tanevek[0] if tanevek else None
     return {
         'id': osztaly.id,
         'startYear': osztaly.startYear,
         'szekcio': osztaly.szekcio,
         'current_name': str(osztaly),
-        'tanev_id': osztaly.tanev.id if osztaly.tanev else None,
-        'tanev_name': str(osztaly.tanev) if osztaly.tanev else None
+        'tanev_id': latest.id if latest else None,
+        'tanev_name': str(latest) if latest else None,
+        'tanev_ids': [t.id for t in tanevek],
     }
 
 def serialize_forgatas(forgatas) -> dict:
@@ -424,7 +429,7 @@ def register_sync_endpoints(api):
         
         # Fetch classes
         perf.start_timer("fetch_classes")
-        osztalyok = list(Osztaly.objects.select_related('tanev').all())
+        osztalyok = list(Osztaly.objects.prefetch_related('tanevek').all())
         perf.end_timer("fetch_classes")
         perf.record_count("class_count", len(osztalyok))
         
@@ -459,7 +464,7 @@ def register_sync_endpoints(api):
         
         # Fetch classes
         perf.start_timer("fetch_classes")
-        osztalyok = list(Osztaly.objects.select_related('tanev').all())
+        osztalyok = list(Osztaly.objects.prefetch_related('tanevek').all())
         perf.end_timer("fetch_classes")
         perf.record_count("class_count", len(osztalyok))
         
@@ -497,7 +502,7 @@ def register_sync_endpoints(api):
         perf = PerformanceMonitor(debug_performance)
         
         perf.start_timer("fetch_classes")
-        osztalyok = list(Osztaly.objects.select_related('tanev').all())
+        osztalyok = list(Osztaly.objects.prefetch_related('tanevek').all())
         perf.end_timer("fetch_classes")
         perf.record_count("class_count", len(osztalyok))
         
@@ -536,7 +541,7 @@ def register_sync_endpoints(api):
         
         # Find osztaly by start year
         perf.start_timer("fetch_osztaly")
-        osztalyok = list(Osztaly.objects.select_related('tanev').filter(startYear=year))
+        osztalyok = list(Osztaly.objects.prefetch_related('tanevek').filter(startYear=year))
         perf.end_timer("fetch_osztaly")
         
         if not osztalyok:
@@ -585,7 +590,7 @@ def register_sync_endpoints(api):
         # Find osztaly by start year and szekcio
         perf.start_timer("fetch_osztaly")
         try:
-            osztaly = Osztaly.objects.select_related('tanev').get(startYear=startYear, szekcio=szekcio)
+            osztaly = Osztaly.objects.prefetch_related('tanevek').get(startYear=startYear, szekcio=szekcio)
         except Osztaly.DoesNotExist:
             return 404, {"detail": f"No class found with start year {startYear} and section {szekcio}"}
         perf.end_timer("fetch_osztaly")
@@ -714,7 +719,7 @@ def register_sync_endpoints(api):
         # Get or create profile
         perf.start_timer("fetch_profile")
         profile, created = Profile.objects.select_related(
-            'user', 'osztaly', 'osztaly__tanev', 'stab', 'radio_stab'
+            'user', 'osztaly', 'stab', 'radio_stab'
         ).get_or_create(user=user)
         perf.end_timer("fetch_profile")
         perf.record_count("profile_created", 1 if created else 0)
@@ -749,7 +754,7 @@ def register_sync_endpoints(api):
         # Get or create profile
         perf.start_timer("fetch_profile")
         profile, created = Profile.objects.select_related(
-            'user', 'osztaly', 'osztaly__tanev', 'stab', 'radio_stab'
+            'user', 'osztaly', 'stab', 'radio_stab'
         ).get_or_create(user=user)
         perf.end_timer("fetch_profile")
         perf.record_count("profile_created", 1 if created else 0)

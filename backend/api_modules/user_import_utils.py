@@ -133,7 +133,11 @@ def get_or_create_radio_stab(radio_name: str, radio_code: str, dry_run: bool = F
 
 
 def get_or_create_class(start_year: int, section: str, tanev: Tanev = None, dry_run: bool = False) -> tuple:
-    """Get or create a class by start year and section. Returns (osztaly, created)."""
+    """Get or create a class by start year and section. Returns (osztaly, created).
+
+    A tanévhez rendelést a ``Tanev.osztalyok`` M2M kezeli, ezért ha kapunk
+    ``tanev`` argumentumot, azt csak M2M-en keresztül csatlakoztatjuk.
+    """
     if not start_year or not section:
         return None, False
     
@@ -145,19 +149,11 @@ def get_or_create_class(start_year: int, section: str, tanev: Tanev = None, dry_
     osztaly, created = Osztaly.objects.get_or_create(
         startYear=start_year,
         szekcio=section.upper(),
-        defaults={
-            'startYear': start_year,
-            'szekcio': section.upper(),
-            'tanev': tanev
-        }
     )
     
-    # If tanev is provided and the class didn't have one, assign it
-    if tanev and not osztaly.tanev:
-        osztaly.tanev = tanev
-        osztaly.save()
-        if tanev:
-            tanev.add_osztaly(osztaly)
+    # Ha kaptunk tanévet, és még nincs hozzárendelve, csatoljuk M2M-en át.
+    if tanev and not tanev.osztalyok.filter(pk=osztaly.pk).exists():
+        tanev.add_osztaly(osztaly)
     
     return osztaly, created
 

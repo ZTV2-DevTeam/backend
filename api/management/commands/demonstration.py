@@ -222,11 +222,11 @@ class Command(BaseCommand):
                 osztaly, created = Osztaly.objects.get_or_create(
                     startYear=start_year,
                     szekcio=section,
-                    defaults={
-                        'tanev': random.choice(tanevek) if tanevek else None
-                    }
                 )
                 if created:
+                    # Random hozzárendelés egy tanévhez a M2M-en át
+                    if tanevek:
+                        random.choice(tanevek).add_osztaly(osztaly)
                     created_count += 1
 
         self.stdout.write(f'Created {created_count} F classes (skipped {5 * len(sections) - created_count} existing)')

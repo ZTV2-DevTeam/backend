@@ -315,12 +315,18 @@ def get_detailed_class_status() -> List[dict]:
         class_teachers = [f"{teacher.last_name} {teacher.first_name}" 
                          for teacher in osztaly.osztaly_fonokei.all()]
         
+        # Build tanev label from the M2M reverse relation.
+        tanev_str = None
+        latest_tanev = osztaly.tanevek.order_by('-start_date').first() if hasattr(osztaly, 'tanevek') else None
+        if latest_tanev:
+            tanev_str = str(latest_tanev)
+
         class_data = {
             'id': osztaly.id,
             'name': str(osztaly),
             'start_year': osztaly.startYear,
             'section': osztaly.szekcio,
-            'tanev': str(osztaly.tanev) if osztaly.tanev else None,
+            'tanev': tanev_str,
             'student_count': student_count,
             'teacher_count': teacher_count,
             'class_teachers': class_teachers,

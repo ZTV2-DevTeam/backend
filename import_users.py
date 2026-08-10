@@ -339,19 +339,11 @@ def get_or_create_class(start_year: int, section: str, tanev: Tanev = None) -> O
     osztaly, created = Osztaly.objects.get_or_create(
         startYear=start_year,
         szekcio=section.upper(),
-        defaults={
-            'startYear': start_year,
-            'szekcio': section.upper(),
-            'tanev': tanev
-        }
     )
     
-    # If tanev is provided and the class didn't have one, assign it
-    if tanev and not osztaly.tanev:
-        osztaly.tanev = tanev
-        osztaly.save()
-        if tanev:
-            tanev.add_osztaly(osztaly)
+    # Ha kaptunk tanévet, és még nincs hozzárendelve, csatoljuk M2M-en át.
+    if tanev and not tanev.osztalyok.filter(pk=osztaly.pk).exists():
+        tanev.add_osztaly(osztaly)
     
     if created:
         print(f"  ✓ Created class: {start_year}{section.upper()}")

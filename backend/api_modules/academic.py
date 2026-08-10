@@ -199,6 +199,7 @@ class OsztalySchema(Schema):
     display_name: str
     current_display_name: Optional[str] = None
     tanev: Optional[TanevSchema] = None
+    tanevek: list[TanevSchema] = []
     student_count: int = 0
 
 class OsztalyCreateSchema(Schema):
@@ -229,6 +230,7 @@ class OsztalyWithTeachersSchema(Schema):
     display_name: str
     current_display_name: Optional[str] = None
     tanev: Optional[TanevSchema] = None
+    tanevek: list[TanevSchema] = []
     student_count: int = 0
     teachers: list[OsztalyTeacherSchema] = []
 
@@ -274,13 +276,20 @@ def create_osztaly_response(osztaly: Osztaly) -> dict:
     Returns:
         Dictionary with class information
     """
+    # A tanév információt a Tanev.osztalyok M2M-en keresztül számoljuk. Több
+    # tanév is tartozhat egy osztályhoz (különböző évfolyamokban), így a
+    # frontend külön kezelheti őket. A `tanev` mező a legutóbbi tanévet adja
+    # vissza visszamenőleges kompatibilitás miatt.
+    tanevek_qs = osztaly.tanevek.all().order_by('-start_date')
+    tanevek = [create_tanev_response(t) for t in tanevek_qs]
     return {
         "id": osztaly.id,
         "start_year": osztaly.startYear,
         "szekcio": osztaly.szekcio,
         "display_name": str(osztaly),
         "current_display_name": osztaly.get_current_year_name() if hasattr(osztaly, 'get_current_year_name') else str(osztaly),
-        "tanev": create_tanev_response(osztaly.tanev) if osztaly.tanev else None,
+        "tanev": tanevek[0] if tanevek else None,
+        "tanevek": tanevek,
         "student_count": osztaly.profile_set.count() if hasattr(osztaly, 'profile_set') else 0
     }
 
@@ -503,7 +512,7 @@ def register_academic_endpoints(api):
             401: Authentication failed
         """
         try:
-            classes = Osztaly.objects.select_related('tanev').all()
+            classes = Osztaly.objects.prefetch_related('tanevek').all()
             
             response = []
             for osztaly in classes:
@@ -529,7 +538,7 @@ def register_academic_endpoints(api):
             401: Authentication failed
         """
         try:
-            osztaly = Osztaly.objects.select_related('tanev').get(id=osztaly_id)
+            osztaly = Osztaly.objects.prefetch_related('tanevek').get(id=osztaly_id)
             return 200, create_osztaly_response(osztaly)
         except Osztaly.DoesNotExist:
             return 404, {"message": "Osztály nem található"}
@@ -551,7 +560,7 @@ def register_academic_endpoints(api):
             401: Authentication failed
         """
         try:
-            classes = Osztaly.objects.select_related('tanev').filter(
+            classes = Osztaly.objects.prefetch_related('tanevek').filter(
                 szekcio__iexact=szekcio
             )
             
@@ -599,8 +608,9 @@ def register_academic_endpoints(api):
             osztaly = Osztaly.objects.create(
                 startYear=data.start_year,
                 szekcio=data.szekcio.upper(),
-                tanev=tanev
             )
+            if tanev is not None:
+                tanev.add_osztaly(osztaly)
             
             return 201, create_osztaly_response(osztaly)
         except Exception as e:
@@ -642,7 +652,8 @@ def register_academic_endpoints(api):
             if data.tanev_id is not None:
                 try:
                     tanev = Tanev.objects.get(id=data.tanev_id)
-                    osztaly.tanev = tanev
+                    # Az osztály tanévhez rendelését a M2M-en keresztül kezeljük.
+                    tanev.add_osztaly(osztaly)
                 except Tanev.DoesNotExist:
                     return 400, {"message": "Tanév nem található"}
             
@@ -740,7 +751,7 @@ def register_academic_endpoints(api):
             401: Authentication failed
         """
         try:
-            osztaly = Osztaly.objects.select_related('tanev').get(id=osztaly_id)
+            osztaly = Osztaly.objects.prefetch_related('tanevek').get(id=osztaly_id)
             return 200, create_osztaly_with_teachers_response(osztaly)
         except Osztaly.DoesNotExist:
             return 404, {"message": "Osztály nem található"}
@@ -867,7 +878,7 @@ def register_academic_endpoints(api):
                 if not has_permission:
                     return 401, {"message": "Csak saját osztályait vagy adminisztrátorként tekintheti meg"}
             
-            classes = Osztaly.objects.filter(osztaly_fonokei=user).select_related('tanev')
+            classes = Osztaly.objects.filter(osztaly_fonokei=user).prefetch_related('tanevek')
             
             response = []
             for osztaly in classes:
