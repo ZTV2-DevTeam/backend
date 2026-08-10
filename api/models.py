@@ -191,6 +191,8 @@ class Profile(models.Model):
                                    help_text='A felhasználó különleges szerepe a rendszerben')
     szerkeszto = models.BooleanField(default=False, verbose_name='Szerkesztő', 
                                    help_text='Jelöli, hogy a felhasználó kiírhat-e forgatásokat')
+    elrejtve = models.BooleanField(default=False, verbose_name='Elrejtve a Stáb oldalon',
+                                  help_text='Ha be van jelölve, a felhasználó nem jelenik meg a Stáb oldal listájában')
 
     class Meta:
         verbose_name = 'Profil'

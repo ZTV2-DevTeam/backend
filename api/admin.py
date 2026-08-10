@@ -689,10 +689,10 @@ class OsztalyAdmin(ImportExportModelAdmin):
 @admin.register(Profile)
 class ProfileAdmin(ImportExportModelAdmin):
     resource_classes = [ProfileResource]  # Use only ProfileResource which handles both osztaly_name and osztaly_display
-    list_display = ['user_full_name', 'user_status', 'telefonszam', 'medias', 'display_osztaly', 'display_stab', 'admin_level', 'special_role_display', 'szerkeszto_status']
+    list_display = ['user_full_name', 'user_status', 'telefonszam', 'medias', 'display_osztaly', 'display_stab', 'admin_level', 'special_role_display', 'szerkeszto_status', 'elrejtve_status']
     list_filter = [
         'medias', 'osztaly', 'stab', 'radio_stab', 'admin_type', 
-        'special_role', 'szerkeszto'
+        'special_role', 'szerkeszto', 'elrejtve'
     ]
     search_fields = ['user__first_name', 'user__last_name', 'user__username', 'telefonszam']
     autocomplete_fields = ['user', 'osztaly', 'stab', 'radio_stab']
@@ -713,6 +713,10 @@ class ProfileAdmin(ImportExportModelAdmin):
         ('⚡ Jogosultságok és szerepek', {
             'fields': ('admin_type', 'special_role', 'szerkeszto'),
             'description': 'Adminisztrátor jogosultságok és különleges szerepek'
+        }),
+        ('👁️ Stáb oldal láthatósága', {
+            'fields': ('elrejtve',),
+            'description': 'Elrejtve esetén a felhasználó nem jelenik meg az app Stáb oldalának listájában'
         }),
         ('📊 Számított jogosultságok', {
             'fields': ('is_admin', 'is_developer_admin', 'is_teacher_admin', 'is_system_admin', 'is_production_leader', 'display_permissions'),
@@ -773,6 +777,12 @@ class ProfileAdmin(ImportExportModelAdmin):
             return format_html('<span style="color: green; font-weight: bold;">✏️ Igen</span>')
         return format_html('<span style="color: gray;">❌ Nem</span>')
     szerkeszto_status.short_description = 'Szerkesztő'
+
+    def elrejtve_status(self, obj):
+        if obj.elrejtve:
+            return format_html('<span style="color: #dc3545; font-weight: bold;">🙈 Elrejtve</span>')
+        return format_html('<span style="color: gray;">👁️ Látható</span>')
+    elrejtve_status.short_description = 'Stáb oldalon'
     
     def display_permissions(self, obj):
         perms = []

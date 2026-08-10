@@ -112,6 +112,7 @@ from django.utils import timezone
 class UserProfileSchema(Schema):
     """Response schema for user profile data."""
     id: int
+    profile_id: Optional[int] = None
     username: str
     first_name: str
     last_name: str
@@ -127,6 +128,21 @@ class UserProfileSchema(Schema):
     is_second_year_radio: bool = False
     szerkeszto: bool = False
     can_create_forgatas: bool = False
+    elrejtve: bool = False
+
+class StabHistoryEntrySchema(Schema):
+    """Response schema for a single stáb/radio stáb membership change record."""
+    id: int
+    previous_stab: Optional[str] = None
+    previous_radio_stab: Optional[str] = None
+    new_stab: Optional[str] = None
+    new_radio_stab: Optional[str] = None
+    datetime: str
+
+class ToggleHiddenResponseSchema(Schema):
+    """Response schema for toggling a user's visibility on the Stáb page."""
+    id: int
+    elrejtve: bool
 
 class ActiveUserSchema(Schema):
     """Response schema for active user data."""
@@ -183,6 +199,7 @@ def create_user_profile_response(profile: Profile) -> dict:
 
     return {
         "id": profile.user.id,
+        "profile_id": profile.id,
         "username": profile.user.username,
         "first_name": profile.user.first_name,
         "last_name": profile.user.last_name,
@@ -197,7 +214,8 @@ def create_user_profile_response(profile: Profile) -> dict:
         "osztaly_name": str(profile.osztaly) if profile.osztaly else None,
         "is_second_year_radio": profile.is_second_year_radio_student,
         "szerkeszto": profile.szerkeszto,
-        "can_create_forgatas": profile.can_create_forgatas
+        "can_create_forgatas": profile.can_create_forgatas,
+        "elrejtve": profile.elrejtve
     }
 
 def get_or_create_user_profile_response(user) -> dict:
@@ -388,6 +406,76 @@ def register_user_endpoints(api):
             return 404, {"message": "Felhasználó nem található"}
         except Exception as e:
             return 500, {"message": f"Error fetching user details: {str(e)}"}
+
+    @api.get("/users/{user_id}/stab-history", auth=JWTAuth(), response={200: list[StabHistoryEntrySchema], 404: ErrorSchema, 500: ErrorSchema})
+    def get_user_stab_history(request, user_id: int):
+        """
+        Get a user's previous stáb/radio stáb membership history.
+
+        Returns the Átigazolás records generated automatically whenever the
+        user's stáb or radio stáb assignment changes. Accessible to any
+        authenticated user (same visibility as the public profile endpoint).
+
+        Args:
+            user_id: Unique user identifier
+
+        Returns:
+            200: List of stáb history entries (newest first)
+            404: Profile not found
+            500: Server error
+        """
+        try:
+            from api.models import Atigazolas
+            profile = Profile.objects.get(user__id=user_id)
+            entries = Atigazolas.objects.filter(profile=profile).order_by('-datetime')
+            return 200, [
+                {
+                    "id": entry.id,
+                    "previous_stab": entry.previous_stab,
+                    "previous_radio_stab": entry.previous_radio_stab,
+                    "new_stab": entry.new_stab,
+                    "new_radio_stab": entry.new_radio_stab,
+                    "datetime": entry.datetime.isoformat()
+                }
+                for entry in entries
+            ]
+        except Profile.DoesNotExist:
+            return 404, {"message": "Felhasználó nem található"}
+        except Exception as e:
+            return 500, {"message": f"Error fetching stáb history: {str(e)}"}
+
+    @api.post("/users/{user_id}/toggle-hidden", auth=JWTAuth(), response={200: ToggleHiddenResponseSchema, 401: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
+    def toggle_user_hidden(request, user_id: int):
+        """
+        Toggle whether a user is hidden from the Stáb page listing.
+
+        Requires admin permissions. This only affects visibility on the
+        Stáb page - the user remains fully visible/usable everywhere else
+        in the system (assignments, admin, etc.).
+
+        Args:
+            user_id: Unique user identifier
+
+        Returns:
+            200: Updated visibility state
+            404: User not found
+            401: Insufficient permissions
+            500: Server error
+        """
+        try:
+            has_permission, error_message = check_admin_permissions(request.auth)
+            if not has_permission:
+                return 401, {"message": error_message}
+
+            profile = Profile.objects.select_related('user').get(user__id=user_id)
+            profile.elrejtve = not profile.elrejtve
+            profile.save()
+
+            return 200, {"id": profile.user.id, "elrejtve": profile.elrejtve}
+        except Profile.DoesNotExist:
+            return 404, {"message": "Felhasználó nem található"}
+        except Exception as e:
+            return 500, {"message": f"Error toggling user visibility: {str(e)}"}
 
     @api.get("/users/radio-students", auth=JWTAuth(), response={200: list[UserProfileSchema], 403: ErrorSchema, 500: ErrorSchema})
     def get_radio_students(request):

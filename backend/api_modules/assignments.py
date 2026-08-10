@@ -742,7 +742,7 @@ def register_assignment_endpoints(api):
     """Register all assignment-related endpoints with the API router."""
     
     @api.get("/assignments/class-matrix/{class_id}", auth=JWTAuth(), response={200: ClassMatrixResponseSchema, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 500: ErrorSchema})
-    def get_class_matrix(request, class_id: int, time_filter: str = 'all'):
+    def get_class_matrix(request, class_id: int, time_filter: str = 'all', tanev_id: int = None):
         """
         Get assignment matrix for a specific class.
         Shows how many times each class member was assigned each role.
@@ -755,12 +755,19 @@ def register_assignment_endpoints(api):
             if not has_perm:
                 return 403, {"message": msg}
                 
-            from api.models import Osztaly
+            from api.models import Osztaly, Tanev
             
             try:
                 osztaly = Osztaly.objects.get(id=class_id)
             except Osztaly.DoesNotExist:
                 return 404, {"message": "Osztály nem található."}
+
+            tanev = None
+            if tanev_id:
+                try:
+                    tanev = Tanev.objects.get(id=tanev_id)
+                except Tanev.DoesNotExist:
+                    return 404, {"message": "Tanév nem található."}
 
             profiles = Profile.objects.filter(osztaly=osztaly).select_related('user')
             users = [p.user for p in profiles]
@@ -786,6 +793,10 @@ def register_assignment_endpoints(api):
             
             if time_filter == 'past':
                 filters['forgatas__date__lt'] = timezone.now().date()
+
+            if tanev:
+                filters['forgatas__date__gte'] = tanev.start_date
+                filters['forgatas__date__lte'] = tanev.end_date
             
             # Only prefetch relations for users in THIS class
             assignments = Beosztas.objects.filter(**filters).select_related('forgatas').prefetch_related(
