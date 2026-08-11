@@ -1807,23 +1807,10 @@ def send_forgatas_creation_email(sender, instance, created, **kwargs):
             creator_user = instance.szerkeszto
             
             if not creator_user:
-                # Try to get current user from thread local or request context
-                # For now, we'll use a fallback approach
-                from django.contrib.auth.models import User
-                try:
-                    # This is a fallback - in a real scenario, you might want to pass
-                    # the creator through the save method or use threading.local
-                    creator_user = User.objects.filter(is_superuser=True).first()
-                    if not creator_user:
-                        creator_user = User.objects.filter(is_staff=True).first()
-                except:
-                    pass
-            
-            if not creator_user:
                 print(f"[WARNING] Could not determine creator for forgatás: {instance.name}")
                 # Create a placeholder user for email purposes
                 from django.contrib.auth.models import User
-                creator_user = User(username='system', first_name='Rendszer', last_name='Felhasználó')
+                creator_user = User(username='system', first_name='Ismeretlen', last_name='Felhasználó')
             
             print(f"[DEBUG] Creator identified as: {creator_user.get_full_name() or creator_user.username}")
             
