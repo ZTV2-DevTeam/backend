@@ -275,11 +275,16 @@ class Profile(models.Model):
         """Check if user is currently in 10F class"""
         if not self.osztaly or self.osztaly.szekcio.upper() != 'F':
             return False
-        
+
+        tanev = Tanev.get_active()
+        if tanev is not None:
+            year_diff = tanev.start_year - self.osztaly.startYear + 8
+            return year_diff == 10  # 10F class
+
+        # Fallback: no active tanév record, calculate from current date
         current_year = datetime.now().year
         elso_felev = datetime.now().month >= 9
-        
-        year_diff = current_year - self.osztaly.startYear 
+        year_diff = current_year - self.osztaly.startYear
         year_diff += 8 if elso_felev else 7
         return year_diff == 10  # 10F class
     
@@ -324,15 +329,21 @@ class Profile(models.Model):
         """Check if this is a second year student (9F) who has a radio stab assignment"""
         if not self.osztaly or not self.radio_stab:
             return False
-        
+
+        if self.osztaly.szekcio.upper() != 'F':
+            return False
+
+        tanev = Tanev.get_active()
+        if tanev is not None:
+            year_diff = tanev.start_year - self.osztaly.startYear + 8
+            return year_diff == 9  # 9F class with radio stab assignment
+
+        # Fallback: no active tanév record, calculate from current date
         current_year = datetime.now().year
         elso_felev = datetime.now().month >= 9
-        
-        if self.osztaly.szekcio.upper() == 'F':
-            year_diff = current_year - self.osztaly.startYear 
-            year_diff += 8 if elso_felev else 7
-            return year_diff == 9  # 9F class with radio stab assignment
-        return False
+        year_diff = current_year - self.osztaly.startYear
+        year_diff += 8 if elso_felev else 7
+        return year_diff == 9  # 9F class with radio stab assignment
     
     def is_available_for_datetime(self, start_datetime, end_datetime):
         """
