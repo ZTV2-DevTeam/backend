@@ -324,9 +324,9 @@ def serialize_forgatas(forgatas) -> dict:
         'id': forgatas.id,
         'name': forgatas.name,
         'description': forgatas.description,
-        'date': forgatas.date,
-        'timeFrom': forgatas.timeFrom,
-        'timeTo': forgatas.timeTo,
+        'date': forgatas.start_time.date(),
+        'timeFrom': forgatas.start_time.time(),
+        'timeTo': forgatas.end_time.time(),
         'location_name': forgatas.location.name if forgatas.location else None
     }
 

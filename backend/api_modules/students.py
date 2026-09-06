@@ -223,7 +223,7 @@ def create_student_response(user: User, include_reporter_stats: bool = False) ->
         reporter_sessions = Forgatas.objects.filter(szerkeszto=user)
         reporter_stats = {
             "reporter_sessions_count": reporter_sessions.count(),
-            "last_reporter_date": reporter_sessions.order_by('-date').first().date.isoformat() if reporter_sessions.exists() else None,
+            "last_reporter_date": reporter_sessions.order_by('-start_time').first().start_time.date().isoformat() if reporter_sessions.exists() else None,
             "is_experienced": reporter_sessions.count() >= 3
         }
     
@@ -384,7 +384,7 @@ def register_student_endpoints(api):
                     grade_level = current_tanev.start_year - profile.osztaly.startYear + 8
             
             # Get reporter statistics
-            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-date').first()
+            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-start_time').first()
             
             reporters.append({
                 "id": user.id,
@@ -394,7 +394,7 @@ def register_student_endpoints(api):
                 "grade_level": grade_level,
                 "is_experienced": user.reporter_count >= 3,
                 "reporter_sessions_count": user.reporter_count,
-                "last_reporter_date": last_session.date.isoformat() if last_session else None,
+                "last_reporter_date": last_session.start_time.date().isoformat() if last_session else None,
                 "reason": "Harmadév"
             })
         
@@ -416,7 +416,7 @@ def register_student_endpoints(api):
                     grade_level = current_tanev.start_year - profile.osztaly.startYear + 8
             
             # Get reporter statistics
-            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-date').first()
+            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-start_time').first()
             
             reporters.append({
                 "id": user.id,
@@ -426,7 +426,7 @@ def register_student_endpoints(api):
                 "grade_level": grade_level,
                 "is_experienced": user.reporter_count >= 3,
                 "reporter_sessions_count": user.reporter_count,
-                "last_reporter_date": last_session.date.isoformat() if last_session else None,
+                "last_reporter_date": last_session.start_time.date().isoformat() if last_session else None,
                 "reason": "GYV"
             })
         
@@ -448,7 +448,7 @@ def register_student_endpoints(api):
                     grade_level = current_tanev.start_year - profile.osztaly.startYear + 8
             
             # Get reporter statistics
-            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-date').first()
+            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-start_time').first()
             
             reporters.append({
                 "id": user.id,
@@ -458,7 +458,7 @@ def register_student_endpoints(api):
                 "grade_level": grade_level,
                 "is_experienced": user.reporter_count >= 3,
                 "reporter_sessions_count": user.reporter_count,
-                "last_reporter_date": last_session.date.isoformat() if last_session else None,
+                "last_reporter_date": last_session.start_time.date().isoformat() if last_session else None,
                 "reason": "Lehetséges Szerkesztő"
             })
         
@@ -591,7 +591,7 @@ def register_student_endpoints(api):
                     grade_level = current_tanev.start_year - profile.osztaly.startYear + 8
             
             # Get reporter statistics
-            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-date').first()
+            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-start_time').first()
             
             experienced_reporters.append({
                 "id": user.id,
@@ -601,7 +601,7 @@ def register_student_endpoints(api):
                 "grade_level": grade_level,
                 "is_experienced": True,
                 "reporter_sessions_count": user.reporter_count,
-                "last_reporter_date": last_session.date.isoformat() if last_session else None
+                "last_reporter_date": last_session.start_time.date().isoformat() if last_session else None
             })
         
         return 200, experienced_reporters
@@ -647,10 +647,10 @@ def register_student_endpoints(api):
                 
                 # Find reporters with conflicting sessions
                 conflicting_reporters = Forgatas.objects.filter(
-                    date=check_date,
+                    start_time__date=check_date,
                     szerkeszto__isnull=False
                 ).filter(
-                    Q(timeFrom__lt=check_time_to) & Q(timeTo__gt=check_time_from)
+                    Q(start_time__time__lt=check_time_to) & Q(end_time__time__gt=check_time_from)
                 ).values_list('szerkeszto_id', flat=True)
                 
                 # Exclude conflicting reporters
@@ -673,7 +673,7 @@ def register_student_endpoints(api):
             
             # Get reporter statistics
             reporter_count = Forgatas.objects.filter(szerkeszto=user).count()
-            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-date').first()
+            last_session = Forgatas.objects.filter(szerkeszto=user).order_by('-start_time').first()
             
             reporters.append({
                 "id": user.id,
@@ -683,7 +683,7 @@ def register_student_endpoints(api):
                 "grade_level": grade_level,
                 "is_experienced": reporter_count >= 3,
                 "reporter_sessions_count": reporter_count,
-                "last_reporter_date": last_session.date.isoformat() if last_session else None
+                "last_reporter_date": last_session.start_time.date().isoformat() if last_session else None
             })
         
         return 200, reporters

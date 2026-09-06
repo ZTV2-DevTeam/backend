@@ -569,9 +569,8 @@ class Command(BaseCommand):
             forgatas = Forgatas.objects.create(
                 name=f"{random.choice(shoot_names)} - {i+1}",
                 description=random.choice(descriptions),
-                date=start_date,
-                timeFrom=time_from,
-                timeTo=time_to,
+                start_time=datetime.combine(start_date, time_from),
+                end_time=datetime.combine(start_date, time_to),
                 location=random.choice(partners) if random.random() > 0.1 else None,
                 contactPerson=random.choice(contact_persons) if random.random() > 0.2 else None,
                 forgTipus=shoot_type,

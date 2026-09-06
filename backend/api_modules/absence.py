@@ -688,8 +688,8 @@ def register_absence_endpoints(api):
                         continue
                     
                     # Check if this forgatás overlaps with the new absence
-                    forgatas_start = datetime.combine(forgatas.date, forgatas.timeFrom)
-                    forgatas_end = datetime.combine(forgatas.date, forgatas.timeTo)
+                    forgatas_start = forgatas.start_time
+                    forgatas_end = forgatas.end_time
                     
                     # Convert to local naive datetimes for comparison
                     forgatas_start = convert_to_local_naive_datetime(forgatas_start)
@@ -882,8 +882,8 @@ def register_absence_endpoints(api):
                                 continue
                             
                             # Check if this forgatás overlaps with the new absence
-                            forgatas_start = datetime.combine(forgatas.date, forgatas.timeFrom)
-                            forgatas_end = datetime.combine(forgatas.date, forgatas.timeTo)
+                            forgatas_start = forgatas.start_time
+                            forgatas_end = forgatas.end_time
                             
                             # Convert to local naive datetimes for comparison
                             forgatas_start = convert_to_local_naive_datetime(forgatas_start)

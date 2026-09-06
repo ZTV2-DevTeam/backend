@@ -394,9 +394,9 @@ def create_forgatas_response(forgatas: Forgatas) -> dict:
         "id": forgatas.id,
         "name": forgatas.name,
         "description": forgatas.description,
-        "date": forgatas.date.isoformat(),
-        "time_from": forgatas.timeFrom.isoformat(),
-        "time_to": forgatas.timeTo.isoformat(),
+        "date": forgatas.start_time.date().isoformat(),
+        "time_from": forgatas.start_time.time().isoformat(),
+        "time_to": forgatas.end_time.time().isoformat(),
         "location": {
             "id": forgatas.location.id,
             "name": forgatas.location.name,
@@ -414,7 +414,7 @@ def create_forgatas_response(forgatas: Forgatas) -> dict:
         "related_kacsa": {
             "id": forgatas.relatedKaCsa.id,
             "name": forgatas.relatedKaCsa.name,
-            "date": forgatas.relatedKaCsa.date.isoformat()
+            "date": forgatas.relatedKaCsa.start_time.date().isoformat()
         } if forgatas.relatedKaCsa else None,
         "equipment_ids": list(forgatas.equipments.values_list('id', flat=True)),
         "equipment_count": forgatas.equipments.count(),
@@ -650,9 +650,9 @@ def register_production_endpoints(api):
             ).prefetch_related('equipments__equipmentType').all()
 
             if start_date:
-                sessions = sessions.filter(date__gte=start_date)
+                sessions = sessions.filter(start_time__date__gte=start_date)
             if end_date:
-                sessions = sessions.filter(date__lte=end_date)
+                sessions = sessions.filter(start_time__date__lte=end_date)
             if type:
                 sessions = sessions.filter(forgTipus=type)
             
@@ -691,7 +691,7 @@ def register_production_endpoints(api):
         """
         try:
             # Get all KaCsa sessions
-            kacsa_sessions = Forgatas.objects.filter(forgTipus='kacsa').order_by('-date', '-timeFrom')
+            kacsa_sessions = Forgatas.objects.filter(forgTipus='kacsa').order_by('-start_time')
             
             response = []
             for session in kacsa_sessions:
@@ -706,9 +706,9 @@ def register_production_endpoints(api):
                 response.append({
                     "id": session.id,
                     "name": session.name,
-                    "date": session.date.isoformat(),
-                    "time_from": session.timeFrom.isoformat(),
-                    "time_to": session.timeTo.isoformat(),
+                    "date": session.start_time.date().isoformat(),
+                    "time_from": session.start_time.time().isoformat(),
+                    "time_to": session.end_time.time().isoformat(),
                     "can_link": can_link,
                     "already_linked": already_linked,
                     "linked_sessions_count": linked_count
@@ -818,6 +818,9 @@ def register_production_endpoints(api):
             if time_from >= time_to:
                 return 400, {"message": "A befejezés idejének a kezdés ideje után kell lennie"}
             
+            start_datetime = datetime.combine(session_date, time_from)
+            end_datetime = datetime.combine(session_date, time_to)
+            
             # Get related objects
             location = None
             if data.location_id:
@@ -853,16 +856,15 @@ def register_production_endpoints(api):
                     # Check for scheduling conflicts
                     conflicting_sessions = Forgatas.objects.filter(
                         szerkeszto=szerkeszto,
-                        date=session_date
                     ).filter(
-                        timeFrom__lt=time_to,
-                        timeTo__gt=time_from
+                        start_time__lt=end_datetime,
+                        end_time__gt=start_datetime
                     )
                     
                     if conflicting_sessions.exists():
                         conflicting_session = conflicting_sessions.first()
                         return 400, {
-                            "message": f"A szerkesztő már be van osztva egy másik forgatásra: {conflicting_session.name} ({conflicting_session.timeFrom}-{conflicting_session.timeTo})"
+                            "message": f"A szerkesztő már be van osztva egy másik forgatásra: {conflicting_session.name} ({conflicting_session.start_time.strftime('%H:%M')}-{conflicting_session.end_time.strftime('%H:%M')})"
                         }
                         
                 except User.DoesNotExist:
@@ -872,9 +874,8 @@ def register_production_endpoints(api):
             forgatas = Forgatas.objects.create(
                 name=data.name,
                 description=data.description,
-                date=session_date,
-                timeFrom=time_from,
-                timeTo=time_to,
+                start_time=start_datetime,
+                end_time=end_datetime,
                 location=location,
                 contactPerson=contact_person,
                 szerkeszto=szerkeszto,
@@ -980,27 +981,35 @@ def register_production_endpoints(api):
             if data.notes is not None:
                 forgatas.notes = data.notes
             
-            # Update date and times
+            # Update date and times (stored as start_time/end_time datetimes)
+            new_date = forgatas.start_time.date()
+            new_time_from = forgatas.start_time.time()
+            new_time_to = forgatas.end_time.time()
+            
             if data.date is not None:
                 try:
-                    forgatas.date = date.fromisoformat(data.date)
+                    new_date = date.fromisoformat(data.date)
                 except ValueError:
                     return 400, {"message": "Hibás dátum formátum"}
             
             if data.time_from is not None:
                 try:
-                    forgatas.timeFrom = time.fromisoformat(data.time_from)
+                    new_time_from = time.fromisoformat(data.time_from)
                 except ValueError:
                     return 400, {"message": "Hibás kezdő idő formátum"}
             
             if data.time_to is not None:
                 try:
-                    forgatas.timeTo = time.fromisoformat(data.time_to)
+                    new_time_to = time.fromisoformat(data.time_to)
                 except ValueError:
                     return 400, {"message": "Hibás befejező idő formátum"}
             
+            if data.date is not None or data.time_from is not None or data.time_to is not None:
+                forgatas.start_time = datetime.combine(new_date, new_time_from)
+                forgatas.end_time = datetime.combine(new_date, new_time_to)
+            
             # Validate time range
-            if forgatas.timeFrom >= forgatas.timeTo:
+            if forgatas.start_time >= forgatas.end_time:
                 return 400, {"message": "A befejezés idejének a kezdés ideje után kell lennie"}
             
             # Update type
@@ -1056,16 +1065,15 @@ def register_production_endpoints(api):
                         # Check for scheduling conflicts (exclude current session)
                         conflicting_sessions = Forgatas.objects.filter(
                             szerkeszto=szerkeszto,
-                            date=forgatas.date
                         ).exclude(id=forgatas.id).filter(
-                            timeFrom__lt=forgatas.timeTo,
-                            timeTo__gt=forgatas.timeFrom
+                            start_time__lt=forgatas.end_time,
+                            end_time__gt=forgatas.start_time
                         )
                         
                         if conflicting_sessions.exists():
                             conflicting_session = conflicting_sessions.first()
                             return 400, {
-                                "message": f"A szerkesztő már be van osztva egy másik forgatásra: {conflicting_session.name} ({conflicting_session.timeFrom}-{conflicting_session.timeTo})"
+                                "message": f"A szerkesztő már be van osztva egy másik forgatásra: {conflicting_session.name} ({conflicting_session.start_time.strftime('%H:%M')}-{conflicting_session.end_time.strftime('%H:%M')})"
                             }
                         
                         forgatas.szerkeszto = szerkeszto
@@ -1151,14 +1159,14 @@ def register_production_endpoints(api):
             if date_from:
                 try:
                     date_from_obj = date.fromisoformat(date_from)
-                    forgatas_list = forgatas_list.filter(date__gte=date_from_obj)
+                    forgatas_list = forgatas_list.filter(start_time__date__gte=date_from_obj)
                 except ValueError:
                     return 401, {"message": "Hibás dátum formátum (date_from)"}
             
             if date_to:
                 try:
                     date_to_obj = date.fromisoformat(date_to)
-                    forgatas_list = forgatas_list.filter(date__lte=date_to_obj)
+                    forgatas_list = forgatas_list.filter(start_time__date__lte=date_to_obj)
                 except ValueError:
                     return 401, {"message": "Hibás dátum formátum (date_to)"}
             
@@ -1179,7 +1187,7 @@ def register_production_endpoints(api):
             if finalized_only:
                 forgatas_list = forgatas_list.filter(beosztasok__kesz=True)
             
-            forgatas_list = forgatas_list.order_by('-date', '-timeFrom').distinct()
+            forgatas_list = forgatas_list.order_by('-start_time').distinct()
             
             response = []
             for forgatas in forgatas_list:
@@ -1234,8 +1242,8 @@ def register_production_endpoints(api):
             end_date = today + timedelta(days=days_ahead)
             
             upcoming_sessions = Forgatas.objects.filter(
-                date__gte=today,
-                date__lte=end_date
+                start_time__date__gte=today,
+                start_time__date__lte=end_date
             )
             
             # Apply type filter if provided
@@ -1245,7 +1253,7 @@ def register_production_endpoints(api):
                     return 401, {"message": "Érvénytelen típus"}
                 upcoming_sessions = upcoming_sessions.filter(forgTipus=type)
             
-            upcoming_sessions = upcoming_sessions.order_by('date', 'timeFrom')
+            upcoming_sessions = upcoming_sessions.order_by('start_time')
             
             response = []
             for forgatas in upcoming_sessions:
@@ -1276,8 +1284,8 @@ def register_production_endpoints(api):
             end_date = today + timedelta(days=days_ahead)
             
             unassigned_sessions = Forgatas.objects.filter(
-                date__gte=today,
-                date__lte=end_date,
+                start_time__date__gte=today,
+                start_time__date__lte=end_date,
                 beosztasok__isnull=True
             )
             
@@ -1288,7 +1296,7 @@ def register_production_endpoints(api):
                     return 401, {"message": "Érvénytelen típus"}
                 unassigned_sessions = unassigned_sessions.filter(forgTipus=type)
             
-            unassigned_sessions = unassigned_sessions.order_by('date', 'timeFrom')
+            unassigned_sessions = unassigned_sessions.order_by('start_time')
             
             response = []
             for forgatas in unassigned_sessions:
@@ -1332,9 +1340,9 @@ def register_production_endpoints(api):
             
             # Apply filters
             if start_date:
-                sessions = sessions.filter(date__gte=start_date)
+                sessions = sessions.filter(start_time__date__gte=start_date)
             if end_date:
-                sessions = sessions.filter(date__lte=end_date)
+                sessions = sessions.filter(start_time__date__lte=end_date)
             if type:
                 sessions = sessions.filter(forgTipus=type)
             

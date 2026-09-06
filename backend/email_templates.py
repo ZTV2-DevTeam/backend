@@ -444,8 +444,8 @@ def get_assignment_addition_email_content(forgatas, contact_person_name: str) ->
         <h3>Forgatás részletei</h3>
         <div class="info-item"><strong>Név:</strong> {forgatas.name}</div>
         <div class="info-item"><strong>Leírás:</strong> {forgatas.description or 'Nincs megadva'}</div>
-        <div class="info-item"><strong>Dátum:</strong> {forgatas.date.strftime('%Y. %m. %d.')}</div>
-        <div class="info-item"><strong>Időpont:</strong> {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}</div>
+        <div class="info-item"><strong>Dátum:</strong> {forgatas.start_time.strftime('%Y. %m. %d.')}</div>
+        <div class="info-item"><strong>Időpont:</strong> {forgatas.start_time.strftime('%H:%M')} - {forgatas.end_time.strftime('%H:%M')}</div>
         <div class="info-item"><strong>Helyszín:</strong> {forgatas.location or 'Nincs megadva'}</div>
         <div class="info-item"><strong>Kapcsolattartó:</strong> {contact_person_name}</div>
     </div>
@@ -478,8 +478,8 @@ def get_assignment_removal_email_content(forgatas, contact_person_name: str) -> 
     <div class="info-box">
         <h3>Törölt forgatás részletei</h3>
         <div class="info-item"><strong>Név:</strong> {forgatas.name}</div>
-        <div class="info-item"><strong>Dátum:</strong> {forgatas.date.strftime('%Y. %m. %d.')}</div>
-        <div class="info-item"><strong>Időpont:</strong> {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}</div>
+        <div class="info-item"><strong>Dátum:</strong> {forgatas.start_time.strftime('%Y. %m. %d.')}</div>
+        <div class="info-item"><strong>Időpont:</strong> {forgatas.start_time.strftime('%H:%M')} - {forgatas.end_time.strftime('%H:%M')}</div>
         <div class="info-item"><strong>Helyszín:</strong> {forgatas.location or 'Nincs megadva'}</div>
         <div class="info-item"><strong>Kapcsolattartó:</strong> {contact_person_name}</div>
     </div>
@@ -519,8 +519,8 @@ def get_assignment_finalized_email_content(forgatas, contact_person_name: str) -
         <h3>Forgatás részletei</h3>
         <div class="info-item"><strong>Név:</strong> {forgatas.name}</div>
         <div class="info-item"><strong>Leírás:</strong> {forgatas.description or 'Nincs megadva'}</div>
-        <div class="info-item"><strong>Dátum:</strong> {forgatas.date.strftime('%Y. %m. %d.')}</div>
-        <div class="info-item"><strong>Időpont:</strong> {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}</div>
+        <div class="info-item"><strong>Dátum:</strong> {forgatas.start_time.strftime('%Y. %m. %d.')}</div>
+        <div class="info-item"><strong>Időpont:</strong> {forgatas.start_time.strftime('%H:%M')} - {forgatas.end_time.strftime('%H:%M')}</div>
         <div class="info-item"><strong>Helyszín:</strong> {forgatas.location or 'Nincs megadva'}</div>
         <div class="info-item"><strong>Kapcsolattartó:</strong> {contact_person_name}</div>
     </div>
@@ -696,8 +696,8 @@ def get_forgatas_creation_email_content(forgatas, creator_name: str) -> str:
         <div class="info-item"><strong>Név:</strong> {forgatas.name}</div>
         <div class="info-item"><strong>Leírás:</strong> {forgatas.description or 'Nincs megadva'}</div>
         <div class="info-item"><strong>Típus:</strong> {forgatas_type_display}</div>
-        <div class="info-item"><strong>Dátum:</strong> {forgatas.date.strftime('%Y. %m. %d.')}</div>
-        <div class="info-item"><strong>Időpont:</strong> {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}</div>
+        <div class="info-item"><strong>Dátum:</strong> {forgatas.start_time.strftime('%Y. %m. %d.')}</div>
+        <div class="info-item"><strong>Időpont:</strong> {forgatas.start_time.strftime('%H:%M')} - {forgatas.end_time.strftime('%H:%M')}</div>
         <div class="info-item"><strong>Helyszín:</strong> {forgatas.location.name if forgatas.location else 'Nincs megadva'}</div>
         <div class="info-item"><strong>Kapcsolattartó:</strong> {forgatas.contactPerson.name if forgatas.contactPerson else 'Nincs megadva'}</div>
         <div class="info-item"><strong>Létrehozta:</strong> {creator_name}</div>
@@ -967,9 +967,9 @@ def get_absence_forgatas_reverse_conflict_email_content(absence, conflicting_for
     # Build list of conflicting forgatások
     forgatas_list_html = ""
     for forgatas in conflicting_forgatas_list:
-        forgatas_date_str = forgatas.date.strftime('%Y-%m-%d') if hasattr(forgatas.date, 'strftime') else str(forgatas.date)
-        forgatas_time_from = forgatas.timeFrom.strftime('%H:%M') if hasattr(forgatas.timeFrom, 'strftime') else str(forgatas.timeFrom)
-        forgatas_time_to = forgatas.timeTo.strftime('%H:%M') if hasattr(forgatas.timeTo, 'strftime') else str(forgatas.timeTo)
+        forgatas_date_str = forgatas.start_time.strftime('%Y-%m-%d') if forgatas.start_time else ''
+        forgatas_time_from = forgatas.start_time.strftime('%H:%M') if forgatas.start_time else ''
+        forgatas_time_to = forgatas.end_time.strftime('%H:%M') if forgatas.end_time else ''
         
         forgatas_list_html += f"""
         <div style="margin: 12px 0; padding: 12px; background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6; border-radius: 4px;">

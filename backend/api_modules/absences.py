@@ -181,9 +181,9 @@ def create_forgatas_basic_response(forgatas: Forgatas) -> dict:
     return {
         "id": forgatas.id,
         "name": forgatas.name,
-        "date": forgatas.date.isoformat(),
-        "time_from": forgatas.timeFrom.isoformat(),
-        "time_to": forgatas.timeTo.isoformat(),
+        "date": forgatas.start_time.date().isoformat(),
+        "time_from": forgatas.start_time.time().isoformat(),
+        "time_to": forgatas.end_time.time().isoformat(),
         "type": forgatas.forgTipus,
         "notes": forgatas.notes
     }
@@ -297,9 +297,9 @@ def auto_create_absences_for_forgatas(forgatas: Forgatas, student_ids: List[int]
                 Absence.objects.create(
                     diak=student,
                     forgatas=forgatas,
-                    date=forgatas.date,
-                    timeFrom=forgatas.timeFrom,
-                    timeTo=forgatas.timeTo,
+                    date=forgatas.start_time.date(),
+                    timeFrom=forgatas.start_time.time(),
+                    timeTo=forgatas.end_time.time(),
                     excused=False,
                     unexcused=False
                 )

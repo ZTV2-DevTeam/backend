@@ -73,7 +73,7 @@ def register_legacy_endpoints(api):
     def get_legacy_beosztasview(request):
         user = request.auth
         now = datetime.now()
-        forgatas_qs = Forgatas.objects.filter(date__gte=now)
+        forgatas_qs = Forgatas.objects.filter(start_time__gte=now)
         is_admin = user.is_superuser
 
         result = []
@@ -92,9 +92,9 @@ def register_legacy_endpoints(api):
                 "id": forgatas.id,
                 "name": forgatas.name,
                 "description": forgatas.description,
-                "date": forgatas.date.isoformat() if forgatas.date else None,
-                "time_from": forgatas.timeFrom.isoformat() if forgatas.timeFrom else None,
-                "time_to": forgatas.timeTo.isoformat() if forgatas.timeTo else None,
+                "date": forgatas.start_time.date().isoformat() if forgatas.start_time else None,
+                "time_from": forgatas.start_time.time().isoformat() if forgatas.start_time else None,
+                "time_to": forgatas.end_time.time().isoformat() if forgatas.end_time else None,
                 "location": {
                     "id": forgatas.location.id,
                     "name": forgatas.location.name,
@@ -107,7 +107,7 @@ def register_legacy_endpoints(api):
                 "related_kacsa": {
                     "id": forgatas.relatedKaCsa.id,
                     "name": forgatas.relatedKaCsa.name,
-                    "date": forgatas.relatedKaCsa.date.isoformat()
+                    "date": forgatas.relatedKaCsa.start_time.date().isoformat()
                 } if forgatas.relatedKaCsa else None,
                 "equipment_ids": list(forgatas.equipments.values_list('id', flat=True)),
                 "equipment_count": forgatas.equipments.count(),

@@ -89,7 +89,7 @@ def test_assignment_email():
             return False
         
         # Find or create a test forgatas
-        forgatas = Forgatas.objects.filter(date__gte=date.today()).first()
+        forgatas = Forgatas.objects.filter(start_time__date__gte=date.today()).first()
         
         if not forgatas:
             print("❌ No future forgatas found for testing.")
@@ -99,7 +99,7 @@ def test_assignment_email():
         removed_users = [test_users[3]] if len(test_users) > 3 else []
         
         print(f"✅ Using test forgatas: {forgatas.name}")
-        print(f"📅 Date: {forgatas.date} {forgatas.timeFrom}-{forgatas.timeTo}")
+        print(f"📅 Date: {forgatas.start_time.date()} {forgatas.start_time.time()}-{forgatas.end_time.time()}")
         print(f"➕ Added users: {[f'{u.get_full_name()} ({u.email})' for u in added_users]}")
         print(f"➖ Removed users: {[f'{u.get_full_name()} ({u.email})' for u in removed_users]}")
         

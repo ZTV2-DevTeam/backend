@@ -23,7 +23,7 @@ except ImportError:
 django.setup()
 
 from api.models import Beosztas, Forgatas, SzerepkorRelaciok, Szerepkor, User, Tanev
-from datetime import date, time
+from datetime import date, time, datetime
 from django.db import transaction
 
 
@@ -57,9 +57,8 @@ def test_beosztas_finalization_email():
         test_forgatas = Forgatas.objects.create(
             name="Test Forgatás - Véglegesítés Email Test",
             description="Ez egy teszt forgatás a véglegesítve email teszteléséhez",
-            date=date.today(),
-            timeFrom=time(14, 0),
-            timeTo=time(16, 0),
+            start_time=datetime.combine(date.today(), time(14, 0)),
+            end_time=datetime.combine(date.today(), time(16, 0)),
             forgTipus="teszt",
             tanev=active_tanev
         )

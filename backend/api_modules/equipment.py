@@ -475,15 +475,15 @@ def register_equipment_endpoints(api):
             overview = []
             for equip in equipment_list:
                 # Get bookings for this date
-                bookings_today = equip.forgatasok.filter(date=check_date).order_by('timeFrom')
+                bookings_today = equip.forgatasok.filter(start_time__date=check_date).order_by('start_time')
                 
                 booking_details = []
                 for booking in bookings_today:
                     booking_details.append({
                         "forgatas_id": booking.id,
                         "forgatas_name": booking.name,
-                        "time_from": booking.timeFrom.isoformat(),
-                        "time_to": booking.timeTo.isoformat(),
+                        "time_from": booking.start_time.time().isoformat(),
+                        "time_to": booking.end_time.time().isoformat(),
                         "type": booking.forgTipus,
                         "location": booking.location.name if booking.location else None
                     })
@@ -764,30 +764,21 @@ def register_equipment_endpoints(api):
                     })
                     
                 # Get overlapping bookings
+                start_dt = datetime.combine(start_date_obj, start_time_obj)
+                end_dt = datetime.combine(end_date_obj, end_time_obj)
                 overlapping_bookings = equipment.get_bookings_for_period(start_date_obj, end_date_obj)
                 for booking in overlapping_bookings:
                     # Check for actual time overlap
-                    booking_conflicts = False
-                    if booking.date == start_date_obj == end_date_obj:
-                        if booking.timeFrom < end_time_obj and booking.timeTo > start_time_obj:
-                            booking_conflicts = True
-                    elif booking.date == start_date_obj:
-                        if booking.timeTo > start_time_obj:
-                            booking_conflicts = True
-                    elif booking.date == end_date_obj:
-                        if booking.timeFrom < end_time_obj:
-                            booking_conflicts = True
-                    elif start_date_obj < booking.date < end_date_obj:
-                        booking_conflicts = True
+                    booking_conflicts = booking.start_time < end_dt and booking.end_time > start_dt
                         
                     if booking_conflicts:
                         conflicts.append({
                             "type": "filming_session",
                             "forgatas_id": booking.id,
                             "forgatas_name": booking.name,
-                            "date": booking.date.isoformat(),
-                            "time_from": booking.timeFrom.isoformat(),
-                            "time_to": booking.timeTo.isoformat(),
+                            "date": booking.start_time.date().isoformat(),
+                            "time_from": booking.start_time.time().isoformat(),
+                            "time_to": booking.end_time.time().isoformat(),
                             "location": booking.location.name if booking.location else None,
                             "type_display": dict(booking.tipusok).get(booking.forgTipus, booking.forgTipus)
                         })
@@ -882,7 +873,7 @@ def register_equipment_endpoints(api):
             
             # Calculate statistics
             total_bookings = bookings.count()
-            upcoming_bookings = equipment.forgatasok.filter(date__gt=today).count()
+            upcoming_bookings = equipment.forgatasok.filter(start_time__date__gt=today).count()
             
             # Calculate usage hours
             usage_hours = 0.0
@@ -890,26 +881,24 @@ def register_equipment_endpoints(api):
             
             for booking in bookings:
                 # Calculate duration in hours
-                from datetime import datetime, timedelta
-                start_datetime = datetime.combine(booking.date, booking.timeFrom)
-                end_datetime = datetime.combine(booking.date, booking.timeTo)
-                duration = end_datetime - start_datetime
+                duration = booking.end_time - booking.start_time
                 usage_hours += duration.total_seconds() / 3600
                 
                 # Track most recent use
-                if most_recent_use is None or booking.date > most_recent_use:
-                    most_recent_use = booking.date
+                booking_date = booking.start_time.date()
+                if most_recent_use is None or booking_date > most_recent_use:
+                    most_recent_use = booking_date
             
             # Get next booking
-            next_booking_obj = equipment.forgatasok.filter(date__gt=today).order_by('date', 'timeFrom').first()
+            next_booking_obj = equipment.forgatasok.filter(start_time__date__gt=today).order_by('start_time').first()
             next_booking = None
             if next_booking_obj:
                 next_booking = {
                     "forgatas_id": next_booking_obj.id,
                     "forgatas_name": next_booking_obj.name,
-                    "date": next_booking_obj.date.isoformat(),
-                    "time_from": next_booking_obj.timeFrom.isoformat(),
-                    "time_to": next_booking_obj.timeTo.isoformat(),
+                    "date": next_booking_obj.start_time.date().isoformat(),
+                    "time_from": next_booking_obj.start_time.time().isoformat(),
+                    "time_to": next_booking_obj.end_time.time().isoformat(),
                     "location": next_booking_obj.location.name if next_booking_obj.location else None
                 }
             

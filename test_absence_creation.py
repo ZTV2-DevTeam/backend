@@ -13,7 +13,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
 from api.models import *
-from datetime import date, time
+from datetime import date, time, datetime
 
 def test_absence_creation():
     """
@@ -53,9 +53,8 @@ def test_absence_creation():
     forgatas = Forgatas.objects.create(
         name="Test Forgatás - Absence Creation",
         description="Test forgatás hiányzás létrehozás tesztelésére",
-        date=date.today(),
-        timeFrom=time(14, 0),
-        timeTo=time(16, 0),
+        start_time=datetime.combine(date.today(), time(14, 0)),
+        end_time=datetime.combine(date.today(), time(16, 0)),
         location=partner,
         forgTipus='rendes',
         tanev=current_tanev
@@ -133,8 +132,8 @@ def test_absence_creation():
     print("\n5. Testing forgatas timing change...")
     
     # Change forgatas timing
-    forgatas.timeFrom = time(15, 0)
-    forgatas.timeTo = time(17, 0)
+    forgatas.start_time = datetime.combine(forgatas.start_time.date(), time(15, 0))
+    forgatas.end_time = datetime.combine(forgatas.end_time.date(), time(17, 0))
     forgatas.save()
     print("   Changed forgatas timing to 15:00-17:00")
     

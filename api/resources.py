@@ -504,20 +504,15 @@ class EquipmentResource(resources.ModelResource):
 class ForgatásResource(resources.ModelResource):
     """Filming session import/export with all relationships"""
     
-    date = fields.Field(
-        column_name='date',
-        attribute='date',
-        widget=DateWidget(format='%Y-%m-%d')
+    start_time = fields.Field(
+        column_name='start_time',
+        attribute='start_time',
+        widget=DateTimeWidget(format='%Y-%m-%d %H:%M:%S')
     )
-    timeFrom = fields.Field(
-        column_name='timeFrom',
-        attribute='timeFrom',
-        widget=TimeWidget(format='%H:%M')
-    )
-    timeTo = fields.Field(
-        column_name='timeTo',
-        attribute='timeTo', 
-        widget=TimeWidget(format='%H:%M')
+    end_time = fields.Field(
+        column_name='end_time',
+        attribute='end_time',
+        widget=DateTimeWidget(format='%Y-%m-%d %H:%M:%S')
     )
     location_name = fields.Field(
         column_name='location_name',
@@ -548,12 +543,12 @@ class ForgatásResource(resources.ModelResource):
     class Meta:
         model = Forgatas
         fields = (
-            'id', 'name', 'description', 'date', 'timeFrom', 'timeTo',
+            'id', 'name', 'description', 'start_time', 'end_time',
             'location_name', 'szerkeszto_username', 'contact_person_name',
             'notes', 'forgTipus', 'tanev_display', 'equipment_names'
         )
         export_order = (
-            'id', 'name', 'description', 'date', 'timeFrom', 'timeTo',
+            'id', 'name', 'description', 'start_time', 'end_time',
             'location_name', 'szerkeszto_username', 'contact_person_name',
             'notes', 'forgTipus', 'tanev_display', 'equipment_names'
         )

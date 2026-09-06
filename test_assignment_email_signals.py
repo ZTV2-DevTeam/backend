@@ -80,9 +80,8 @@ def test_assignment_email_notifications():
         test_forgatas, _ = Forgatas.objects.get_or_create(
             name="Test Forgatas - Signal Test",
             defaults={
-                'date': date(2025, 10, 15),
-                'timeFrom': time(10, 0),
-                'timeTo': time(16, 0),
+                'start_time': datetime.combine(date(2025, 10, 15), time(10, 0)),
+                'end_time': datetime.combine(date(2025, 10, 15), time(16, 0)),
                 'location': 'Test Location',
                 'partner': partner,
                 'forgTipus': 'normal',  # Not 'kacsa' to ensure emails are sent

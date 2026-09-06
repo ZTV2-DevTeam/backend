@@ -808,12 +808,12 @@ class ProfileAdmin(ImportExportModelAdmin):
 @admin.register(Forgatas)
 class ForgatásAdmin(ImportExportModelAdmin):
     resource_class = ForgatásResource
-    list_display = ['name_with_icon', 'date', 'time_display', 'forgTipus_display', 'location_display', 'equipment_count', 'szerkeszto_display', 'tanev']
-    list_filter = ['forgTipus', 'date', 'tanev', 'location', 'szerkeszto']
+    list_display = ['name_with_icon', 'start_time_display', 'time_display', 'forgTipus_display', 'location_display', 'equipment_count', 'szerkeszto_display', 'tanev']
+    list_filter = ['forgTipus', 'start_time', 'tanev', 'location', 'szerkeszto']
     search_fields = ['name', 'description', 'notes', 'szerkeszto__first_name', 'szerkeszto__last_name']
     autocomplete_fields = ['location', 'contactPerson', 'relatedKaCsa', 'tanev', 'szerkeszto']
     filter_horizontal = ['equipments']
-    date_hierarchy = 'date'
+    date_hierarchy = 'start_time'
     
     fieldsets = (
         ('🎬 Forgatás alapadatok', {
@@ -821,7 +821,7 @@ class ForgatásAdmin(ImportExportModelAdmin):
             'description': 'A forgatás alapvető információi'
         }),
         ('⏰ Időpont', {
-            'fields': ('date', 'timeFrom', 'timeTo'),
+            'fields': ('start_time', 'end_time'),
             'description': 'A forgatás időbeli paraméterei'
         }),
         ('📍 Helyszín és kapcsolatok', {
@@ -842,6 +842,8 @@ class ForgatásAdmin(ImportExportModelAdmin):
             'classes': ('collapse',),
             'description': 'További információk és megjegyzések'
         })
+        # Megjegyzés: a régi date/timeFrom/timeTo mezők szándékosan nem szerepelnek itt –
+        # elavultak, csak történeti adatként maradnak meg, admin felületen nem szerkeszthetők.
     )
     
     def name_with_icon(self, obj):
@@ -855,8 +857,13 @@ class ForgatásAdmin(ImportExportModelAdmin):
         return format_html('{} <strong>{}</strong>', icon, obj.name)
     name_with_icon.short_description = 'Forgatás neve'
     
+    def start_time_display(self, obj):
+        return obj.start_time.strftime('%Y-%m-%d')
+    start_time_display.short_description = 'Dátum'
+    start_time_display.admin_order_field = 'start_time'
+    
     def time_display(self, obj):
-        return f"{obj.timeFrom.strftime('%H:%M')} - {obj.timeTo.strftime('%H:%M')}"
+        return f"{obj.start_time.strftime('%H:%M')} - {obj.end_time.strftime('%H:%M')}"
     time_display.short_description = 'Időintervallum'
     
     def forgTipus_display(self, obj):

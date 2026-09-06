@@ -395,7 +395,7 @@ def create_kacsa_forgatas(session_name, session_date):
     # Check if this forgatás already exists
     existing_forgatas = Forgatas.objects.filter(
         name__icontains=session_name,
-        date=session_date,
+        start_time__date=session_date,
         forgTipus='kacsa'
     ).first()
     
@@ -407,9 +407,8 @@ def create_kacsa_forgatas(session_name, session_date):
     forgatas = Forgatas.objects.create(
         name=f"KaCsa {session_name}",
         description=f"KaCsa {session_name} - Kamasz Csatorna című műsor összejátszása a Padláson. Körősi szárny, Padlás (4. emelet) - Műterem",
-        date=session_date,
-        timeFrom=default_start_time,
-        timeTo=default_end_time,
+        start_time=datetime.combine(session_date, default_start_time),
+        end_time=datetime.combine(session_date, default_end_time),
         location=location,
         forgTipus='kacsa',
         tanev=tanev,

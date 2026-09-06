@@ -722,8 +722,8 @@ def send_assignment_change_notification_email(forgatas, added_users: list, remov
                                 <div class="forgatas-info">
                                     <h3>{forgatas.name}</h3>
                                     <p><strong>Leírás:</strong> {forgatas.description}</p>
-                                    <p><strong>Dátum:</strong> {forgatas.date.strftime('%Y. %m. %d.')}</p>
-                                    <p><strong>Időpont:</strong> {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}</p>
+                                    <p><strong>Dátum:</strong> {forgatas.start_time.strftime('%Y. %m. %d.')}</p>
+                                    <p><strong>Időpont:</strong> {forgatas.start_time.strftime('%H:%M')} - {forgatas.end_time.strftime('%H:%M')}</p>
                                     {f'<p><strong>Helyszín:</strong> {forgatas.location.name}</p>' if forgatas.location else ''}
                                     {f'<p><strong>Kapcsolattartó:</strong> {forgatas.contactPerson.name}</p>' if forgatas.contactPerson else ''}
                                 </div>
@@ -753,8 +753,8 @@ Kedves Kollégák!
 
 Forgatás: {forgatas.name}
 Leírás: {forgatas.description}
-Dátum: {forgatas.date.strftime('%Y. %m. %d.')}
-Időpont: {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}
+Dátum: {forgatas.start_time.strftime('%Y. %m. %d.')}
+Időpont: {forgatas.start_time.strftime('%H:%M')} - {forgatas.end_time.strftime('%H:%M')}
 {f'Helyszín: {forgatas.location.name}' if forgatas.location else ''}
 {f'Kapcsolattartó: {forgatas.contactPerson.name}' if forgatas.contactPerson else ''}
 {crew_text}
@@ -889,8 +889,8 @@ Ez egy automatikus értesítés az FTV rendszerből.
                                 
                                 <div class="forgatas-info">
                                     <h3>{forgatas.name}</h3>
-                                    <p><strong>Dátum:</strong> {forgatas.date.strftime('%Y. %m. %d.')}</p>
-                                    <p><strong>Időpont:</strong> {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}</p>
+                                    <p><strong>Dátum:</strong> {forgatas.start_time.strftime('%Y. %m. %d.')}</p>
+                                    <p><strong>Időpont:</strong> {forgatas.start_time.strftime('%H:%M')} - {forgatas.end_time.strftime('%H:%M')}</p>
                                 </div>
                                 
                                 <p><strong>Önt eltávolították ebből a beosztásból.</strong></p>
@@ -918,8 +918,8 @@ Kedves Kollégák!
 A beosztása módosításra került a következő forgatásnál:
 
 Forgatás: {forgatas.name}
-Dátum: {forgatas.date.strftime('%Y. %m. %d.')}
-Időpont: {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}
+Dátum: {forgatas.start_time.strftime('%Y. %m. %d.')}
+Időpont: {forgatas.start_time.strftime('%H:%M')} - {forgatas.end_time.strftime('%H:%M')}
 
 Önt eltávolították ebből a beosztásból.
 Már nem szükséges részt vennie ezen a forgatáson.
@@ -1065,8 +1065,8 @@ def send_forgatas_creation_notification_email(forgatas, creator_user) -> bool:
 Új forgatás létrehozva az FTV rendszerben
 
 Forgatás: {forgatas.name}
-Dátum: {forgatas.date.strftime('%Y. %m. %d.')}
-Időpont: {forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}
+Dátum: {forgatas.start_time.strftime('%Y. %m. %d.')}
+Időpont: {forgatas.start_time.strftime('%H:%M')} - {forgatas.end_time.strftime('%H:%M')}
 Helyszín: {forgatas.location.name if forgatas.location else 'Nincs megadva'}
 Létrehozta: {creator_name}
 

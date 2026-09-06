@@ -642,12 +642,18 @@ class Forgatas(models.Model):
                            help_text='A forgatás egyedi neve')
     description = models.TextField(max_length=500, blank=False, null=False, verbose_name='Leírás', 
                                   help_text='A forgatás részletes leírása (maximum 500 karakter)')
-    date = models.DateField(blank=False, null=False, verbose_name='Dátum', 
-                           help_text='A forgatás dátuma')
-    timeFrom = models.TimeField(blank=False, null=False, verbose_name='Kezdés ideje', 
-                               help_text='A forgatás kezdési időpontja')
-    timeTo = models.TimeField(blank=False, null=False, verbose_name='Befejezés ideje', 
-                             help_text='A forgatás befejezésének időpontja')
+    # Elavult mezők: a start_time/end_time mezők váltották fel őket. Csak történeti adatként
+    # maradnak meg, a kód mostantól nem olvassa és nem is írja ezeket.
+    date = models.DateField(blank=True, null=True, verbose_name='Dátum (elavult)', 
+                           help_text='Elavult mező, lásd: start_time/end_time')
+    timeFrom = models.TimeField(blank=True, null=True, verbose_name='Kezdés ideje (elavult)', 
+                               help_text='Elavult mező, lásd: start_time')
+    timeTo = models.TimeField(blank=True, null=True, verbose_name='Befejezés ideje (elavult)', 
+                             help_text='Elavult mező, lásd: end_time')
+    start_time = models.DateTimeField(blank=False, null=False, verbose_name='Kezdés időpontja',
+                                       help_text='A forgatás kezdésének dátuma és időpontja')
+    end_time = models.DateTimeField(blank=False, null=False, verbose_name='Befejezés időpontja',
+                                     help_text='A forgatás befejezésének dátuma és időpontja')
     location = models.ForeignKey('Partner', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Helyszín', 
                                 help_text='A forgatás helyszíne (partnerintézmény)')
     szerkeszto = models.ForeignKey('auth.User', null=True, blank=True, verbose_name='Szerkesztő', help_text='A forgatás szerkesztője', on_delete=models.PROTECT)
@@ -675,48 +681,45 @@ class Forgatas(models.Model):
                                        help_text='A forgatáshoz szükséges felszerelések')
 
     def __str__(self):
-        return f'{self.name} ({self.date})'
+        return f'{self.name} ({self.start_time.date()})'
     
     def save(self, *args, **kwargs):
         # Store old values for comparison if updating
-        old_date = None
-        old_timeFrom = None
-        old_timeTo = None
+        old_start_time = None
+        old_end_time = None
         if self.pk:
             try:
                 old_forgatas = Forgatas.objects.get(pk=self.pk)
-                old_date = old_forgatas.date
-                old_timeFrom = old_forgatas.timeFrom
-                old_timeTo = old_forgatas.timeTo
+                old_start_time = old_forgatas.start_time
+                old_end_time = old_forgatas.end_time
             except Forgatas.DoesNotExist:
                 pass
         
-        # Auto-assign school year based on date
-        if not self.tanev and self.date:
-            self.tanev = Tanev.get_current_by_date(self.date)
+        # Auto-assign school year based on start date
+        if not self.tanev and self.start_time:
+            self.tanev = Tanev.get_current_by_date(self.start_time.date())
         
         super().save(*args, **kwargs)
         
         # Update related absence records if timing changed
-        if old_date is not None and (
-            old_date != self.date or 
-            old_timeFrom != self.timeFrom or 
-            old_timeTo != self.timeTo
+        if old_start_time is not None and (
+            old_start_time != self.start_time or 
+            old_end_time != self.end_time
         ):
             self.update_related_absences()
     
     def update_related_absences(self):
         """Update all absence records related to this forgatas when timing changes"""
         Absence.objects.filter(forgatas=self).update(
-            date=self.date,
-            timeFrom=self.timeFrom,
-            timeTo=self.timeTo
+            date=self.start_time.date(),
+            timeFrom=self.start_time.time(),
+            timeTo=self.end_time.time()
         )
     
     class Meta:
         verbose_name = "Forgatás"
         verbose_name_plural = "Forgatások"
-        ordering = ['date', 'timeFrom']
+        ordering = ['start_time']
 
 class Absence(models.Model):
     diak = models.ForeignKey('auth.User', on_delete=models.CASCADE, verbose_name='Diák', 
@@ -865,42 +868,31 @@ class Equipment(models.Model):
         # If equipment is not functional, it's not available
         if not self.functional:
             return False
-            
-        # Find overlapping filming sessions
-        overlapping_sessions = self.forgatasok.filter(
-            date__gte=start_date,
-            date__lte=end_date
-        )
         
-        for session in overlapping_sessions:
-            # Check for time overlap on the same date
-            if session.date == start_date == end_date:
-                # Same day - check time overlap
-                if (session.timeFrom < end_time and session.timeTo > start_time):
-                    return False
-            elif session.date == start_date:
-                # Start date - check if session ends after our start time
-                if session.timeTo > start_time:
-                    return False
-            elif session.date == end_date:
-                # End date - check if session starts before our end time
-                if session.timeFrom < end_time:
-                    return False
-            elif start_date < session.date < end_date:
-                # Session is completely within our date range
-                return False
+        start_dt = datetime.combine(start_date, start_time)
+        end_dt = datetime.combine(end_date, end_time)
+        
+        # Find overlapping filming sessions (start_time/end_time overlap check)
+        overlapping_sessions = self.forgatasok.filter(
+            start_time__lt=end_dt,
+            end_time__gt=start_dt
+        )
                 
-        return True
+        return not overlapping_sessions.exists()
     
     def get_bookings_for_period(self, start_date, end_date=None):
         """Get all filming sessions where this equipment is booked for a given period"""
+        from datetime import datetime, time as time_cls
         if end_date is None:
             end_date = start_date
-            
+        
+        period_start = datetime.combine(start_date, time_cls.min)
+        period_end = datetime.combine(end_date, time_cls.max)
+        
         return self.forgatasok.filter(
-            date__gte=start_date,
-            date__lte=end_date
-        ).order_by('date', 'timeFrom')
+            start_time__lte=period_end,
+            end_time__gte=period_start
+        ).order_by('start_time')
     
     def get_availability_schedule(self, start_date, end_date):
         """Get detailed availability schedule for a date range"""
@@ -909,9 +901,9 @@ class Equipment(models.Model):
         
         for booking in bookings:
             schedule.append({
-                'date': booking.date,
-                'time_from': booking.timeFrom,
-                'time_to': booking.timeTo,
+                'date': booking.start_time.date(),
+                'time_from': booking.start_time.time(),
+                'time_to': booking.end_time.time(),
                 'forgatas_name': booking.name,
                 'forgatas_id': booking.id,
                 'forgatas_type': booking.forgTipus,
@@ -1177,9 +1169,8 @@ class Beosztas(models.Model):
         
         # Update existing absence records if forgatas details changed
         if old_forgatas and (
-            old_forgatas.date != self.forgatas.date or 
-            old_forgatas.timeFrom != self.forgatas.timeFrom or 
-            old_forgatas.timeTo != self.forgatas.timeTo
+            old_forgatas.start_time != self.forgatas.start_time or 
+            old_forgatas.end_time != self.forgatas.end_time
         ):
             print(f"[DEBUG] Forgatas details changed, updating all existing absences")
             # Update all existing absence records with new timing
@@ -1195,8 +1186,8 @@ class Beosztas(models.Model):
         
         print(f"[DEBUG] create_absence_for_user called for user: {user.get_full_name()}")
         print(f"[DEBUG] - forgatas: {self.forgatas.name}")
-        print(f"[DEBUG] - date: {self.forgatas.date}")
-        print(f"[DEBUG] - time: {self.forgatas.timeFrom} - {self.forgatas.timeTo}")
+        print(f"[DEBUG] - start_time: {self.forgatas.start_time}")
+        print(f"[DEBUG] - end_time: {self.forgatas.end_time}")
         
         # Check if auto-generated absence already exists to avoid duplicates
         existing_absence = Absence.objects.filter(
@@ -1208,9 +1199,9 @@ class Beosztas(models.Model):
         if existing_absence:
             print(f"[DEBUG] Auto-generated absence already exists for {user.get_full_name()}, updating instead")
             # Update the existing one instead of creating duplicate
-            existing_absence.date = self.forgatas.date
-            existing_absence.timeFrom = self.forgatas.timeFrom
-            existing_absence.timeTo = self.forgatas.timeTo
+            existing_absence.date = self.forgatas.start_time.date()
+            existing_absence.timeFrom = self.forgatas.start_time.time()
+            existing_absence.timeTo = self.forgatas.end_time.time()
             existing_absence.save()
             print(f"[DEBUG] Updated existing absence #{existing_absence.id}")
         else:
@@ -1218,9 +1209,9 @@ class Beosztas(models.Model):
                 new_absence = Absence.objects.create(
                     diak=user,
                     forgatas=self.forgatas,
-                    date=self.forgatas.date,
-                    timeFrom=self.forgatas.timeFrom,
-                    timeTo=self.forgatas.timeTo,
+                    date=self.forgatas.start_time.date(),
+                    timeFrom=self.forgatas.start_time.time(),
+                    timeTo=self.forgatas.end_time.time(),
                     excused=False,  # Default to not excused
                     unexcused=False,
                     auto_generated=True  # Mark as auto-generated
@@ -1248,9 +1239,9 @@ class Beosztas(models.Model):
             if absence:
                 print(f"[DEBUG] Found auto-generated absence #{absence.id}, updating...")
                 # Update with new timing from forgatas
-                absence.date = self.forgatas.date
-                absence.timeFrom = self.forgatas.timeFrom
-                absence.timeTo = self.forgatas.timeTo
+                absence.date = self.forgatas.start_time.date()
+                absence.timeFrom = self.forgatas.start_time.time()
+                absence.timeTo = self.forgatas.end_time.time()
                 absence.save()
                 print(f"[SUCCESS] Updated absence #{absence.id} for {user.get_full_name()}")
             else:
@@ -1672,8 +1663,8 @@ Tájékoztatjuk, hogy a következő forgatáshoz tartozó beosztás véglegesít
 
 Forgatás: {instance.forgatas.name}
 Leírás: {instance.forgatas.description or 'Nincs megadva'}
-Dátum: {instance.forgatas.date.strftime('%Y. %m. %d.')}
-Időpont: {instance.forgatas.timeFrom.strftime('%H:%M')} - {instance.forgatas.timeTo.strftime('%H:%M')}
+Dátum: {instance.forgatas.start_time.strftime('%Y. %m. %d.')}
+Időpont: {instance.forgatas.start_time.strftime('%H:%M')} - {instance.forgatas.end_time.strftime('%H:%M')}
 Helyszín: {instance.forgatas.location or 'Nincs megadva'}
 Kapcsolattartó: {contact_person_name}
 

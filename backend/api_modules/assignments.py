@@ -332,9 +332,8 @@ def create_forgatas_basic_response(forgatas: Forgatas) -> dict:
         print(f"🔍 [DEBUG] Forgatas ID: {forgatas.id}")
         print(f"🔍 [DEBUG] Forgatas name: '{forgatas.name}'")
         print(f"🔍 [DEBUG] Forgatas description: '{forgatas.description}'")
-        print(f"🔍 [DEBUG] Forgatas date: {forgatas.date}")
-        print(f"🔍 [DEBUG] Forgatas timeFrom: {forgatas.timeFrom}")
-        print(f"🔍 [DEBUG] Forgatas timeTo: {forgatas.timeTo}")
+        print(f"🔍 [DEBUG] Forgatas start_time: {forgatas.start_time}")
+        print(f"🔍 [DEBUG] Forgatas end_time: {forgatas.end_time}")
         print(f"🔍 [DEBUG] Forgatas forgTipus: '{forgatas.forgTipus}'")
         
         # Check each field individually to isolate the issue
@@ -354,7 +353,7 @@ def create_forgatas_basic_response(forgatas: Forgatas) -> dict:
         
         # Date
         try:
-            response["date"] = forgatas.date.isoformat()
+            response["date"] = forgatas.start_time.date().isoformat()
             print(f"✅ [DEBUG] Added date: '{response['date']}'")
         except Exception as e:
             print(f"❌ [DEBUG] Error with date field: {str(e)}")
@@ -362,18 +361,18 @@ def create_forgatas_basic_response(forgatas: Forgatas) -> dict:
         
         # Time From
         try:
-            response["time_from"] = forgatas.timeFrom.isoformat()
+            response["time_from"] = forgatas.start_time.time().isoformat()
             print(f"✅ [DEBUG] Added time_from: '{response['time_from']}'")
         except Exception as e:
-            print(f"❌ [DEBUG] Error with timeFrom field: {str(e)}")
+            print(f"❌ [DEBUG] Error with start_time field: {str(e)}")
             raise
         
         # Time To
         try:
-            response["time_to"] = forgatas.timeTo.isoformat()
+            response["time_to"] = forgatas.end_time.time().isoformat()
             print(f"✅ [DEBUG] Added time_to: '{response['time_to']}'")
         except Exception as e:
-            print(f"❌ [DEBUG] Error with timeTo field: {str(e)}")
+            print(f"❌ [DEBUG] Error with end_time field: {str(e)}")
             raise
         
         # Type
@@ -496,17 +495,12 @@ def check_user_availability_for_forgatas(user: User, forgatas: Forgatas) -> dict
         }
     
     # Create datetime objects for the forgatas
-    forgatas_start = datetime.combine(forgatas.date, forgatas.timeFrom)
-    forgatas_end = datetime.combine(forgatas.date, forgatas.timeTo)
+    forgatas_start = forgatas.start_time
+    forgatas_end = forgatas.end_time
     
     conflicts = []
     is_on_vacation = False
     has_radio_session = False
-    
-    # Check for vacation (Tavollet) conflicts
-    # Convert forgatas date to datetime range for comparison
-    forgatas_start = datetime.combine(forgatas.date, forgatas.timeFrom)
-    forgatas_end = datetime.combine(forgatas.date, forgatas.timeTo)
     
     # Check for vacation (Tavollet) conflicts with TavolletTipus logic
     vacation_conflicts = Tavollet.objects.filter(
@@ -554,7 +548,7 @@ def check_user_availability_for_forgatas(user: User, forgatas: Forgatas) -> dict
     # Check for radio session conflicts (for all users)
     radio_sessions = RadioSession.objects.filter(
         participants=user,
-        date=forgatas.date
+        date=forgatas.start_time.date()
     )
     
     for session in radio_sessions:
@@ -577,7 +571,7 @@ def check_user_availability_for_forgatas(user: User, forgatas: Forgatas) -> dict
     # Find other finalized assignments (beosztás) for the same date and overlapping time
     other_assignments = Beosztas.objects.filter(
         szerepkor_relaciok__user=user,
-        forgatas__date=forgatas.date,
+        forgatas__start_time__date=forgatas.start_time.date(),
         kesz=True  # Only check finalized assignments
     ).exclude(
         forgatas=forgatas  # Exclude current forgatas
@@ -586,8 +580,8 @@ def check_user_availability_for_forgatas(user: User, forgatas: Forgatas) -> dict
     has_other_assignment = False
     for assignment in other_assignments:
         if assignment.forgatas:
-            assignment_start = datetime.combine(assignment.forgatas.date, assignment.forgatas.timeFrom)
-            assignment_end = datetime.combine(assignment.forgatas.date, assignment.forgatas.timeTo)
+            assignment_start = assignment.forgatas.start_time
+            assignment_end = assignment.forgatas.end_time
             
             if assignment_start < forgatas_end and assignment_end > forgatas_start:
                 has_other_assignment = True
@@ -596,9 +590,9 @@ def check_user_availability_for_forgatas(user: User, forgatas: Forgatas) -> dict
                     "description": f"Már beosztva: {assignment.forgatas.name}",
                     "forgatas_id": assignment.forgatas.id,
                     "forgatas_name": assignment.forgatas.name,
-                    "date": assignment.forgatas.date.isoformat(),
-                    "time_from": assignment.forgatas.timeFrom.isoformat(),
-                    "time_to": assignment.forgatas.timeTo.isoformat(),
+                    "date": assignment.forgatas.start_time.date().isoformat(),
+                    "time_from": assignment.forgatas.start_time.time().isoformat(),
+                    "time_to": assignment.forgatas.end_time.time().isoformat(),
                 })
     
     # User is available if they have no conflicts
@@ -725,9 +719,9 @@ def auto_create_absences_for_beosztas(beosztas: Beosztas):
                 Absence.objects.create(
                     diak=student,
                     forgatas=beosztas.forgatas,
-                    date=beosztas.forgatas.date,
-                    timeFrom=beosztas.forgatas.timeFrom,
-                    timeTo=beosztas.forgatas.timeTo,
+                    date=beosztas.forgatas.start_time.date(),
+                    timeFrom=beosztas.forgatas.start_time.time(),
+                    timeTo=beosztas.forgatas.end_time.time(),
                     excused=False,
                     unexcused=False
                 )
@@ -792,11 +786,11 @@ def register_assignment_endpoints(api):
             }
             
             if time_filter == 'past':
-                filters['forgatas__date__lt'] = timezone.now().date()
+                filters['forgatas__start_time__date__lt'] = timezone.now().date()
 
             if tanev:
-                filters['forgatas__date__gte'] = tanev.start_date
-                filters['forgatas__date__lte'] = tanev.end_date
+                filters['forgatas__start_time__date__gte'] = tanev.start_date
+                filters['forgatas__start_time__date__lte'] = tanev.end_date
             
             # Only prefetch relations for users in THIS class
             assignments = Beosztas.objects.filter(**filters).select_related('forgatas').prefetch_related(
@@ -834,8 +828,8 @@ def register_assignment_endpoints(api):
                             seen_combinations[rel.user_id][role_id].add(beosztas.id)
                             matrix_data[rel.user_id][role_id].append({
                                 "forgatas_name": beosztas.forgatas.name,
-                                "date": beosztas.forgatas.date.isoformat(),
-                                "time": beosztas.forgatas.timeFrom.isoformat()
+                                "date": beosztas.forgatas.start_time.date().isoformat(),
+                                "time": beosztas.forgatas.start_time.time().isoformat()
                             })
             
             # Build roles list
@@ -917,9 +911,9 @@ def register_assignment_endpoints(api):
             
             if start_date or end_date:
                 if start_date:
-                    assignments = assignments.filter(forgatas__date__gte=start_date)
+                    assignments = assignments.filter(forgatas__start_time__date__gte=start_date)
                 if end_date:
-                    assignments = assignments.filter(forgatas__date__lte=end_date)
+                    assignments = assignments.filter(forgatas__start_time__date__lte=end_date)
             
             assignments = assignments.order_by('-created_at')
             
@@ -964,8 +958,8 @@ def register_assignment_endpoints(api):
             
             # Debug: Check forgatas details
             if assignment.forgatas:
-                print(f"🔍 [DEBUG] Forgatas details: ID={assignment.forgatas.id}, name='{assignment.forgatas.name}', date={assignment.forgatas.date}")
-                print(f"🔍 [DEBUG] Forgatas times: {assignment.forgatas.timeFrom} - {assignment.forgatas.timeTo}")
+                print(f"🔍 [DEBUG] Forgatas details: ID={assignment.forgatas.id}, name='{assignment.forgatas.name}', start_time={assignment.forgatas.start_time}")
+                print(f"🔍 [DEBUG] Forgatas times: {assignment.forgatas.start_time} - {assignment.forgatas.end_time}")
                 print(f"🔍 [DEBUG] Forgatas type: {assignment.forgatas.forgTipus}")
             else:
                 print(f"❌ [DEBUG] WARNING: Assignment has no forgatas!")
@@ -1583,7 +1577,7 @@ def register_assignment_endpoints(api):
                 latest_assignment = related_assignments.first()
                 if latest_assignment and latest_assignment.forgatas:
                     # Store the last_time as a date object for comparison, convert to string only when needed
-                    current_date = latest_assignment.forgatas.date
+                    current_date = latest_assignment.forgatas.start_time.date()
                     stored_last_date = role_stats[role_id].get("last_date")  # We'll track this separately
                     
                     if (not stored_last_date or current_date > stored_last_date):
@@ -1603,7 +1597,7 @@ def register_assignment_endpoints(api):
                             "forgatas": {
                                 "id": assignment.forgatas.id,
                                 "name": assignment.forgatas.name,
-                                "date": assignment.forgatas.date.isoformat(),
+                                "date": assignment.forgatas.start_time.date().isoformat(),
                                 "type": assignment.forgatas.forgTipus
                             },
                             "finalized": assignment.kesz,
@@ -1770,9 +1764,9 @@ def register_assignment_endpoints(api):
             
             if start_date or end_date:
                 if start_date:
-                    assignments = assignments.filter(forgatas__date__gte=start_date)
+                    assignments = assignments.filter(forgatas__start_time__date__gte=start_date)
                 if end_date:
-                    assignments = assignments.filter(forgatas__date__lte=end_date)
+                    assignments = assignments.filter(forgatas__start_time__date__lte=end_date)
             
             assignments = assignments.order_by('-created_at')
             
@@ -1883,8 +1877,8 @@ def register_assignment_endpoints(api):
             future_date = date.today() + timedelta(days=30)
             
             test_forgatas = Forgatas.objects.filter(
-                date__gte=recent_date,
-                date__lte=future_date
+                start_time__date__gte=recent_date,
+                start_time__date__lte=future_date
             ).first()
             
             if not test_forgatas:
@@ -1892,9 +1886,8 @@ def register_assignment_endpoints(api):
                 test_forgatas = Forgatas(
                     name="🧪 Teszt Forgatás (Availability Check)",
                     description="Ez egy teszt forgatás a felhasználói elérhetőség tesztelésére.",
-                    date=date.today() + timedelta(days=1),
-                    timeFrom=time(14, 0),
-                    timeTo=time(16, 0),
+                    start_time=datetime.combine(date.today() + timedelta(days=1), time(14, 0)),
+                    end_time=datetime.combine(date.today() + timedelta(days=1), time(16, 0)),
                     forgTipus="teszt"
                 )
             
@@ -1960,8 +1953,8 @@ def register_assignment_endpoints(api):
             future_date = date.today() + timedelta(days=30)
             
             test_forgatas = Forgatas.objects.filter(
-                date__gte=recent_date,
-                date__lte=future_date
+                start_time__date__gte=recent_date,
+                start_time__date__lte=future_date
             ).first()
             
             if not test_forgatas:
@@ -1969,9 +1962,8 @@ def register_assignment_endpoints(api):
                 test_forgatas = Forgatas(
                     name="🧪 Teszt Forgatás",
                     description="Ez egy teszt forgatás az email értesítő rendszer tesztelésére.",
-                    date=date.today() + timedelta(days=1),
-                    timeFrom=time(14, 0),
-                    timeTo=time(16, 0),
+                    start_time=datetime.combine(date.today() + timedelta(days=1), time(14, 0)),
+                    end_time=datetime.combine(date.today() + timedelta(days=1), time(16, 0)),
                     forgTipus="teszt"
                 )
             

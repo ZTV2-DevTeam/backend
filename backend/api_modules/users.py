@@ -272,9 +272,9 @@ def create_fuggo_forgatas_response(forgatas: Forgatas) -> dict:
     return {
         "id": forgatas.id,
         "name": forgatas.name,
-        "date": forgatas.date.isoformat(),
+        "date": forgatas.start_time.date().isoformat(),
         "location": forgatas.location.name if forgatas.location else None,
-        "time": f"{forgatas.timeFrom.strftime('%H:%M')} - {forgatas.timeTo.strftime('%H:%M')}",
+        "time": f"{forgatas.start_time.strftime('%H:%M')} - {forgatas.end_time.strftime('%H:%M')}",
         "szerkeszto": forgatas.szerkeszto.get_full_name() if forgatas.szerkeszto else None,
         "notes": forgatas.notes
     }

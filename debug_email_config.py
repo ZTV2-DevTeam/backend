@@ -172,9 +172,8 @@ def test_assignment_email():
         test_forgatas = Forgatas(
             name="🧪 Test Forgatas - Email Debug",
             description="This is a test forgatas created for email debugging purposes. This forgatas is not saved to the database.",
-            date=date.today() + timedelta(days=1),
-            timeFrom=time(14, 0),
-            timeTo=time(16, 0),
+            start_time=datetime.combine(date.today() + timedelta(days=1), time(14, 0)),
+            end_time=datetime.combine(date.today() + timedelta(days=1), time(16, 0)),
             forgTipus="teszt"
         )
         
