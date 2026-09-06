@@ -262,6 +262,10 @@ class ForgatSchema(Schema):
     date: str
     time_from: str
     time_to: str
+    end_date: str
+    is_multi_day: bool = False
+    start_datetime: str
+    end_datetime: str
     location: Optional[dict] = None
     contact_person: Optional[ContactPersonSchema] = None
     szerkeszto: Optional[dict] = None
@@ -282,6 +286,10 @@ class ForgatWithRolesSchema(Schema):
     date: str
     time_from: str
     time_to: str
+    end_date: str
+    is_multi_day: bool = False
+    start_datetime: str
+    end_datetime: str
     location: Optional[dict] = None
     contact_person: Optional[ContactPersonSchema] = None
     szerkeszto: Optional[dict] = None
@@ -306,6 +314,9 @@ class ForgatCreateSchema(Schema):
     date: str
     time_from: str
     time_to: str
+    # Multi-day (több napos) sessions: optionally provide a different end_date.
+    # Only admins/gyártásvezető may set an end_date different from date.
+    end_date: Optional[str] = None
     location_id: Optional[int] = None
     contact_person_id: Optional[int] = None
     szerkeszto_id: Optional[int] = None
@@ -321,6 +332,7 @@ class ForgatUpdateSchema(Schema):
     date: Optional[str] = None
     time_from: Optional[str] = None
     time_to: Optional[str] = None
+    end_date: Optional[str] = None
     location_id: Optional[int] = None
     contact_person_id: Optional[int] = None
     szerkeszto_id: Optional[int] = None
@@ -397,6 +409,10 @@ def create_forgatas_response(forgatas: Forgatas) -> dict:
         "date": forgatas.start_time.date().isoformat(),
         "time_from": forgatas.start_time.time().isoformat(),
         "time_to": forgatas.end_time.time().isoformat(),
+        "end_date": forgatas.end_time.date().isoformat(),
+        "is_multi_day": forgatas.is_multi_day,
+        "start_datetime": forgatas.start_time.isoformat(),
+        "end_datetime": forgatas.end_time.isoformat(),
         "location": {
             "id": forgatas.location.id,
             "name": forgatas.location.name,
@@ -556,6 +572,21 @@ def check_admin_permissions(user) -> tuple[bool, str]:
         return True, ""
     except Profile.DoesNotExist:
         return False, "Felhasználói profil nem található"
+
+def check_multi_day_permissions(user) -> tuple[bool, str]:
+    """
+    Check if user can create/edit multi-day (több napos) filming sessions.
+    Only admins or gyártásvezető (production leader) may do this.
+    """
+    try:
+        from api.models import Profile
+        profile = Profile.objects.get(user=user)
+        if not profile.can_create_multi_day_forgatas:
+            return False, "Csak adminisztrátorok vagy gyártásvezetők hozhatnak létre több napos forgatást"
+        return True, ""
+    except Profile.DoesNotExist:
+        return False, "Felhasználói profil nem található"
+
 
 # ============================================================================
 # API Endpoints
@@ -812,14 +843,23 @@ def register_production_endpoints(api):
                 session_date = date.fromisoformat(data.date)
                 time_from = time.fromisoformat(data.time_from)
                 time_to = time.fromisoformat(data.time_to)
+                end_session_date = date.fromisoformat(data.end_date) if data.end_date else session_date
             except ValueError:
                 return 400, {"message": "Hibás dátum vagy idő formátum"}
             
-            if time_from >= time_to:
-                return 400, {"message": "A befejezés idejének a kezdés ideje után kell lennie"}
+            # Multi-day (több napos) sessions require admin or gyártásvezető permission
+            if end_session_date != session_date:
+                has_multi_day_permission, multi_day_error = check_multi_day_permissions(request.auth)
+                if not has_multi_day_permission:
+                    return 401, {"message": multi_day_error}
+                if end_session_date < session_date:
+                    return 400, {"message": "A befejezés dátuma nem lehet korábbi, mint a kezdés dátuma"}
             
             start_datetime = datetime.combine(session_date, time_from)
-            end_datetime = datetime.combine(session_date, time_to)
+            end_datetime = datetime.combine(end_session_date, time_to)
+            
+            if start_datetime >= end_datetime:
+                return 400, {"message": "A befejezés idejének a kezdés ideje után kell lennie"}
             
             # Get related objects
             location = None
@@ -983,6 +1023,7 @@ def register_production_endpoints(api):
             
             # Update date and times (stored as start_time/end_time datetimes)
             new_date = forgatas.start_time.date()
+            new_end_date = forgatas.end_time.date()
             new_time_from = forgatas.start_time.time()
             new_time_to = forgatas.end_time.time()
             
@@ -991,6 +1032,12 @@ def register_production_endpoints(api):
                     new_date = date.fromisoformat(data.date)
                 except ValueError:
                     return 400, {"message": "Hibás dátum formátum"}
+            
+            if data.end_date is not None:
+                try:
+                    new_end_date = date.fromisoformat(data.end_date)
+                except ValueError:
+                    return 400, {"message": "Hibás befejező dátum formátum"}
             
             if data.time_from is not None:
                 try:
@@ -1004,9 +1051,17 @@ def register_production_endpoints(api):
                 except ValueError:
                     return 400, {"message": "Hibás befejező idő formátum"}
             
-            if data.date is not None or data.time_from is not None or data.time_to is not None:
+            # Multi-day (több napos) sessions require admin or gyártásvezető permission
+            if new_end_date != new_date:
+                has_multi_day_permission, multi_day_error = check_multi_day_permissions(request.auth)
+                if not has_multi_day_permission:
+                    return 401, {"message": multi_day_error}
+                if new_end_date < new_date:
+                    return 400, {"message": "A befejezés dátuma nem lehet korábbi, mint a kezdés dátuma"}
+            
+            if data.date is not None or data.end_date is not None or data.time_from is not None or data.time_to is not None:
                 forgatas.start_time = datetime.combine(new_date, new_time_from)
-                forgatas.end_time = datetime.combine(new_date, new_time_to)
+                forgatas.end_time = datetime.combine(new_end_date, new_time_to)
             
             # Validate time range
             if forgatas.start_time >= forgatas.end_time:

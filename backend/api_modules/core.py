@@ -248,6 +248,7 @@ def register_core_endpoints(api):
                 "can_view_all_users": False,
                 "can_view_all_forgatas": False,
                 "can_create_forgatas": False,
+                "can_create_multi_day_forgatas": False,
                 "can_edit_forgatas": False,
                 "can_delete_forgatas": False,
                 
@@ -366,6 +367,7 @@ def register_core_endpoints(api):
                 # Check if user can create forgatas based on profile conditions
                 # (10F class, production leader, or szerkeszto field)
                 permissions["can_create_forgatas"] = profile.can_create_forgatas
+                permissions["can_create_multi_day_forgatas"] = profile.can_create_multi_day_forgatas
                 
                 # Set permissions based on admin type
                 if permissions["is_developer_admin"]:
@@ -380,6 +382,7 @@ def register_core_endpoints(api):
                         "can_view_all_users": True,
                         "can_view_all_forgatas": True,
                         "can_create_forgatas": True,
+                        "can_create_multi_day_forgatas": True,
                         "can_edit_forgatas": True,
                         "can_delete_forgatas": True,
                         "can_manage_radio_stab": True,

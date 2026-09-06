@@ -113,6 +113,8 @@ class ForgatSchema(Schema):
     date: str
     time_from: str
     time_to: str
+    end_date: str
+    is_multi_day: bool = False
     type: str
     notes: Optional[str] = None
 
@@ -144,6 +146,8 @@ class AbsenceSchema(Schema):
     student_edit_note: Optional[str] = None
     effective_time_from: str
     effective_time_to: str
+    is_multi_day: bool = False
+    can_be_corrected: bool = True
 
 class AbsenceUpdateSchema(Schema):
     """Request schema for updating absence status."""
@@ -184,6 +188,8 @@ def create_forgatas_basic_response(forgatas: Forgatas) -> dict:
         "date": forgatas.start_time.date().isoformat(),
         "time_from": forgatas.start_time.time().isoformat(),
         "time_to": forgatas.end_time.time().isoformat(),
+        "end_date": forgatas.end_time.date().isoformat(),
+        "is_multi_day": forgatas.is_multi_day,
         "type": forgatas.forgTipus,
         "notes": forgatas.notes
     }
@@ -235,7 +241,9 @@ def create_absence_response(absence: Absence) -> dict:
         "student_edit_timestamp": absence.student_edit_timestamp.isoformat() if absence.student_edit_timestamp else None,
         "student_edit_note": absence.student_edit_note,
         "effective_time_from": absence.get_effective_time_from().isoformat(),
-        "effective_time_to": absence.get_effective_time_to().isoformat()
+        "effective_time_to": absence.get_effective_time_to().isoformat(),
+        "is_multi_day": absence.is_multi_day_forgatas,
+        "can_be_corrected": not absence.is_multi_day_forgatas
     }
 
 def check_class_teacher_permissions(user: User, target_absence: Absence = None) -> tuple[bool, str]:
@@ -766,6 +774,9 @@ def register_absence_management_endpoints(api):
                 diak=requesting_user
             )
             
+            if absence.is_multi_day_forgatas:
+                return 400, {"message": "Több napos forgatáshoz tartozó hiányzás nem korrigálható"}
+            
             # Validate extra time values
             if data.extra_time_before is not None:
                 if data.extra_time_before < 0 or data.extra_time_before > 480:  # Max 8 hours
@@ -794,7 +805,7 @@ def register_absence_management_endpoints(api):
         except Exception as e:
             return 400, {"message": f"Error updating absence extra time: {str(e)}"}
 
-    @api.delete("/my-absences/{absence_id}/extra-time", auth=JWTAuth(), response={200: AbsenceSchema, 401: ErrorSchema, 404: ErrorSchema})
+    @api.delete("/my-absences/{absence_id}/extra-time", auth=JWTAuth(), response={200: AbsenceSchema, 400: ErrorSchema, 401: ErrorSchema, 404: ErrorSchema})
     def reset_my_absence_extra_time(request, absence_id: int):
         """
         Reset extra time for student's own absence back to default (0 minutes before/after).
@@ -811,10 +822,13 @@ def register_absence_management_endpoints(api):
         """
         try:
             requesting_user = request.auth
-            absence = Absence.objects.get(
+            absence = Absence.objects.select_related('forgatas').get(
                 id=absence_id,
                 diak=requesting_user
             )
+            
+            if absence.is_multi_day_forgatas:
+                return 400, {"message": "Több napos forgatáshoz tartozó hiányzás nem korrigálható"}
             
             # Reset student extra time fields
             absence.student_extra_time_before = 0

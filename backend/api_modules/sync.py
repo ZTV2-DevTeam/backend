@@ -199,6 +199,8 @@ class ForgatDetailsSchema(Schema):
     date: date
     timeFrom: dt_time
     timeTo: dt_time
+    end_date: date
+    is_multi_day: bool = False
     location_name: Optional[str] = None
 
 class AbsenceSchema(Schema):
@@ -222,6 +224,8 @@ class AbsenceSchema(Schema):
     student_edit_timestamp: Optional[datetime] = None
     student_edit_note: Optional[str] = None
     affected_classes: List[int]
+    is_multi_day: bool = False
+    can_be_corrected: bool = True
 
 class ProfileDetailedSchema(Schema):
     """Detailed profile schema with full information."""
@@ -327,6 +331,8 @@ def serialize_forgatas(forgatas) -> dict:
         'date': forgatas.start_time.date(),
         'timeFrom': forgatas.start_time.time(),
         'timeTo': forgatas.end_time.time(),
+        'end_date': forgatas.end_time.date(),
+        'is_multi_day': forgatas.is_multi_day,
         'location_name': forgatas.location.name if forgatas.location else None
     }
 
@@ -351,7 +357,9 @@ def serialize_absence(absence: Absence) -> dict:
         'student_edited': absence.student_edited,
         'student_edit_timestamp': absence.student_edit_timestamp,
         'student_edit_note': absence.student_edit_note,
-        'affected_classes': absence.get_affected_classes()
+        'affected_classes': absence.get_affected_classes(),
+        'is_multi_day': absence.is_multi_day_forgatas,
+        'can_be_corrected': not absence.is_multi_day_forgatas
     }
 
 def serialize_profile_minimal(profile: Profile) -> dict:

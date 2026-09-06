@@ -271,6 +271,11 @@ class Profile(models.Model):
         
         return False
     
+    @property
+    def can_create_multi_day_forgatas(self):
+        """Check if user can create multi-day (több napos) forgatások - admins or gyártásvezető only"""
+        return self.is_admin or self.is_production_leader
+    
     def is_current_10f_student(self):
         """Check if user is currently in 10F class"""
         if not self.osztaly or self.osztaly.szekcio.upper() != 'F':
@@ -682,7 +687,38 @@ class Forgatas(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.start_time.date()})'
-    
+
+    @property
+    def is_multi_day(self):
+        """Whether the filming session spans more than one calendar day."""
+        if not self.start_time or not self.end_time:
+            return False
+        return self.start_time.date() != self.end_time.date()
+
+    def get_absence_day_specs(self):
+        """Return a (date, timeFrom, timeTo) tuple per calendar day this forgatas spans.
+
+        Single-day sessions return exactly one tuple. Multi-day sessions return one
+        tuple per day, with the first/last day clipped to the actual start/end time
+        and any full days in between spanning the whole day.
+        """
+        start_date = self.start_time.date()
+        end_date = self.end_time.date()
+        if start_date == end_date:
+            return [(start_date, self.start_time.time(), self.end_time.time())]
+
+        specs = []
+        current = start_date
+        while current <= end_date:
+            if current == start_date:
+                specs.append((current, self.start_time.time(), time.max))
+            elif current == end_date:
+                specs.append((current, time.min, self.end_time.time()))
+            else:
+                specs.append((current, time.min, time.max))
+            current += timedelta(days=1)
+        return specs
+
     def save(self, *args, **kwargs):
         # Store old values for comparison if updating
         old_start_time = None
@@ -710,11 +746,10 @@ class Forgatas(models.Model):
     
     def update_related_absences(self):
         """Update all absence records related to this forgatas when timing changes"""
-        Absence.objects.filter(forgatas=self).update(
-            date=self.start_time.date(),
-            timeFrom=self.start_time.time(),
-            timeTo=self.end_time.time()
-        )
+        for beosztas in self.beosztasok.all():
+            users = {relacio.user for relacio in beosztas.szerepkor_relaciok.all()}
+            for user in users:
+                beosztas.update_absence_for_user(user)
     
     class Meta:
         verbose_name = "Forgatás"
@@ -727,6 +762,12 @@ class Absence(models.Model):
     forgatas = models.ForeignKey('Forgatas', on_delete=models.CASCADE, verbose_name='Forgatás', 
                                 help_text='A forgatás, ami miatt hiányzik')
     date = models.DateField(verbose_name='Dátum', help_text='A hiányzás dátuma')
+
+    @property
+    def is_multi_day_forgatas(self):
+        """Whether this absence belongs to a multi-day filming session (one Absence row per day)."""
+        return bool(self.forgatas and self.forgatas.is_multi_day)
+
     timeFrom = models.TimeField(verbose_name='Kezdés ideje', help_text='A hiányzás kezdési időpontja')
     timeTo = models.TimeField(verbose_name='Befejezés ideje', help_text='A hiányzás befejezési időpontja')
     excused = models.BooleanField(default=False, verbose_name='Igazolt', 
@@ -1179,7 +1220,12 @@ class Beosztas(models.Model):
                 self.update_absence_for_user(user)
     
     def create_absence_for_user(self, user):
-        """Create an absence record for a user assigned to this forgatas"""
+        """Create (or refresh) absence record(s) for a user assigned to this forgatas.
+
+        A single-day forgatas gets one Absence row. A multi-day forgatas gets one
+        Absence row per calendar day it spans, so each day can be excused/unexcused
+        independently by the osztályfőnök.
+        """
         if not self.forgatas:
             print(f"[DEBUG] Cannot create absence - no forgatas")
             return
@@ -1189,39 +1235,46 @@ class Beosztas(models.Model):
         print(f"[DEBUG] - start_time: {self.forgatas.start_time}")
         print(f"[DEBUG] - end_time: {self.forgatas.end_time}")
         
-        # Check if auto-generated absence already exists to avoid duplicates
-        existing_absence = Absence.objects.filter(
-            diak=user,
-            forgatas=self.forgatas,
-            auto_generated=True
-        ).first()
+        day_specs = self.forgatas.get_absence_day_specs()
+        existing_by_date = {
+            a.date: a for a in Absence.objects.filter(
+                diak=user, forgatas=self.forgatas, auto_generated=True
+            )
+        }
         
-        if existing_absence:
-            print(f"[DEBUG] Auto-generated absence already exists for {user.get_full_name()}, updating instead")
-            # Update the existing one instead of creating duplicate
-            existing_absence.date = self.forgatas.start_time.date()
-            existing_absence.timeFrom = self.forgatas.start_time.time()
-            existing_absence.timeTo = self.forgatas.end_time.time()
-            existing_absence.save()
-            print(f"[DEBUG] Updated existing absence #{existing_absence.id}")
-        else:
-            try:
-                new_absence = Absence.objects.create(
-                    diak=user,
-                    forgatas=self.forgatas,
-                    date=self.forgatas.start_time.date(),
-                    timeFrom=self.forgatas.start_time.time(),
-                    timeTo=self.forgatas.end_time.time(),
-                    excused=False,  # Default to not excused
-                    unexcused=False,
-                    auto_generated=True  # Mark as auto-generated
-                )
-                print(f"[SUCCESS] Created new absence #{new_absence.id} for {user.get_full_name()}")
-            except Exception as e:
-                print(f"[ERROR] Failed to create absence for {user.get_full_name()}: {e}")
+        seen_dates = set()
+        for day_date, t_from, t_to in day_specs:
+            seen_dates.add(day_date)
+            existing_absence = existing_by_date.get(day_date)
+            if existing_absence:
+                existing_absence.timeFrom = t_from
+                existing_absence.timeTo = t_to
+                existing_absence.save()
+                print(f"[DEBUG] Updated existing absence #{existing_absence.id} for {day_date}")
+            else:
+                try:
+                    new_absence = Absence.objects.create(
+                        diak=user,
+                        forgatas=self.forgatas,
+                        date=day_date,
+                        timeFrom=t_from,
+                        timeTo=t_to,
+                        excused=False,  # Default to not excused
+                        unexcused=False,
+                        auto_generated=True  # Mark as auto-generated
+                    )
+                    print(f"[SUCCESS] Created new absence #{new_absence.id} for {user.get_full_name()} on {day_date}")
+                except Exception as e:
+                    print(f"[ERROR] Failed to create absence for {user.get_full_name()} on {day_date}: {e}")
+        
+        # Remove stale day-absences if the forgatas' span shrank (e.g. multi-day -> single-day)
+        for old_date, absence in existing_by_date.items():
+            if old_date not in seen_dates:
+                absence.delete()
+                print(f"[DEBUG] Removed stale absence for {user.get_full_name()} on {old_date}")
     
     def update_absence_for_user(self, user):
-        """Update existing absence record for a user when forgatas details change"""
+        """Update existing absence record(s) for a user when forgatas details change"""
         if not self.forgatas:
             print(f"[DEBUG] Cannot update absence - no forgatas")
             return
@@ -1229,29 +1282,11 @@ class Beosztas(models.Model):
         print(f"[DEBUG] update_absence_for_user called for user: {user.get_full_name()}")
         
         try:
-            # Look for auto-generated absence first
-            absence = Absence.objects.filter(
-                diak=user,
-                forgatas=self.forgatas,
-                auto_generated=True
-            ).first()
-            
-            if absence:
-                print(f"[DEBUG] Found auto-generated absence #{absence.id}, updating...")
-                # Update with new timing from forgatas
-                absence.date = self.forgatas.start_time.date()
-                absence.timeFrom = self.forgatas.start_time.time()
-                absence.timeTo = self.forgatas.end_time.time()
-                absence.save()
-                print(f"[SUCCESS] Updated absence #{absence.id} for {user.get_full_name()}")
-            else:
-                print(f"[DEBUG] No auto-generated absence found for {user.get_full_name()}, creating new one")
-                # If absence doesn't exist, create it
-                self.create_absence_for_user(user)
+            # create_absence_for_user already updates-or-creates per day and removes
+            # stale days, so it covers both the "create" and "update" cases.
+            self.create_absence_for_user(user)
         except Exception as e:
             print(f"[ERROR] Failed to update absence for {user.get_full_name()}: {e}")
-            # Try to create if update fails
-            self.create_absence_for_user(user)
     
     def remove_absence_for_user(self, user):
         """Remove absence record for a user no longer assigned to this forgatas"""

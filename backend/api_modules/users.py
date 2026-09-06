@@ -170,6 +170,8 @@ class FuggoForgatasSchema(Schema):
     id: int
     name: str
     date: str  # Date of the forgatas (ISO format)
+    end_date: str
+    is_multi_day: bool = False
     location: Optional[str] = None
     time: str  # Combined timeFrom - timeTo format
     szerkeszto: Optional[str] = None
@@ -273,6 +275,8 @@ def create_fuggo_forgatas_response(forgatas: Forgatas) -> dict:
         "id": forgatas.id,
         "name": forgatas.name,
         "date": forgatas.start_time.date().isoformat(),
+        "end_date": forgatas.end_time.date().isoformat(),
+        "is_multi_day": forgatas.is_multi_day,
         "location": forgatas.location.name if forgatas.location else None,
         "time": f"{forgatas.start_time.strftime('%H:%M')} - {forgatas.end_time.strftime('%H:%M')}",
         "szerkeszto": forgatas.szerkeszto.get_full_name() if forgatas.szerkeszto else None,
