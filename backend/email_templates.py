@@ -33,19 +33,16 @@ def get_base_email_template(
     button_html = ""
     if button_text and button_url:
         button_html = f"""
-        <div style="text-align: center; margin: 40px 0;">
+        <div style="text-align: center; margin: 30px 0;">
             <a href="{button_url}" 
                style="display: inline-block; 
-                      padding: 16px 32px; 
-                      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-                      color: white !important; 
+                      padding: 14px 32px; 
+                      background-color: #3b82f6;
+                      color: #ffffff !important; 
                       text-decoration: none; 
-                      border-radius: 12px; 
-                      font-weight: 700;
-                      font-size: 16px;
-                      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-                      transition: all 0.2s ease;
-                      letter-spacing: 0.5px;">
+                      border-radius: 8px; 
+                      font-weight: bold;
+                      font-size: 16px;">
                 {button_text}
             </a>
         </div>
@@ -59,96 +56,44 @@ def get_base_email_template(
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{title}</title>
         <style>
-            * {{
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }}
-            
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
                 line-height: 1.6;
                 color: #333333;
-                background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-                margin: 0;
-                padding: 20px 0;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f4f4f4;
             }}
             
             .email-container {{
-                max-width: 600px;
-                margin: 0 auto;
                 background-color: #ffffff;
-                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-                border-radius: 16px;
-                overflow: hidden;
+                border-radius: 10px;
+                padding: 30px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             }}
             
             .email-header {{
-                background: linear-gradient(135deg, #0f1419 0%, #1a202c 50%, #2d3748 100%);
-                color: #ffffff;
-                padding: 50px 30px;
                 text-align: center;
-                position: relative;
-                overflow: hidden;
+                margin-bottom: 30px;
+                padding-bottom: 20px;
+                border-bottom: 2px solid #3b82f6;
             }}
             
-            .email-header::before {{
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: radial-gradient(circle at 30% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
-                           radial-gradient(circle at 70% 80%, rgba(37, 99, 235, 0.08) 0%, transparent 50%);
-                pointer-events: none;
-            }}
-            
-            .logo-section {{
-                margin-bottom: 20px;
-                position: relative;
-                z-index: 1;
-            }}
-            
-            .logo-text {{
-                font-size: 48px;
-                font-weight: 900;
-                color: #ffffff;
-                text-decoration: none;
-                letter-spacing: 3px;
-                display: inline-flex;
-                align-items: center;
-                gap: 12px;
-            }}
-            
-            .logo-text::before {{
-                content: '📺';
-                font-size: 40px;
+            .email-header h1 {{
                 color: #3b82f6;
-                filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.3));
+                margin: 0;
+                font-size: 26px;
             }}
             
-            .platform-subtitle {{
+            .email-header p {{
+                margin: 8px 0 0 0;
+                color: #666666;
                 font-size: 14px;
-                color: #94a3b8;
-                margin-top: 8px;
-                font-weight: 500;
-                letter-spacing: 1px;
-            }}
-            
-            .email-title {{
-                font-size: 28px;
-                font-weight: 700;
-                margin-top: 30px;
-                color: #ffffff;
-                position: relative;
-                z-index: 1;
             }}
             
             .email-content {{
-                padding: 50px 40px;
-                background-color: #ffffff;
-                position: relative;
+                margin-bottom: 25px;
             }}
             
             .content-section {{
@@ -161,57 +106,36 @@ def get_base_email_template(
                 font-weight: 700;
                 margin-bottom: 16px;
                 padding-bottom: 8px;
-                border-bottom: 3px solid #3b82f6;
-                position: relative;
-            }}
-            
-            .content-section h2::after {{
-                content: '';
-                position: absolute;
-                bottom: -3px;
-                left: 0;
-                width: 40px;
-                height: 3px;
-                background: linear-gradient(90deg, #3b82f6, #1d4ed8);
-                border-radius: 2px;
+                border-bottom: 2px solid #3b82f6;
             }}
             
             .content-section p {{
                 margin-bottom: 16px;
-                color: #475569;
-                line-height: 1.7;
+                color: #333333;
+                line-height: 1.6;
                 font-size: 16px;
             }}
             
             .info-box {{
-                background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-                border: 1px solid #e2e8f0;
-                border-left: 5px solid #3b82f6;
-                padding: 24px;
-                margin: 24px 0;
-                border-radius: 12px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+                background-color: #d1ecf1;
+                border: 1px solid #bee5eb;
+                border-radius: 5px;
+                padding: 15px;
+                margin: 20px 0;
+                color: #0c5460;
             }}
             
             .info-box h3 {{
-                color: #1e293b;
+                color: #0c5460;
                 font-size: 18px;
                 font-weight: 700;
-                margin-bottom: 16px;
-                display: flex;
-                align-items: center;
-            }}
-            
-            .info-box h3::before {{
-                content: '📋';
-                margin-right: 8px;
-                font-size: 16px;
+                margin-bottom: 12px;
             }}
             
             .info-item {{
-                margin-bottom: 12px;
-                padding: 8px 0;
-                border-bottom: 1px solid #e2e8f0;
+                margin-bottom: 8px;
+                padding: 4px 0;
+                border-bottom: 1px solid rgba(12, 84, 96, 0.15);
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
@@ -223,19 +147,18 @@ def get_base_email_template(
             }}
             
             .info-item strong {{
-                color: #374151;
+                color: #0c5460;
                 font-weight: 600;
                 min-width: 120px;
             }}
             
             .highlight-box {{
-                background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-                border: 1px solid #93c5fd;
-                padding: 24px;
+                background-color: #eff6ff;
+                border: 2px dashed #3b82f6;
+                padding: 20px;
                 margin: 24px 0;
-                border-radius: 12px;
+                border-radius: 8px;
                 text-align: center;
-                box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
             }}
             
             .highlight-box h3 {{
@@ -252,51 +175,46 @@ def get_base_email_template(
             }}
             
             .warning-box {{
-                background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-                border: 1px solid #f59e0b;
-                border-left: 5px solid #f59e0b;
-                padding: 20px;
-                margin: 24px 0;
-                border-radius: 12px;
-                box-shadow: 0 2px 8px rgba(245, 158, 11, 0.1);
+                background-color: #fff3cd;
+                border: 1px solid #ffeaa7;
+                border-radius: 5px;
+                padding: 15px;
+                margin: 20px 0;
+                color: #856404;
             }}
             
             .warning-box p {{
-                color: #92400e;
+                color: #856404;
                 margin: 0;
                 font-weight: 500;
             }}
             
             .success-box {{
-                background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-                border: 1px solid #10b981;
-                border-left: 5px solid #10b981;
-                padding: 20px;
-                margin: 24px 0;
-                border-radius: 12px;
-                box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
+                background-color: #d4edda;
+                border: 1px solid #c3e6cb;
+                border-radius: 5px;
+                padding: 15px;
+                margin: 20px 0;
+                color: #155724;
             }}
             
             .success-box p {{
-                color: #065f46;
+                color: #155724;
                 margin: 0;
                 font-weight: 500;
             }}
             
             .email-footer {{
-                background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-                color: #94a3b8;
-                padding: 40px 30px;
                 text-align: center;
-            }}
-            
-            .footer-content {{
-                font-size: 14px;
-                line-height: 1.6;
+                font-size: 12px;
+                color: #666666;
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid #dddddd;
             }}
             
             .footer-links {{
-                margin-top: 20px;
+                margin-top: 15px;
             }}
             
             .footer-links a {{
@@ -304,43 +222,14 @@ def get_base_email_template(
                 text-decoration: none;
                 margin: 0 15px;
                 font-weight: 500;
-                transition: color 0.2s ease;
             }}
             
             .footer-links a:hover {{
-                color: #60a5fa;
                 text-decoration: underline;
             }}
             
             .copyright {{
-                margin-top: 24px;
-                font-size: 12px;
-                color: #64748b;
-                border-top: 1px solid #334155;
-                padding-top: 20px;
-            }}
-            
-            @media (max-width: 600px) {{
-                .email-container {{
-                    margin: 0;
-                    box-shadow: none;
-                }}
-                
-                .email-content {{
-                    padding: 20px 15px;
-                }}
-                
-                .email-header {{
-                    padding: 20px 15px;
-                }}
-                
-                .logo-text {{
-                    font-size: 28px;
-                }}
-                
-                .email-title {{
-                    font-size: 20px;
-                }}
+                margin-top: 15px;
             }}
         </style>
     </head>
@@ -348,11 +237,8 @@ def get_base_email_template(
         <div class="email-container">
             <!-- Header -->
             <div class="email-header">
-                <div class="logo-section">
-                    <div class="logo-text">FTV</div>
-                    <div class="platform-subtitle">Forgatásszervezési Platform</div>
-                </div>
-                <div class="email-title">{title}</div>
+                <h1>{title}</h1>
+                <p>FTV &ndash; Forgatásszervezési Platform</p>
             </div>
             
             <!-- Content -->
@@ -363,17 +249,15 @@ def get_base_email_template(
             
             <!-- Footer -->
             <div class="email-footer">
-                <div class="footer-content">
-                    <p>{footer_text}</p>
-                    
-                    <div class="footer-links">
-                        <a href="https://ftv.szlg.info">FTV Rendszer</a>
-                        <a href="https://szlgbp.hu">Az Iskola honlapja</a>
-                    </div>
-                    
-                    <div class="copyright">
-                        © 2025 FTV - Minden jog fenntartva.
-                    </div>
+                <p>{footer_text}</p>
+                
+                <div class="footer-links">
+                    <a href="https://ftv.szlg.info">FTV Rendszer</a>
+                    <a href="https://szlgbp.hu">Az Iskola honlapja</a>
+                </div>
+                
+                <div class="copyright">
+                    © 2026 FTV - Minden jog fenntartva.
                 </div>
             </div>
         </div>
@@ -634,7 +518,9 @@ def get_login_info_email_content(user_name: str, username: str, password: str) -
             </div>
             <div style="margin: 10px 0; font-size: 16px;">
                 <strong>Új jelszó:</strong> 
-                <span style="background-color: rgba(255,255,255,0.2); 
+                <span style="background-color: #ffffff; 
+                             border: 1px solid #93c5fd;
+                             color: #1e40af;
                              padding: 5px 10px; 
                              border-radius: 4px; 
                              font-family: 'Courier New', monospace; 

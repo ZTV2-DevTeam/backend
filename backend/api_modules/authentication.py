@@ -359,7 +359,7 @@ Fontos információk:
 
 Ez egy automatikus email, kérjük ne válaszoljon rá.
 
-© 2025 FTV. Minden jog fenntartva.
+© 2026 FTV. Minden jog fenntartva.
         """
         
         print(f"[DEBUG] About to send email using Django send_mail...")
@@ -440,7 +440,7 @@ Fontos információk:
 
 Ez egy automatikus email, kérjük ne válaszoljon rá.
 
-© 2025 FTV. Minden jog fenntartva.
+© 2026 FTV. Minden jog fenntartva.
         """
         
         send_mail(
@@ -547,7 +547,7 @@ A teljes közlemény megtekintéséhez látogassa meg a FTV rendszert:
 {frontend_url}
 
 Ez egy automatikus értesítés az FTV rendszerből.
-© 2025 FTV. Minden jog fenntartva.
+© 2026 FTV. Minden jog fenntartva.
         """
         
         print(f"[DEBUG] About to send announcement emails to {len(recipient_emails)} recipients using HTML template")
@@ -737,7 +737,7 @@ def send_assignment_change_notification_email(forgatas, added_users: list, remov
                             </div>
                             <div class="footer">
                                 <p>Ez egy automatikus értesítés az FTV rendszerből.</p>
-                                <p>© 2025 FTV. Minden jog fenntartva.</p>
+                                <p>© 2026 FTV. Minden jog fenntartva.</p>
                             </div>
                         </div>
                     </body>
@@ -764,7 +764,7 @@ A részletes információkat a FTV rendszerben találja:
 {frontend_url}
 
 Ez egy automatikus értesítés az FTV rendszerből.
-© 2025 FTV. Minden jog fenntartva.
+© 2026 FTV. Minden jog fenntartva.
                 """
                 
                 try:
@@ -903,7 +903,7 @@ Ez egy automatikus értesítés az FTV rendszerből.
                             </div>
                             <div class="footer">
                                 <p>Ez egy automatikus értesítés az FTV rendszerből.</p>
-                                <p>© 2025 FTV. Minden jog fenntartva.</p>
+                                <p>© 2026 FTV. Minden jog fenntartva.</p>
                             </div>
                         </div>
                     </body>
@@ -928,7 +928,7 @@ Az aktuális beosztásokat a FTV rendszerben ellenőrizheti:
 {frontend_url}
 
 Ez egy automatikus értesítés az FTV rendszerből.
-© 2025 FTV. Minden jog fenntartva.
+© 2026 FTV. Minden jog fenntartva.
                 """
 
                 try:
