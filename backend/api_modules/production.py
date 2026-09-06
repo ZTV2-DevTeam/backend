@@ -1324,6 +1324,7 @@ def register_production_endpoints(api):
             ).prefetch_related(
                 'equipments',
                 'beosztasok__szerepkor_relaciok__user__profile__stab',
+                'beosztasok__szerepkor_relaciok__user__profile__osztaly',
                 'beosztasok__szerepkor_relaciok__szerepkor',
                 'beosztasok__author',
                 'beosztasok__stab'
@@ -1373,6 +1374,7 @@ def register_production_endpoints(api):
                                 profile = user.profile
                                 profile_data = {
                                     "stab": {"id": profile.stab.id, "name": profile.stab.name} if profile.stab else None,
+                                    "osztaly_name": str(profile.osztaly) if profile.osztaly else None,
                                     "telefonszam": profile.telefonszam,
                                     "is_admin": profile.has_admin_permission('any')
                                 }
