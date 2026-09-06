@@ -273,8 +273,17 @@ class Profile(models.Model):
     
     @property
     def can_create_multi_day_forgatas(self):
-        """Check if user can create multi-day (több napos) forgatások - admins or gyártásvezető only"""
-        return self.is_admin or self.is_production_leader
+        """Check if user can create multi-day (több napos) forgatások.
+
+        Allowed for every administrator (fejlesztő/developer, tanár/teacher,
+        rendszergazda/system_admin) and gyártásvezető (production leader).
+        Regular students (including 10F students and szerkesztők who are not
+        also admins/gyártásvezető) may NOT create multi-day sessions.
+        """
+        return (
+            self.admin_type in ('developer', 'teacher', 'system_admin')
+            or self.is_production_leader
+        )
     
     def is_current_10f_student(self):
         """Check if user is currently in 10F class"""
